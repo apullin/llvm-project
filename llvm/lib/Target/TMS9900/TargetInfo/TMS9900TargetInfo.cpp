@@ -140,6 +140,12 @@ public:
     // xas99 doesn't use ELF sections - code/data placement is via AORG/RORG
     UsesELFSectionDirectiveForBSS = false;
 
+    //=== xas99 BSS/Zero Fill ===//
+    // xas99 uses BSS directive for zero-filled space (not .zero)
+    if (TMS9900AsmDialectOpt == AD_XAS99) {
+      ZeroDirective = "\tBSS ";
+    }
+
     //=== Assembler Integration ===//
     // We don't have an integrated assembler/parser for TMS9900.
     // This allows inline assembly to be emitted verbatim without parsing.
@@ -222,13 +228,10 @@ void TMS9900InstPrinter::printOperand(const MCInst *MI, unsigned OpNo,
     // Check if we're using xas99 dialect (dialect 1)
     if (MAI.getAssemblerDialect() == AD_XAS99) {
       // xas99 format: >XXXX for hex values
-      // Use hex for all values (xas99 convention)
-      if (Imm < 0) {
-        // For negative values, print as signed hex with >
-        O << ">-" << format_hex_no_prefix(-Imm, 1);
-      } else {
-        O << ">" << format_hex_no_prefix(Imm, 1);
-      }
+      // For negative values, output two's complement (16-bit)
+      // e.g., -1 -> >FFFF, -2 -> >FFFE
+      uint16_t Val = static_cast<uint16_t>(Imm & 0xFFFF);
+      O << ">" << format_hex_no_prefix(Val, 1);
     } else {
       // Default: decimal
       O << Imm;

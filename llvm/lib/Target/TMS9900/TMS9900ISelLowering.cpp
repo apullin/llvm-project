@@ -16,6 +16,7 @@
 #include "TMS9900Subtarget.h"
 #include "TMS9900TargetMachine.h"
 #include "llvm/CodeGen/CallingConvLower.h"
+#include "llvm/CodeGen/RuntimeLibcalls.h"
 #include "llvm/CodeGen/MachineFrameInfo.h"
 #include "llvm/CodeGen/MachineFunction.h"
 #include "llvm/CodeGen/MachineInstrBuilder.h"
@@ -191,13 +192,13 @@ TMS9900TargetLowering::TMS9900TargetLowering(const TargetMachine &TM,
   setOperationAction(ISD::SDIVREM, MVT::i32, Expand);
   setOperationAction(ISD::UDIVREM, MVT::i32, Expand);
 
-  // Shifts - expand to shift_parts operations
+  // 32-bit shifts - expand to shift_parts, then handle with libcalls
+  // __ashlsi3 (shift left), __lshrsi3 (logical right), __ashrsi3 (arithmetic right)
   setOperationAction(ISD::SHL, MVT::i32, Expand);
   setOperationAction(ISD::SRA, MVT::i32, Expand);
   setOperationAction(ISD::SRL, MVT::i32, Expand);
 
-  // Multi-word shift parts - custom handling for efficient code
-  // These are generated when 32-bit shifts are expanded
+  // Multi-word shift parts - custom handling for libcalls
   setOperationAction(ISD::SHL_PARTS, MVT::i16, Custom);
   setOperationAction(ISD::SRA_PARTS, MVT::i16, Custom);
   setOperationAction(ISD::SRL_PARTS, MVT::i16, Custom);
@@ -635,9 +636,63 @@ SDValue TMS9900TargetLowering::LowerShiftParts(SDValue Op, SelectionDAG &DAG,
   }
 
   // Variable shift amount - use libcall
-  // The LLVM infrastructure will handle this when we return SDValue()
-  // and the operation remains Custom
-  return SDValue();
+  // Combine lo/hi into i32, call libcall, split result back
+
+  // Build the i32 value from lo and hi parts
+  SDValue Val = DAG.getNode(ISD::BUILD_PAIR, DL, MVT::i32, Lo, Hi);
+
+  // Determine which libcall to use
+  RTLIB::Libcall LC;
+  if (IsLeft) {
+    LC = RTLIB::SHL_I32;
+  } else if (IsArithmetic) {
+    LC = RTLIB::SRA_I32;
+  } else {
+    LC = RTLIB::SRL_I32;
+  }
+
+  // Make the libcall
+  TargetLowering::MakeLibCallOptions CallOptions;
+  SDValue Result = makeLibCall(DAG, LC, MVT::i32, {Val, Amt}, CallOptions, DL).first;
+
+  // Extract lo and hi from the result
+  SDValue ResLo = DAG.getNode(ISD::EXTRACT_ELEMENT, DL, VT, Result,
+                               DAG.getConstant(0, DL, MVT::i16));
+  SDValue ResHi = DAG.getNode(ISD::EXTRACT_ELEMENT, DL, VT, Result,
+                               DAG.getConstant(1, DL, MVT::i16));
+
+  return DAG.getMergeValues({ResLo, ResHi}, DL);
+}
+
+/// LowerShift32 - Lower 32-bit shifts to libcalls
+/// __ashlsi3 (shift left), __lshrsi3 (logical right), __ashrsi3 (arithmetic right)
+SDValue TMS9900TargetLowering::LowerShift32(SDValue Op, SelectionDAG &DAG) const {
+  SDLoc DL(Op);
+  EVT VT = Op.getValueType();
+
+  // Only handle i32 shifts
+  if (VT != MVT::i32)
+    return SDValue();
+
+  SDValue Val = Op.getOperand(0);
+  SDValue Amt = Op.getOperand(1);
+
+  // Determine which libcall to use
+  RTLIB::Libcall LC;
+  switch (Op.getOpcode()) {
+  default: llvm_unreachable("Invalid shift opcode");
+  case ISD::SHL: LC = RTLIB::SHL_I32; break;
+  case ISD::SRL: LC = RTLIB::SRL_I32; break;
+  case ISD::SRA: LC = RTLIB::SRA_I32; break;
+  }
+
+  // The shift amount needs to be i16 for the libcall
+  if (Amt.getValueType() != MVT::i16)
+    Amt = DAG.getZExtOrTrunc(Amt, DL, MVT::i16);
+
+  // Make the libcall
+  TargetLowering::MakeLibCallOptions CallOptions;
+  return makeLibCall(DAG, LC, VT, {Val, Amt}, CallOptions, DL).first;
 }
 
 SDValue TMS9900TargetLowering::LowerVASTART(SDValue Op, SelectionDAG &DAG) const {

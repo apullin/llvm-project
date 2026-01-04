@@ -14,8 +14,27 @@
 #include "llvm/MC/MCRegisterInfo.h"
 #include "llvm/MC/MCSubtargetInfo.h"
 #include "llvm/MC/TargetRegistry.h"
+#include "llvm/Support/CommandLine.h"
+#include "llvm/Support/Format.h"
 
 using namespace llvm;
+
+//===----------------------------------------------------------------------===//
+// TMS9900 Assembly Dialect Selection
+//===----------------------------------------------------------------------===//
+// 0 = Default (LLVM-style): decimal immediates, .text/.data sections
+// 1 = XAS99: >XXXX hex immediates, xas99-compatible output
+//===----------------------------------------------------------------------===//
+
+enum TMS9900AsmDialect { AD_Default = 0, AD_XAS99 = 1 };
+
+static cl::opt<TMS9900AsmDialect> TMS9900AsmDialectOpt(
+    "tms9900-asm-dialect", cl::init(AD_Default), cl::Hidden,
+    cl::desc("Choose TMS9900 assembly dialect:"),
+    cl::values(clEnumValN(AD_Default, "default",
+                          "Default LLVM-style assembly"),
+               clEnumValN(AD_XAS99, "xas99",
+                          "xas99-compatible assembly (>XXXX hex)")));
 
 // First include the ENUM definitions so TMS9900::R11 etc are defined
 #define GET_REGINFO_ENUM
@@ -69,6 +88,10 @@ public:
     // Code pointer size is 16 bits (2 bytes)
     CodePointerSize = 2;
     CalleeSaveStackSlotSize = 2;
+
+    // Set assembler dialect based on command-line option
+    // This is used by MCInstPrinter to determine formatting
+    AssemblerDialect = TMS9900AsmDialectOpt;
 
     // TMS9900 is big-endian
     IsLittleEndian = false;
@@ -195,7 +218,21 @@ void TMS9900InstPrinter::printOperand(const MCInst *MI, unsigned OpNo,
   if (Op.isReg()) {
     O << getRegisterName(Op.getReg());
   } else if (Op.isImm()) {
-    O << Op.getImm();
+    int64_t Imm = Op.getImm();
+    // Check if we're using xas99 dialect (dialect 1)
+    if (MAI.getAssemblerDialect() == AD_XAS99) {
+      // xas99 format: >XXXX for hex values
+      // Use hex for all values (xas99 convention)
+      if (Imm < 0) {
+        // For negative values, print as signed hex with >
+        O << ">-" << format_hex_no_prefix(-Imm, 1);
+      } else {
+        O << ">" << format_hex_no_prefix(Imm, 1);
+      }
+    } else {
+      // Default: decimal
+      O << Imm;
+    }
   } else {
     assert(Op.isExpr() && "unknown operand kind in printOperand");
     Op.getExpr()->print(O, &MAI);

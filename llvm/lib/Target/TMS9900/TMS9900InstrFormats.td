@@ -1,0 +1,474 @@
+//===-- TMS9900InstrFormats.td - TMS9900 Instruction Formats -*- tablegen -*-=//
+//
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
+//
+//===----------------------------------------------------------------------===//
+//
+// TMS9900 Instruction Format Definitions
+//
+// Instruction formats based on the TMS9900 Data Manual:
+//
+// Format 1: Dual operand (both general addressing)
+//   [opcode:4][B:1][Td:2][D:4][Ts:2][S:4]
+//   Examples: A, AB, C, CB, S, SB, SOC, SZC, MOV, MOVB
+//
+// Format 2: Dual operand (source general, dest register)
+//   [opcode:6][D:4][Ts:2][S:4]
+//   Examples: COC, CZC, XOR, MPY, DIV
+//
+// Format 3: Single operand
+//   [opcode:10][Ts:2][S:4]
+//   Examples: B, BL, BLWP, CLR, SETO, INV, NEG, INC, DEC
+//
+// Format 4: CRU multi-bit
+//   [opcode:6][C:4][Ts:2][S:4]
+//   Examples: LDCR, STCR
+//
+// Format 5: CRU single-bit
+//   [opcode:8][disp:8]
+//   Examples: SBO, SBZ, TB
+//
+// Format 6: Jump (PC-relative)
+//   [opcode:8][disp:8]
+//   Examples: JEQ, JNE, JMP, etc.
+//
+// Format 7: Shift
+//   [opcode:8][C:4][W:4]
+//   Examples: SLA, SRA, SRC, SRL
+//
+// Format 8: Immediate register
+//   [opcode:8][N:4][W:4] + [imm:16]
+//   Examples: AI, ANDI, CI, LI, ORI
+//
+// Format 9: Internal register immediate
+//   [opcode:11][N:5] + [imm:16]
+//   Examples: LWPI, LIMI
+//
+// Format 10: Internal register store
+//   [opcode:11][N:1][W:4]
+//   Examples: STST, STWP
+//
+// Format 11: RTWP
+//   [opcode:11][N:5]
+//
+// Format 12: External
+//   [opcode:11][N:5]
+//   Examples: IDLE, RSET, CKOF, CKON, LREX
+//
+//===----------------------------------------------------------------------===//
+
+//===----------------------------------------------------------------------===//
+// Addressing Mode Encodings
+//===----------------------------------------------------------------------===//
+
+// Ts/Td field encoding:
+//   00 = Register direct (Rx)
+//   01 = Register indirect (*Rx)
+//   10 = Symbolic @LABEL (when S/D=0) or Indexed @LABEL(Rx) (when S/D!=0)
+//   11 = Register indirect auto-increment (*Rx+)
+
+//===----------------------------------------------------------------------===//
+// Base Instruction Class
+//===----------------------------------------------------------------------===//
+
+class TMS9900Inst<dag outs, dag ins, string asmstr, list<dag> pattern>
+    : Instruction {
+  let Namespace = "TMS9900";
+
+  dag OutOperandList = outs;
+  dag InOperandList = ins;
+  let AsmString = asmstr;
+  let Pattern = pattern;
+
+  // Size in bytes (most instructions are 2 bytes, some have additional words)
+  bits<8> Size = 2;
+
+  let TSFlags{7-0} = Size;
+}
+
+//===----------------------------------------------------------------------===//
+// Pseudo Instructions
+//===----------------------------------------------------------------------===//
+
+class Pseudo<dag outs, dag ins, string asmstr, list<dag> pattern>
+    : TMS9900Inst<outs, ins, asmstr, pattern> {
+  let isPseudo = 1;
+  let isCodeGenOnly = 1;
+}
+
+//===----------------------------------------------------------------------===//
+// Format 1: Dual Operand with General Addressing (both operands)
+// [opcode:4][B:1][Td:2][D:4][Ts:2][S:4]
+//===----------------------------------------------------------------------===//
+
+// TMS9900 Instruction Encoding Notes:
+//
+// The manual describes Format 1 as [op:4][B:1][Td:2][D:4][Ts:2][S:4] = 17 bits.
+// However, B is actually encoded as bit 0 of the opcode (MOV=0xC, MOVB=0xD).
+//
+// Correct Format 1 layout (16 bits):
+//   [opcode:4][dest:6][src:6]
+// Where each 6-bit operand = [T:2][reg:4]
+//   T=00: register direct
+//   T=01: register indirect
+//   T=10: symbolic/indexed
+//   T=11: register indirect auto-increment
+//
+// Bit layout (LLVM-style, bit 0 = LSB):
+//   Bits 15-12: opcode (including byte flag as bit 12)
+//   Bits 11-6: destination operand (Td:2 + D:4)
+//   Bits 5-0: source operand (Ts:2 + S:4)
+//
+// Example: MOV R1,R2 = 0xC082
+//   0xC082 = 1100 0000 1000 0010
+//   opcode = 1100 (MOV)
+//   dest = 000010 = T=00 (reg direct), reg=0010 (R2)
+//   src = 000001 = T=00 (reg direct), reg=0001 (R1)
+
+// Simplified format for register-to-register operations (Ts=Td=00)
+class Format1_Reg<bits<4> opcode, bit byteflag, dag outs, dag ins,
+                  string asmstr, list<dag> pattern>
+    : TMS9900Inst<outs, ins, asmstr, pattern> {
+  bits<4> rd;   // Destination register
+  bits<4> rs;   // Source register
+
+  bits<16> Inst;
+
+  // Combine opcode with byte flag
+  let Inst{15-13} = opcode{3-1};
+  let Inst{12} = byteflag;
+  // Destination operand (Td=00 for register direct)
+  let Inst{11-10} = 0b00;     // Td = register direct
+  let Inst{9-6} = rd;         // D = destination register
+  // Source operand (Ts=00 for register direct)
+  let Inst{5-4} = 0b00;       // Ts = register direct
+  let Inst{3-0} = rs;         // S = source register
+}
+
+//===----------------------------------------------------------------------===//
+// Format 2: Dual Operand (Source General, Dest Register)
+// [opcode:6][D:4][Ts:2][S:4]
+//===----------------------------------------------------------------------===//
+
+class Format2<bits<6> opcode, dag outs, dag ins, string asmstr,
+              list<dag> pattern>
+    : TMS9900Inst<outs, ins, asmstr, pattern> {
+  bits<4> rd;   // Destination register
+  bits<6> src;  // Ts:2 + S:4
+
+  bits<16> Inst;
+
+  let Inst{15-10} = opcode;
+  let Inst{9-6} = rd;
+  let Inst{5-4} = src{5-4};   // Ts
+  let Inst{3-0} = src{3-0};   // S
+}
+
+class Format2_Reg<bits<6> opcode, dag outs, dag ins, string asmstr,
+                  list<dag> pattern>
+    : TMS9900Inst<outs, ins, asmstr, pattern> {
+  bits<4> rd;   // Destination register
+  bits<4> rs;   // Source register
+
+  bits<16> Inst;
+
+  let Inst{15-10} = opcode;
+  let Inst{9-6} = rd;
+  let Inst{5-4} = 0b00;       // Ts = register direct
+  let Inst{3-0} = rs;
+}
+
+//===----------------------------------------------------------------------===//
+// Format 3: Single Operand
+// [opcode:10][Ts:2][S:4]
+//===----------------------------------------------------------------------===//
+
+class Format3<bits<10> opcode, dag outs, dag ins, string asmstr,
+              list<dag> pattern>
+    : TMS9900Inst<outs, ins, asmstr, pattern> {
+  bits<6> src;  // Ts:2 + S:4
+
+  bits<16> Inst;
+
+  let Inst{15-6} = opcode;
+  let Inst{5-4} = src{5-4};   // Ts
+  let Inst{3-0} = src{3-0};   // S
+}
+
+class Format3_Reg<bits<10> opcode, dag outs, dag ins, string asmstr,
+                  list<dag> pattern>
+    : TMS9900Inst<outs, ins, asmstr, pattern> {
+  bits<4> rs;   // Source/dest register
+
+  bits<16> Inst;
+
+  let Inst{15-6} = opcode;
+  let Inst{5-4} = 0b00;       // Ts = register direct
+  let Inst{3-0} = rs;
+}
+
+//===----------------------------------------------------------------------===//
+// Format 1 with Memory Addressing
+// For load: MOV @addr,Rd or MOV *Rs,Rd
+// For store: MOV Rs,@addr or MOV Rs,*Rd
+//===----------------------------------------------------------------------===//
+
+// MOV with symbolic source addressing: MOV @addr,Rd
+// [opcode:4][B:1][Td:2][D:4][Ts:2][S:4] + [addr:16]
+// Ts=10, S=0 for symbolic addressing
+class Format1_SymLoad<bits<4> opcode, bit byteflag, dag outs, dag ins,
+                      string asmstr, list<dag> pattern>
+    : TMS9900Inst<outs, ins, asmstr, pattern> {
+  bits<4> rd;     // Destination register
+  bits<16> addr;  // Memory address
+
+  bits<16> Inst;
+
+  let Inst{15-13} = opcode{3-1};
+  let Inst{12} = byteflag;
+  // Destination operand (Td=00 for register direct)
+  let Inst{11-10} = 0b00;     // Td = register direct
+  let Inst{9-6} = rd;         // D = destination register
+  // Source operand (Ts=10, S=0 for symbolic addressing)
+  let Inst{5-4} = 0b10;       // Ts = symbolic/indexed
+  let Inst{3-0} = 0b0000;     // S = 0 for symbolic
+
+  let Size = 4;  // Two words (instruction + address)
+}
+
+// MOV with symbolic destination addressing: MOV Rs,@addr
+class Format1_SymStore<bits<4> opcode, bit byteflag, dag outs, dag ins,
+                       string asmstr, list<dag> pattern>
+    : TMS9900Inst<outs, ins, asmstr, pattern> {
+  bits<16> addr;  // Memory address
+  bits<4> rs;     // Source register
+
+  bits<16> Inst;
+
+  let Inst{15-13} = opcode{3-1};
+  let Inst{12} = byteflag;
+  // Destination operand (Td=10, D=0 for symbolic addressing)
+  let Inst{11-10} = 0b10;     // Td = symbolic
+  let Inst{9-6} = 0b0000;     // D = 0 for symbolic
+  // Source operand (Ts=00 for register direct)
+  let Inst{5-4} = 0b00;       // Ts = register direct
+  let Inst{3-0} = rs;         // S = source register
+
+  let Size = 4;  // Two words (instruction + address)
+}
+
+// MOV with indirect source: MOV *Rs,Rd
+class Format1_IndLoad<bits<4> opcode, bit byteflag, dag outs, dag ins,
+                      string asmstr, list<dag> pattern>
+    : TMS9900Inst<outs, ins, asmstr, pattern> {
+  bits<4> rd;   // Destination register
+  bits<4> rs;   // Source register (contains address)
+
+  bits<16> Inst;
+
+  let Inst{15-13} = opcode{3-1};
+  let Inst{12} = byteflag;
+  // Destination operand (Td=00 for register direct)
+  let Inst{11-10} = 0b00;     // Td = register direct
+  let Inst{9-6} = rd;         // D = destination register
+  // Source operand (Ts=01 for indirect)
+  let Inst{5-4} = 0b01;       // Ts = register indirect
+  let Inst{3-0} = rs;         // S = source register
+}
+
+// MOV with indirect destination: MOV Rs,*Rd
+class Format1_IndStore<bits<4> opcode, bit byteflag, dag outs, dag ins,
+                       string asmstr, list<dag> pattern>
+    : TMS9900Inst<outs, ins, asmstr, pattern> {
+  bits<4> rd;   // Destination register (contains address)
+  bits<4> rs;   // Source register
+
+  bits<16> Inst;
+
+  let Inst{15-13} = opcode{3-1};
+  let Inst{12} = byteflag;
+  // Destination operand (Td=01 for indirect)
+  let Inst{11-10} = 0b01;     // Td = register indirect
+  let Inst{9-6} = rd;         // D = destination register
+  // Source operand (Ts=00 for register direct)
+  let Inst{5-4} = 0b00;       // Ts = register direct
+  let Inst{3-0} = rs;         // S = source register
+}
+
+// MOV with indexed source: MOV @offset(Ri),Rd
+class Format1_IdxLoad<bits<4> opcode, bit byteflag, dag outs, dag ins,
+                      string asmstr, list<dag> pattern>
+    : TMS9900Inst<outs, ins, asmstr, pattern> {
+  bits<4> rd;     // Destination register
+  bits<4> ri;     // Index register (1-15, not 0)
+  bits<16> offset;// Offset
+
+  bits<16> Inst;
+
+  let Inst{15-13} = opcode{3-1};
+  let Inst{12} = byteflag;
+  // Destination operand (Td=00 for register direct)
+  let Inst{11-10} = 0b00;     // Td = register direct
+  let Inst{9-6} = rd;         // D = destination register
+  // Source operand (Ts=10 for indexed, S=index register)
+  let Inst{5-4} = 0b10;       // Ts = symbolic/indexed
+  let Inst{3-0} = ri;         // S = index register
+
+  let Size = 4;  // Two words (instruction + offset)
+}
+
+// MOV with indexed destination: MOV Rs,@offset(Ri)
+class Format1_IdxStore<bits<4> opcode, bit byteflag, dag outs, dag ins,
+                       string asmstr, list<dag> pattern>
+    : TMS9900Inst<outs, ins, asmstr, pattern> {
+  bits<4> ri;     // Index register (1-15, not 0)
+  bits<16> offset;// Offset
+  bits<4> rs;     // Source register
+
+  bits<16> Inst;
+
+  let Inst{15-13} = opcode{3-1};
+  let Inst{12} = byteflag;
+  // Destination operand (Td=10 for indexed, D=index register)
+  let Inst{11-10} = 0b10;     // Td = symbolic/indexed
+  let Inst{9-6} = ri;         // D = index register
+  // Source operand (Ts=00 for register direct)
+  let Inst{5-4} = 0b00;       // Ts = register direct
+  let Inst{3-0} = rs;         // S = source register
+
+  let Size = 4;  // Two words (instruction + offset)
+}
+
+//===----------------------------------------------------------------------===//
+// Format 1 with Auto-Increment Addressing
+// MOV *Rs+,Rd - Load with post-increment
+// The register Rs is incremented by 2 (word) or 1 (byte) after the access
+//===----------------------------------------------------------------------===//
+
+// MOV with auto-increment source: MOV *Rs+,Rd
+class Format1_AutoIncLoad<bits<4> opcode, bit byteflag, dag outs, dag ins,
+                          string asmstr, list<dag> pattern>
+    : TMS9900Inst<outs, ins, asmstr, pattern> {
+  bits<4> rd;   // Destination register
+  bits<4> rs;   // Source register (contains address, will be incremented)
+
+  bits<16> Inst;
+
+  let Inst{15-13} = opcode{3-1};
+  let Inst{12} = byteflag;
+  // Destination operand (Td=00 for register direct)
+  let Inst{11-10} = 0b00;     // Td = register direct
+  let Inst{9-6} = rd;         // D = destination register
+  // Source operand (Ts=11 for auto-increment)
+  let Inst{5-4} = 0b11;       // Ts = register indirect auto-increment
+  let Inst{3-0} = rs;         // S = source register
+}
+
+// MOV with auto-increment destination: MOV Rs,*Rd+
+// Note: Auto-increment on destination is unusual but valid
+class Format1_AutoIncStore<bits<4> opcode, bit byteflag, dag outs, dag ins,
+                           string asmstr, list<dag> pattern>
+    : TMS9900Inst<outs, ins, asmstr, pattern> {
+  bits<4> rd;   // Destination register (contains address, will be incremented)
+  bits<4> rs;   // Source register
+
+  bits<16> Inst;
+
+  let Inst{15-13} = opcode{3-1};
+  let Inst{12} = byteflag;
+  // Destination operand (Td=11 for auto-increment)
+  let Inst{11-10} = 0b11;     // Td = register indirect auto-increment
+  let Inst{9-6} = rd;         // D = destination register
+  // Source operand (Ts=00 for register direct)
+  let Inst{5-4} = 0b00;       // Ts = register direct
+  let Inst{3-0} = rs;         // S = source register
+}
+
+//===----------------------------------------------------------------------===//
+// Format 6: Jump (PC-relative)
+// [opcode:8][disp:8]
+//===----------------------------------------------------------------------===//
+
+class Format6<bits<8> opcode, dag outs, dag ins, string asmstr,
+              list<dag> pattern>
+    : TMS9900Inst<outs, ins, asmstr, pattern> {
+  bits<8> disp;   // Signed displacement (word offset)
+
+  bits<16> Inst;
+
+  let Inst{15-8} = opcode;
+  let Inst{7-0} = disp;
+
+  let isBranch = 1;
+  let isTerminator = 1;
+}
+
+//===----------------------------------------------------------------------===//
+// Format 7: Shift
+// [opcode:8][C:4][W:4]
+//===----------------------------------------------------------------------===//
+
+class Format7<bits<8> opcode, dag outs, dag ins, string asmstr,
+              list<dag> pattern>
+    : TMS9900Inst<outs, ins, asmstr, pattern> {
+  bits<4> count;  // Shift count (0 = use R0)
+  bits<4> rw;     // Register to shift
+
+  bits<16> Inst;
+
+  let Inst{15-8} = opcode;
+  let Inst{7-4} = count;
+  let Inst{3-0} = rw;
+}
+
+//===----------------------------------------------------------------------===//
+// Format 8: Immediate Register
+// [opcode:8][N:4][W:4] + [imm:16]
+// (Actually opcode is in bits 0-10, but simplified here)
+//===----------------------------------------------------------------------===//
+
+class Format8<bits<8> opcode, dag outs, dag ins, string asmstr,
+              list<dag> pattern>
+    : TMS9900Inst<outs, ins, asmstr, pattern> {
+  bits<4> rw;     // Register
+  bits<16> imm;   // Immediate value
+
+  bits<16> Inst;
+
+  let Inst{15-8} = opcode;
+  let Inst{7-4} = 0;          // N (unused)
+  let Inst{3-0} = rw;
+
+  let Size = 4;  // Two words
+}
+
+//===----------------------------------------------------------------------===//
+// Format 9: Internal Register Immediate (LWPI, LIMI)
+// [opcode:11][N:5] + [imm:16]
+//===----------------------------------------------------------------------===//
+
+class Format9<bits<11> opcode, dag outs, dag ins, string asmstr,
+              list<dag> pattern>
+    : TMS9900Inst<outs, ins, asmstr, pattern> {
+  bits<16> imm;   // Immediate value
+
+  bits<16> Inst;
+
+  let Inst{15-5} = opcode;
+  let Inst{4-0} = 0;          // N (unused)
+
+  let Size = 4;  // Two words
+}
+
+//===----------------------------------------------------------------------===//
+// Format 11: RTWP
+// [opcode:16]
+//===----------------------------------------------------------------------===//
+
+class Format11<bits<16> opcode, dag outs, dag ins, string asmstr,
+               list<dag> pattern>
+    : TMS9900Inst<outs, ins, asmstr, pattern> {
+  bits<16> Inst = opcode;
+}

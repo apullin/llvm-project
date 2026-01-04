@@ -32,6 +32,7 @@
 #include "ToolChains/Linux.h"
 #include "ToolChains/MSP430.h"
 #include "ToolChains/MSVC.h"
+#include "ToolChains/TMS9900.h"
 #include "ToolChains/MinGW.h"
 #include "ToolChains/MipsLinux.h"
 #include "ToolChains/NaCl.h"
@@ -6362,6 +6363,10 @@ const ToolChain &Driver::getToolChain(const ArgList &Args,
       case llvm::Triple::msp430:
         TC =
             std::make_unique<toolchains::MSP430ToolChain>(*this, Target, Args);
+        break;
+      case llvm::Triple::tms9900:
+        TC =
+            std::make_unique<toolchains::TMS9900ToolChain>(*this, Target, Args);
         break;
       case llvm::Triple::riscv32:
       case llvm::Triple::riscv64:

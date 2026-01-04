@@ -475,6 +475,7 @@ set(LLVM_ALL_EXPERIMENTAL_TARGETS
   DirectX
   M68k
   SPIRV
+  TMS9900
   Xtensa
 )
 

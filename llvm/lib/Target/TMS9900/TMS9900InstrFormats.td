@@ -128,6 +128,7 @@ class Pseudo<dag outs, dag ins, string asmstr, list<dag> pattern>
 //   src = 000001 = T=00 (reg direct), reg=0001 (R1)
 
 // Simplified format for register-to-register operations (Ts=Td=00)
+// Used for MOV and other non-modifying register transfers
 class Format1_Reg<bits<4> opcode, bit byteflag, dag outs, dag ins,
                   string asmstr, list<dag> pattern>
     : TMS9900Inst<outs, ins, asmstr, pattern> {
@@ -145,6 +146,44 @@ class Format1_Reg<bits<4> opcode, bit byteflag, dag outs, dag ins,
   // Source operand (Ts=00 for register direct)
   let Inst{5-4} = 0b00;       // Ts = register direct
   let Inst{3-0} = rs;         // S = source register
+}
+
+// Format1_Reg variant for two-address operations (A, S, SOC, SZC)
+// Operands: (outs $rd), (ins $rs1, $rs2) with $rd = $rs1 constraint
+// Encodes $rd and $rs2 (the explicit source operand)
+class Format1_Reg_TwoAddr<bits<4> opcode, bit byteflag, dag outs, dag ins,
+                          string asmstr, list<dag> pattern>
+    : TMS9900Inst<outs, ins, asmstr, pattern> {
+  bits<4> rd;   // Destination register (output, tied to rs1)
+  bits<4> rs2;  // Source register (explicit source operand)
+
+  bits<16> Inst;
+
+  let Inst{15-13} = opcode{3-1};
+  let Inst{12} = byteflag;
+  let Inst{11-10} = 0b00;     // Td = register direct
+  let Inst{9-6} = rd;         // D = destination register
+  let Inst{5-4} = 0b00;       // Ts = register direct
+  let Inst{3-0} = rs2;        // S = source register
+}
+
+// Format1_Reg variant for compare operations (C)
+// Operands: (outs), (ins $rs1, $rs2) - no output, just sets flags
+// Encodes both rs1 (as destination field) and rs2 (as source field)
+class Format1_Reg_Cmp<bits<4> opcode, bit byteflag, dag outs, dag ins,
+                      string asmstr, list<dag> pattern>
+    : TMS9900Inst<outs, ins, asmstr, pattern> {
+  bits<4> rs1;  // First operand (in destination field position)
+  bits<4> rs2;  // Second operand (source)
+
+  bits<16> Inst;
+
+  let Inst{15-13} = opcode{3-1};
+  let Inst{12} = byteflag;
+  let Inst{11-10} = 0b00;     // Td = register direct
+  let Inst{9-6} = rs1;        // D = first operand
+  let Inst{5-4} = 0b00;       // Ts = register direct
+  let Inst{3-0} = rs2;        // S = second operand
 }
 
 //===----------------------------------------------------------------------===//
@@ -180,6 +219,38 @@ class Format2_Reg<bits<6> opcode, dag outs, dag ins, string asmstr,
   let Inst{3-0} = rs;
 }
 
+// Format2_Reg variant for MPY/DIV with implicit R0 destination
+// These instructions use R0:R1 as destination (hardcoded)
+class Format2_Reg_R0<bits<6> opcode, dag outs, dag ins, string asmstr,
+                     list<dag> pattern>
+    : TMS9900Inst<outs, ins, asmstr, pattern> {
+  bits<4> rs;   // Source register
+
+  bits<16> Inst;
+
+  let Inst{15-10} = opcode;
+  let Inst{9-6} = 0b0000;     // rd = R0 (hardcoded)
+  let Inst{5-4} = 0b00;       // Ts = register direct
+  let Inst{3-0} = rs;
+}
+
+// Format2_Reg variant for two-address operations (XOR)
+// Operands: (outs $rd), (ins $rs1, $rs2) with $rd = $rs1 constraint
+// Encodes $rd and $rs2 (the explicit source operand)
+class Format2_Reg_TwoAddr<bits<6> opcode, dag outs, dag ins, string asmstr,
+                          list<dag> pattern>
+    : TMS9900Inst<outs, ins, asmstr, pattern> {
+  bits<4> rd;   // Destination register (output, tied to rs1)
+  bits<4> rs2;  // Source register (explicit source operand)
+
+  bits<16> Inst;
+
+  let Inst{15-10} = opcode;
+  let Inst{9-6} = rd;
+  let Inst{5-4} = 0b00;       // Ts = register direct
+  let Inst{3-0} = rs2;
+}
+
 //===----------------------------------------------------------------------===//
 // Format 3: Single Operand
 // [opcode:10][Ts:2][S:4]
@@ -207,6 +278,17 @@ class Format3_Reg<bits<10> opcode, dag outs, dag ins, string asmstr,
   let Inst{15-6} = opcode;
   let Inst{5-4} = 0b00;       // Ts = register direct
   let Inst{3-0} = rs;
+}
+
+// Format3_Reg variant with hardcoded R11 (for RET = B *R11)
+class Format3_Reg_R11<bits<10> opcode, dag outs, dag ins, string asmstr,
+                      list<dag> pattern>
+    : TMS9900Inst<outs, ins, asmstr, pattern> {
+  bits<16> Inst;
+
+  let Inst{15-6} = opcode;
+  let Inst{5-4} = 0b01;       // Ts = register indirect
+  let Inst{3-0} = 0b1011;     // R11 (link register)
 }
 
 //===----------------------------------------------------------------------===//
@@ -423,6 +505,36 @@ class Format7<bits<8> opcode, dag outs, dag ins, string asmstr,
   let Inst{3-0} = rw;
 }
 
+// Format7 variant for two-address shift instructions
+// Operands: (outs $rd), (ins $rs, $cnt) with $rd = $rs constraint
+// The register is encoded from $rd, count from $cnt
+class Format7_TwoAddr<bits<8> opcode, dag outs, dag ins, string asmstr,
+                      list<dag> pattern>
+    : TMS9900Inst<outs, ins, asmstr, pattern> {
+  bits<4> cnt;    // Shift count operand
+  bits<4> rd;     // Register to shift (output, tied to input)
+
+  bits<16> Inst;
+
+  let Inst{15-8} = opcode;
+  let Inst{7-4} = cnt;
+  let Inst{3-0} = rd;
+}
+
+// Format7 variant for shifts where count comes from R0 (count field = 0)
+// Operands: (outs $rd), (ins $rs) with $rd = $rs constraint
+class Format7_R0Count<bits<8> opcode, dag outs, dag ins, string asmstr,
+                      list<dag> pattern>
+    : TMS9900Inst<outs, ins, asmstr, pattern> {
+  bits<4> rd;     // Register to shift (output, tied to input)
+
+  bits<16> Inst;
+
+  let Inst{15-8} = opcode;
+  let Inst{7-4} = 0b0000;     // count = 0 (use R0)
+  let Inst{3-0} = rd;
+}
+
 //===----------------------------------------------------------------------===//
 // Format 8: Immediate Register
 // [opcode:8][N:4][W:4] + [imm:16]
@@ -432,14 +544,31 @@ class Format7<bits<8> opcode, dag outs, dag ins, string asmstr,
 class Format8<bits<8> opcode, dag outs, dag ins, string asmstr,
               list<dag> pattern>
     : TMS9900Inst<outs, ins, asmstr, pattern> {
-  bits<4> rw;     // Register
+  bits<4> rd;     // Register (output operand, tied to input)
   bits<16> imm;   // Immediate value
 
   bits<16> Inst;
 
   let Inst{15-8} = opcode;
   let Inst{7-4} = 0;          // N (unused)
-  let Inst{3-0} = rw;
+  let Inst{3-0} = rd;
+
+  let Size = 4;  // Two words
+}
+
+// Format8 variant for compare immediate (no output, just sets flags)
+// Operands: (outs), (ins $rs, $imm)
+class Format8_Cmp<bits<8> opcode, dag outs, dag ins, string asmstr,
+                  list<dag> pattern>
+    : TMS9900Inst<outs, ins, asmstr, pattern> {
+  bits<4> rs;     // Register to compare (input only)
+  bits<16> imm;   // Immediate value
+
+  bits<16> Inst;
+
+  let Inst{15-8} = opcode;
+  let Inst{7-4} = 0;          // N (unused)
+  let Inst{3-0} = rs;
 
   let Size = 4;  // Two words
 }

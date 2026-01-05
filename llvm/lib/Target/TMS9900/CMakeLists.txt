@@ -8,6 +8,7 @@ tablegen(LLVM TMS9900GenAsmWriter.inc -gen-asm-writer)
 tablegen(LLVM TMS9900GenDAGISel.inc -gen-dag-isel)
 tablegen(LLVM TMS9900GenCallingConv.inc -gen-callingconv)
 tablegen(LLVM TMS9900GenSubtargetInfo.inc -gen-subtarget)
+tablegen(LLVM TMS9900GenMCCodeEmitter.inc -gen-emitter)
 
 add_public_tablegen_target(TMS9900CommonTableGen)
 
@@ -34,10 +35,12 @@ add_llvm_target(TMS9900CodeGen
   SelectionDAG
   Support
   Target
+  TMS9900Desc
   TMS9900Info
 
   ADD_TO_COMPONENT
   TMS9900
   )
 
+add_subdirectory(MCTargetDesc)
 add_subdirectory(TargetInfo)

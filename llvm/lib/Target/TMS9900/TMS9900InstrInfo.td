@@ -230,7 +230,7 @@ def MOVmx : Format1_IdxStore<0b1100, 0, (outs), (ins i16imm:$offset, GR16:$ri, G
 // MOV @offset(Ri),Rd - Load indexed (frame index compatible)
 // This is a pseudo that will be printed by custom code in TMS9900AsmPrinter
 // or expanded by TMS9900MCInstLower
-let mayLoad = 1, isCodeGenOnly = 1 in
+let mayLoad = 1, isCodeGenOnly = 1, isPseudo = 1 in
 def MOV_FI_Load : TMS9900Inst<(outs GR16:$rd), (ins GR16:$base, i16imm:$offset),
                               "MOV\t@$offset($base),$rd",
                               []> {
@@ -240,7 +240,7 @@ def MOV_FI_Load : TMS9900Inst<(outs GR16:$rd), (ins GR16:$base, i16imm:$offset),
 // MOV Rs,@offset(Ri) - Store indexed (frame index compatible)
 // This is a pseudo that will be printed by custom code in TMS9900AsmPrinter
 // or expanded by TMS9900MCInstLower
-let mayStore = 1, isCodeGenOnly = 1 in
+let mayStore = 1, isCodeGenOnly = 1, isPseudo = 1 in
 def MOV_FI_Store : TMS9900Inst<(outs), (ins GR16:$base, i16imm:$offset, GR16:$rs),
                                "MOV\t$rs,@$offset($base)",
                                []> {
@@ -349,9 +349,9 @@ def MOVBmpi : Format1_AutoIncStore<0b1100, 1, (outs GR16:$rd_wb),
 
 // LI - Load Immediate (sets status based on value loaded)
 let Defs = [ST] in
-def LI : Format8<0b00100000, (outs GR16:$rw), (ins i16imm:$imm),
-                 "LI\t$rw,$imm",
-                 [(set GR16:$rw, imm:$imm)]>;
+def LI : Format8<0b00100000, (outs GR16:$rd), (ins i16imm:$imm),
+                 "LI\t$rd,$imm",
+                 [(set GR16:$rd, imm:$imm)]>;
 
 // CLR, SETO, SWPB all set status bits
 let Defs = [ST] in {
@@ -381,9 +381,9 @@ def SWPBr : Format3_Reg<0b0000011011, (outs GR16:$rd), (ins GR16:$rs),
 let Defs = [ST] in {
 
 // A - Add
-def Arr : Format1_Reg<0b1010, 0, (outs GR16:$rd), (ins GR16:$rs1, GR16:$rs2),
-                      "A\t$rs2,$rd",
-                      [(set GR16:$rd, (add GR16:$rs1, GR16:$rs2))]> {
+def Arr : Format1_Reg_TwoAddr<0b1010, 0, (outs GR16:$rd), (ins GR16:$rs1, GR16:$rs2),
+                              "A\t$rs2,$rd",
+                              [(set GR16:$rd, (add GR16:$rs1, GR16:$rs2))]> {
   let Constraints = "$rd = $rs1";
 }
 
@@ -395,9 +395,9 @@ def AI : Format8<0b00100001, (outs GR16:$rd), (ins GR16:$rs, i16imm:$imm),
 }
 
 // S - Subtract (dst = dst - src)
-def Srr : Format1_Reg<0b0110, 0, (outs GR16:$rd), (ins GR16:$rs1, GR16:$rs2),
-                      "S\t$rs2,$rd",
-                      [(set GR16:$rd, (sub GR16:$rs1, GR16:$rs2))]> {
+def Srr : Format1_Reg_TwoAddr<0b0110, 0, (outs GR16:$rd), (ins GR16:$rs1, GR16:$rs2),
+                              "S\t$rs2,$rd",
+                              [(set GR16:$rd, (sub GR16:$rs1, GR16:$rs2))]> {
   let Constraints = "$rd = $rs1";
 }
 
@@ -460,9 +460,9 @@ def INVr : Format3_Reg<0b0000010101, (outs GR16:$rd), (ins GR16:$rs),
 }
 
 // SOC - Set Ones Corresponding (OR)
-def SOCrr : Format1_Reg<0b1110, 0, (outs GR16:$rd), (ins GR16:$rs1, GR16:$rs2),
-                        "SOC\t$rs2,$rd",
-                        [(set GR16:$rd, (or GR16:$rs1, GR16:$rs2))]> {
+def SOCrr : Format1_Reg_TwoAddr<0b1110, 0, (outs GR16:$rd), (ins GR16:$rs1, GR16:$rs2),
+                                "SOC\t$rs2,$rd",
+                                [(set GR16:$rd, (or GR16:$rs1, GR16:$rs2))]> {
   let Constraints = "$rd = $rs1";
 }
 
@@ -475,9 +475,9 @@ def ORI : Format8<0b00100011, (outs GR16:$rd), (ins GR16:$rs, i16imm:$imm),
 
 // SZC - Set Zeros Corresponding (AND with complement = BIC)
 // dst = dst AND (NOT src)
-def SZCrr : Format1_Reg<0b0100, 0, (outs GR16:$rd), (ins GR16:$rs1, GR16:$rs2),
-                        "SZC\t$rs2,$rd",
-                        [(set GR16:$rd, (and GR16:$rs1, (not GR16:$rs2)))]> {
+def SZCrr : Format1_Reg_TwoAddr<0b0100, 0, (outs GR16:$rd), (ins GR16:$rs1, GR16:$rs2),
+                                "SZC\t$rs2,$rd",
+                                [(set GR16:$rd, (and GR16:$rs1, (not GR16:$rs2)))]> {
   let Constraints = "$rd = $rs1";
 }
 
@@ -489,9 +489,9 @@ def ANDI : Format8<0b00100010, (outs GR16:$rd), (ins GR16:$rs, i16imm:$imm),
 }
 
 // XOR - Exclusive OR
-def XORrr : Format2_Reg<0b001010, (outs GR16:$rd), (ins GR16:$rs1, GR16:$rs2),
-                        "XOR\t$rs2,$rd",
-                        [(set GR16:$rd, (xor GR16:$rs1, GR16:$rs2))]> {
+def XORrr : Format2_Reg_TwoAddr<0b001010, (outs GR16:$rd), (ins GR16:$rs1, GR16:$rs2),
+                                "XOR\t$rs2,$rd",
+                                [(set GR16:$rd, (xor GR16:$rs1, GR16:$rs2))]> {
   let Constraints = "$rd = $rs1";
 }
 
@@ -505,30 +505,30 @@ def XORrr : Format2_Reg<0b001010, (outs GR16:$rd), (ins GR16:$rs1, GR16:$rs2),
 let Defs = [ST] in {
 
 // SLA - Shift Left Arithmetic
-def SLAri : Format7<0b00001010, (outs GR16:$rd), (ins GR16:$rs, i16imm:$cnt),
-                    "SLA\t$rs,$cnt",
-                    [(set GR16:$rd, (shl GR16:$rs, (i16 imm:$cnt)))]> {
+def SLAri : Format7_TwoAddr<0b00001010, (outs GR16:$rd), (ins GR16:$rs, i16imm:$cnt),
+                            "SLA\t$rs,$cnt",
+                            [(set GR16:$rd, (shl GR16:$rs, (i16 imm:$cnt)))]> {
   let Constraints = "$rd = $rs";
 }
 
 // SRA - Shift Right Arithmetic
-def SRAri : Format7<0b00001000, (outs GR16:$rd), (ins GR16:$rs, i16imm:$cnt),
-                    "SRA\t$rs,$cnt",
-                    [(set GR16:$rd, (sra GR16:$rs, (i16 imm:$cnt)))]> {
+def SRAri : Format7_TwoAddr<0b00001000, (outs GR16:$rd), (ins GR16:$rs, i16imm:$cnt),
+                            "SRA\t$rs,$cnt",
+                            [(set GR16:$rd, (sra GR16:$rs, (i16 imm:$cnt)))]> {
   let Constraints = "$rd = $rs";
 }
 
 // SRL - Shift Right Logical
-def SRLri : Format7<0b00001001, (outs GR16:$rd), (ins GR16:$rs, i16imm:$cnt),
-                    "SRL\t$rs,$cnt",
-                    [(set GR16:$rd, (srl GR16:$rs, (i16 imm:$cnt)))]> {
+def SRLri : Format7_TwoAddr<0b00001001, (outs GR16:$rd), (ins GR16:$rs, i16imm:$cnt),
+                            "SRL\t$rs,$cnt",
+                            [(set GR16:$rd, (srl GR16:$rs, (i16 imm:$cnt)))]> {
   let Constraints = "$rd = $rs";
 }
 
 // SRC - Shift Right Circular (rotate right)
-def SRCri : Format7<0b00001011, (outs GR16:$rd), (ins GR16:$rs, i16imm:$cnt),
-                    "SRC\t$rs,$cnt",
-                    [(set GR16:$rd, (rotr GR16:$rs, (i16 imm:$cnt)))]> {
+def SRCri : Format7_TwoAddr<0b00001011, (outs GR16:$rd), (ins GR16:$rs, i16imm:$cnt),
+                            "SRC\t$rs,$cnt",
+                            [(set GR16:$rd, (rotr GR16:$rs, (i16 imm:$cnt)))]> {
   let Constraints = "$rd = $rs";
 }
 
@@ -537,24 +537,21 @@ def SRCri : Format7<0b00001011, (outs GR16:$rd), (ins GR16:$rs, i16imm:$cnt),
 // Shift instructions with count from R0 (count field = 0)
 // These are used by variable shift pseudos
 let Defs = [ST] in {
-def SLAr0 : Format7<0b00001010, (outs GR16:$rd), (ins GR16:$rs),
-                    "SLA\t$rs,0", []> {
-  let count = 0;
+def SLAr0 : Format7_R0Count<0b00001010, (outs GR16:$rd), (ins GR16:$rs),
+                            "SLA\t$rs,0", []> {
   let Constraints = "$rd = $rs";
   // R0 is implicitly used for the shift count
   let Uses = [R0];
 }
 
-def SRAr0 : Format7<0b00001000, (outs GR16:$rd), (ins GR16:$rs),
-                    "SRA\t$rs,0", []> {
-  let count = 0;
+def SRAr0 : Format7_R0Count<0b00001000, (outs GR16:$rd), (ins GR16:$rs),
+                            "SRA\t$rs,0", []> {
   let Constraints = "$rd = $rs";
   let Uses = [R0];
 }
 
-def SRLr0 : Format7<0b00001001, (outs GR16:$rd), (ins GR16:$rs),
-                    "SRL\t$rs,0", []> {
-  let count = 0;
+def SRLr0 : Format7_R0Count<0b00001001, (outs GR16:$rd), (ins GR16:$rs),
+                            "SRL\t$rs,0", []> {
   let Constraints = "$rd = $rs";
   let Uses = [R0];
 }
@@ -590,13 +587,13 @@ def SRL_VAR : Pseudo<(outs GR16:$rd), (ins GR16:$rs, GR16:$cnt),
 
 // C - Compare
 let Defs = [ST] in {
-def Crr : Format1_Reg<0b1000, 0, (outs), (ins GR16:$rs1, GR16:$rs2),
-                      "C\t$rs1,$rs2",
-                      [(TMS9900cmp GR16:$rs1, GR16:$rs2)]>;
+def Crr : Format1_Reg_Cmp<0b1000, 0, (outs), (ins GR16:$rs1, GR16:$rs2),
+                          "C\t$rs1,$rs2",
+                          [(TMS9900cmp GR16:$rs1, GR16:$rs2)]>;
 
 // CI - Compare Immediate
-def CI : Format8<0b00100100, (outs), (ins GR16:$rs, i16imm:$imm),
-                 "CI\t$rs,$imm",
+def CI : Format8_Cmp<0b00100100, (outs), (ins GR16:$rs, i16imm:$imm),
+                     "CI\t$rs,$imm",
                  [(TMS9900cmp GR16:$rs, imm:$imm)]>;
 }
 
@@ -695,9 +692,9 @@ def RTWP : Format11<0b0000001110000000, (outs), (ins),
 
 // Simple return via B *R11 (for non-context-switch returns)
 // This is lowered from the RET pseudo
-def RET_REAL : Format3_Reg<0b0000010001, (outs), (ins),
-                           "B\t*R11",
-                           []> {
+def RET_REAL : Format3_Reg_R11<0b0000010001, (outs), (ins),
+                               "B\t*R11",
+                               []> {
   let isReturn = 1;
   let isTerminator = 1;
   let isBarrier = 1;
@@ -716,9 +713,9 @@ def RET_REAL : Format3_Reg<0b0000010001, (outs), (ins),
 // Note: Rd must be an even register (R0, R2, R4, R6, R8)
 // We hardcode to R0 and mark that it uses R0 and clobbers R0:R1
 let Uses = [R0], Defs = [R0, R1] in
-def MPYrr : Format2_Reg<0b001110, (outs), (ins GR16:$rs),
-                        "MPY\t$rs,R0",
-                        []>;
+def MPYrr : Format2_Reg_R0<0b001110, (outs), (ins GR16:$rs),
+                           "MPY\t$rs,R0",
+                           []>;
 
 // DIV - Divide (unsigned 32/16 -> 16q, 16r)
 // Dividend in Rd:Rd+1 (32-bit input), divisor in Rs
@@ -726,9 +723,9 @@ def MPYrr : Format2_Reg<0b001110, (outs), (ins GR16:$rs),
 // Note: Rd must be an even register
 // The instruction reads and writes R0:R1 (when Rd=R0)
 let Uses = [R0, R1], Defs = [R0, R1] in
-def DIVrr : Format2_Reg<0b001111, (outs), (ins GR16:$rs),
-                        "DIV\t$rs,R0",
-                        []>;
+def DIVrr : Format2_Reg_R0<0b001111, (outs), (ins GR16:$rs),
+                           "DIV\t$rs,R0",
+                           []>;
 
 // Pseudo instruction for 16-bit multiply (result = low 16 bits)
 // This is expanded by the custom inserter to:

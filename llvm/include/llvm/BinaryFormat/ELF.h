@@ -250,6 +250,7 @@ enum {
   EM_TI_C6000 = 140,      // The Texas Instruments TMS320C6000 DSP family
   EM_TI_C2000 = 141,      // The Texas Instruments TMS320C2000 DSP family
   EM_TI_C5500 = 142,      // The Texas Instruments TMS320C55x DSP family
+  EM_TMS9900 = 0x99,      // Texas Instruments TMS9900 16-bit microprocessor
   EM_MMDSP_PLUS = 160,    // STMicroelectronics 64bit VLIW Data Signal Processor
   EM_CYPRESS_M8C = 161,   // Cypress M8C microprocessor
   EM_R32C = 162,          // Renesas R32C series microprocessors

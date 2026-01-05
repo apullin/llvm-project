@@ -108,12 +108,13 @@ def sub_hi : SubRegIndex<16, 16>;
 
 // Register pairs for MPY/DIV operations
 // These are used for 32-bit results/operands
+// Note: Names use colon separator to avoid conflicts with single registers
 let SubRegIndices = [sub_hi, sub_lo] in {
-def R0_R1   : RegisterWithSubRegs<"R0",  [R0, R1]>   { let Namespace = "TMS9900"; }
-def R2_R3   : RegisterWithSubRegs<"R2",  [R2, R3]>   { let Namespace = "TMS9900"; }
-def R4_R5   : RegisterWithSubRegs<"R4",  [R4, R5]>   { let Namespace = "TMS9900"; }
-def R6_R7   : RegisterWithSubRegs<"R6",  [R6, R7]>   { let Namespace = "TMS9900"; }
-def R8_R9   : RegisterWithSubRegs<"R8",  [R8, R9]>   { let Namespace = "TMS9900"; }
+def R0_R1   : RegisterWithSubRegs<"R0:R1", [R0, R1]>   { let Namespace = "TMS9900"; }
+def R2_R3   : RegisterWithSubRegs<"R2:R3", [R2, R3]>   { let Namespace = "TMS9900"; }
+def R4_R5   : RegisterWithSubRegs<"R4:R5", [R4, R5]>   { let Namespace = "TMS9900"; }
+def R6_R7   : RegisterWithSubRegs<"R6:R7", [R6, R7]>   { let Namespace = "TMS9900"; }
+def R8_R9   : RegisterWithSubRegs<"R8:R9", [R8, R9]>   { let Namespace = "TMS9900"; }
 // R10/R11 are SP/LR, R12/R13 are CRU/OldWP - generally not used for MPY/DIV
 }
 

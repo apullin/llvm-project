@@ -72,21 +72,64 @@ def TMS9900selectcc : SDNode<"TMS9900ISD::SELECT_CC",
                              [SDNPInGlue]>;
 
 //===----------------------------------------------------------------------===//
+// AsmOperandClass Definitions (for AsmParser)
+//===----------------------------------------------------------------------===//
+
+// Immediate operand class
+def TMS9900ImmAsmOperand : AsmOperandClass {
+  let Name = "TMS9900Imm";
+  let RenderMethod = "addImmOperands";
+  let DiagnosticType = "InvalidImm";
+}
+
+// Memory operand class (symbolic: @LABEL or indexed: @offset(Rn))
+def TMS9900MemAsmOperand : AsmOperandClass {
+  let Name = "TMS9900Mem";
+  let RenderMethod = "addMemOperands";
+  let ParserMethod = "parseMemOperand";
+}
+
+// Indirect register operand class (*Rn)
+def TMS9900IndRegAsmOperand : AsmOperandClass {
+  let Name = "TMS9900IndReg";
+  let RenderMethod = "addIndRegOperands";
+  let ParserMethod = "parseIndirectOperand";
+}
+
+// Post-increment indirect operand class (*Rn+)
+def TMS9900PostIndRegAsmOperand : AsmOperandClass {
+  let Name = "TMS9900PostIndReg";
+  let RenderMethod = "addPostIndRegOperands";
+  let ParserMethod = "parsePostIndirectOperand";
+}
+
+// Branch target operand class
+def TMS9900BrTargetAsmOperand : AsmOperandClass {
+  let Name = "TMS9900BrTarget";
+  let RenderMethod = "addBrTargetOperands";
+  let ParserMethod = "parseBranchTarget";
+}
+
+//===----------------------------------------------------------------------===//
 // Operand Definitions
 //===----------------------------------------------------------------------===//
 
 // 16-bit immediate
-def imm16 : Operand<i16>;
+def imm16 : Operand<i16> {
+  let ParserMatchClass = TMS9900ImmAsmOperand;
+}
 
 // 8-bit signed displacement for jumps (word offset, so range is -256 to +254 bytes)
 def brtarget8 : Operand<OtherVT> {
   let EncoderMethod = "getBranchTargetEncoding";
   let DecoderMethod = "decodeBranchTarget";
+  let ParserMatchClass = TMS9900BrTargetAsmOperand;
 }
 
 // Memory operand (for symbolic addressing)
 def memsrc : Operand<i16> {
   let MIOperandInfo = (ops GR16);
+  let ParserMatchClass = TMS9900MemAsmOperand;
 }
 
 // Memory operand for indexed addressing: register + immediate offset
@@ -94,11 +137,13 @@ def memsrc : Operand<i16> {
 // MIOperandInfo defines this as a composite operand: (register, immediate)
 def memri : Operand<i16> {
   let MIOperandInfo = (ops GR16, i16imm);
+  let ParserMatchClass = TMS9900MemAsmOperand;
 }
 
 // Call target (for BL @symbol)
 def calltarget : Operand<i16> {
   let EncoderMethod = "getCallTargetEncoding";
+  let ParserMatchClass = TMS9900ImmAsmOperand;
 }
 
 //===----------------------------------------------------------------------===//
@@ -190,7 +235,7 @@ def MOVim : Format1_IndLoad<0b1100, 0, (outs GR16:$rd), (ins GR16:$rs),
 // MOV @offset(Ri),Rd - Load indexed
 // Used for stack-relative addressing (locals via SP)
 def MOVxm : Format1_IdxLoad<0b1100, 0, (outs GR16:$rd), (ins i16imm:$offset, GR16:$ri),
-                            "MOV\t@$offset($ri),$rd",
+                            "MOV\t@${offset}(${ri}),$rd",
                             [(set GR16:$rd, (load (add GR16:$ri, (i16 imm:$offset))))]> {
   let mayLoad = 1;
 }
@@ -216,7 +261,7 @@ def MOVmi : Format1_IndStore<0b1100, 0, (outs), (ins GR16:$rd, GR16:$rs),
 // MOV Rs,@offset(Ri) - Store indexed
 // Used for stack-relative addressing (locals via SP)
 def MOVmx : Format1_IdxStore<0b1100, 0, (outs), (ins i16imm:$offset, GR16:$ri, GR16:$rs),
-                             "MOV\t$rs,@$offset($ri)",
+                             "MOV\t$rs,@${offset}(${ri})",
                              [(store GR16:$rs, (add GR16:$ri, (i16 imm:$offset)))]> {
   let mayStore = 1;
 }
@@ -232,7 +277,7 @@ def MOVmx : Format1_IdxStore<0b1100, 0, (outs), (ins i16imm:$offset, GR16:$ri, G
 // or expanded by TMS9900MCInstLower
 let mayLoad = 1, isCodeGenOnly = 1, isPseudo = 1 in
 def MOV_FI_Load : TMS9900Inst<(outs GR16:$rd), (ins GR16:$base, i16imm:$offset),
-                              "MOV\t@$offset($base),$rd",
+                              "MOV\t@${offset}(${base}),$rd",
                               []> {
   let Size = 4;  // instruction word + offset word
 }
@@ -242,7 +287,7 @@ def MOV_FI_Load : TMS9900Inst<(outs GR16:$rd), (ins GR16:$base, i16imm:$offset),
 // or expanded by TMS9900MCInstLower
 let mayStore = 1, isCodeGenOnly = 1, isPseudo = 1 in
 def MOV_FI_Store : TMS9900Inst<(outs), (ins GR16:$base, i16imm:$offset, GR16:$rs),
-                               "MOV\t$rs,@$offset($base)",
+                               "MOV\t$rs,@${offset}(${base})",
                                []> {
   let Size = 4;  // instruction word + offset word
 }
@@ -262,7 +307,7 @@ def MOVBim : Format1_IndLoad<0b1100, 1, (outs GR16:$rd), (ins GR16:$rs),
 
 // MOVB @offset(Ri),Rd - Load byte indexed (extending load)
 def MOVBxm : Format1_IdxLoad<0b1100, 1, (outs GR16:$rd), (ins i16imm:$offset, GR16:$ri),
-                             "MOVB\t@$offset($ri),$rd",
+                             "MOVB\t@${offset}(${ri}),$rd",
                              [(set GR16:$rd, (extloadi8 (add GR16:$ri, (i16 imm:$offset))))]> {
   let mayLoad = 1;
 }
@@ -288,7 +333,7 @@ def MOVBmi : Format1_IndStore<0b1100, 1, (outs), (ins GR16:$rd, GR16:$rs),
 
 // MOVB Rs,@offset(Ri) - Store byte indexed (truncating store)
 def MOVBmx : Format1_IdxStore<0b1100, 1, (outs), (ins i16imm:$offset, GR16:$ri, GR16:$rs),
-                              "MOVB\t$rs,@$offset($ri)",
+                              "MOVB\t$rs,@${offset}(${ri})",
                               [(truncstorei8 GR16:$rs, (add GR16:$ri, (i16 imm:$offset)))]> {
   let mayStore = 1;
 }
@@ -310,7 +355,7 @@ def MOVBma : Format1_SymStore<0b1100, 1, (outs), (ins i16imm:$addr, GR16:$rs),
 // Output: $rd = loaded value, $rs_wb = $rs + 2
 def MOVpim : Format1_AutoIncLoad<0b1100, 0, (outs GR16:$rd, GR16:$rs_wb),
                                  (ins GR16:$rs),
-                                 "MOV\t*$rs+,$rd", []> {
+                                 "MOV\t*${rs}+,$rd", []> {
   let mayLoad = 1;
   let Constraints = "$rs_wb = $rs";
 }
@@ -319,7 +364,7 @@ def MOVpim : Format1_AutoIncLoad<0b1100, 0, (outs GR16:$rd, GR16:$rs_wb),
 // Output: $rd = loaded value (in upper byte), $rs_wb = $rs + 1
 def MOVBpim : Format1_AutoIncLoad<0b1100, 1, (outs GR16:$rd, GR16:$rs_wb),
                                   (ins GR16:$rs),
-                                  "MOVB\t*$rs+,$rd", []> {
+                                  "MOVB\t*${rs}+,$rd", []> {
   let mayLoad = 1;
   let Constraints = "$rs_wb = $rs";
 }
@@ -333,7 +378,7 @@ def MOVBpim : Format1_AutoIncLoad<0b1100, 1, (outs GR16:$rd, GR16:$rs_wb),
 // Output: $rd_wb = $rd + 2
 def MOVmpi : Format1_AutoIncStore<0b1100, 0, (outs GR16:$rd_wb),
                                   (ins GR16:$rd, GR16:$rs),
-                                  "MOV\t$rs,*$rd+", []> {
+                                  "MOV\t$rs,*${rd}+", []> {
   let mayStore = 1;
   let Constraints = "$rd_wb = $rd";
 }
@@ -342,7 +387,7 @@ def MOVmpi : Format1_AutoIncStore<0b1100, 0, (outs GR16:$rd_wb),
 // Output: $rd_wb = $rd + 1
 def MOVBmpi : Format1_AutoIncStore<0b1100, 1, (outs GR16:$rd_wb),
                                    (ins GR16:$rd, GR16:$rs),
-                                   "MOVB\t$rs,*$rd+", []> {
+                                   "MOVB\t$rs,*${rd}+", []> {
   let mayStore = 1;
   let Constraints = "$rd_wb = $rd";
 }
@@ -669,6 +714,7 @@ def BL_sym : TMS9900Inst<(outs), (ins calltarget:$target),
 }
 
 // BL with external symbol - BL @external
+// Marked isCodeGenOnly to avoid duplicate asm pattern with BL_sym
 let isCall = 1, Defs = [R11] in
 def BL_ext : TMS9900Inst<(outs), (ins calltarget:$target),
                          "BL\t@$target",
@@ -678,6 +724,7 @@ def BL_ext : TMS9900Inst<(outs), (ins calltarget:$target),
   let Inst{15-10} = 0b000001;
   let Inst{9-4} = 0b101000;
   let Inst{3-0} = 0b0000;
+  let isCodeGenOnly = 1;
 }
 
 // RTWP - Return with workspace pointer (full context restore)

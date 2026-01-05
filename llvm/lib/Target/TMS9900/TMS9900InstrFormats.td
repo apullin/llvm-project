@@ -547,11 +547,14 @@ class Format8<bits<8> opcode, dag outs, dag ins, string asmstr,
   bits<4> rd;     // Register (output operand, tied to input)
   bits<16> imm;   // Immediate value
 
-  bits<16> Inst;
+  bits<32> Inst;
 
+  // First word (low 16 bits in big-endian output)
   let Inst{15-8} = opcode;
   let Inst{7-4} = 0;          // N (unused)
   let Inst{3-0} = rd;
+  // Second word (high 16 bits in big-endian output)
+  let Inst{31-16} = imm;
 
   let Size = 4;  // Two words
 }
@@ -564,11 +567,14 @@ class Format8_Cmp<bits<8> opcode, dag outs, dag ins, string asmstr,
   bits<4> rs;     // Register to compare (input only)
   bits<16> imm;   // Immediate value
 
-  bits<16> Inst;
+  bits<32> Inst;
 
+  // First word (low 16 bits in big-endian output)
   let Inst{15-8} = opcode;
   let Inst{7-4} = 0;          // N (unused)
   let Inst{3-0} = rs;
+  // Second word (high 16 bits in big-endian output)
+  let Inst{31-16} = imm;
 
   let Size = 4;  // Two words
 }
@@ -583,10 +589,13 @@ class Format9<bits<11> opcode, dag outs, dag ins, string asmstr,
     : TMS9900Inst<outs, ins, asmstr, pattern> {
   bits<16> imm;   // Immediate value
 
-  bits<16> Inst;
+  bits<32> Inst;
 
+  // First word (low 16 bits in big-endian output)
   let Inst{15-5} = opcode;
   let Inst{4-0} = 0;          // N (unused)
+  // Second word (high 16 bits in big-endian output)
+  let Inst{31-16} = imm;
 
   let Size = 4;  // Two words
 }

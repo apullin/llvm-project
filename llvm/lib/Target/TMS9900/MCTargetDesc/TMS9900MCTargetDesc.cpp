@@ -100,7 +100,7 @@ public:
       ZeroDirective = "\tBSS ";
     }
 
-    UseIntegratedAssembler = false;
+    UseIntegratedAssembler = true;  // Enable AsmParser for .S files
     SupportsDebugInformation = false;
   }
 

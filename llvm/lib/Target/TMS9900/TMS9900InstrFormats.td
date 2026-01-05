@@ -541,7 +541,7 @@ class Format7_R0Count<bits<8> opcode, dag outs, dag ins, string asmstr,
 // (Actually opcode is in bits 0-10, but simplified here)
 //===----------------------------------------------------------------------===//
 
-class Format8<bits<8> opcode, dag outs, dag ins, string asmstr,
+class Format8<bits<4> subop, dag outs, dag ins, string asmstr,
               list<dag> pattern>
     : TMS9900Inst<outs, ins, asmstr, pattern> {
   bits<4> rd;     // Register (output operand, tied to input)
@@ -549,11 +549,12 @@ class Format8<bits<8> opcode, dag outs, dag ins, string asmstr,
 
   bits<32> Inst;
 
-  // First word (low 16 bits in big-endian output)
-  let Inst{15-8} = opcode;
-  let Inst{7-4} = 0;          // N (unused)
-  let Inst{3-0} = rd;
-  // Second word (high 16 bits in big-endian output)
+  // First word: 0000 0010 DDDD ssss
+  // where DDDD = register, ssss = sub-opcode
+  let Inst{15-8} = 0b00000010;  // Format 8 identifier
+  let Inst{7-4} = rd;
+  let Inst{3-0} = subop;
+  // Second word
   let Inst{31-16} = imm;
 
   let Size = 4;  // Two words
@@ -561,7 +562,7 @@ class Format8<bits<8> opcode, dag outs, dag ins, string asmstr,
 
 // Format8 variant for compare immediate (no output, just sets flags)
 // Operands: (outs), (ins $rs, $imm)
-class Format8_Cmp<bits<8> opcode, dag outs, dag ins, string asmstr,
+class Format8_Cmp<bits<4> subop, dag outs, dag ins, string asmstr,
                   list<dag> pattern>
     : TMS9900Inst<outs, ins, asmstr, pattern> {
   bits<4> rs;     // Register to compare (input only)
@@ -569,11 +570,11 @@ class Format8_Cmp<bits<8> opcode, dag outs, dag ins, string asmstr,
 
   bits<32> Inst;
 
-  // First word (low 16 bits in big-endian output)
-  let Inst{15-8} = opcode;
-  let Inst{7-4} = 0;          // N (unused)
-  let Inst{3-0} = rs;
-  // Second word (high 16 bits in big-endian output)
+  // First word: 0000 0010 DDDD ssss
+  let Inst{15-8} = 0b00000010;  // Format 8 identifier
+  let Inst{7-4} = rs;
+  let Inst{3-0} = subop;
+  // Second word
   let Inst{31-16} = imm;
 
   let Size = 4;  // Two words

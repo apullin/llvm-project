@@ -394,7 +394,7 @@ def MOVBmpi : Format1_AutoIncStore<0b1100, 1, (outs GR16:$rd_wb),
 
 // LI - Load Immediate (sets status based on value loaded)
 let Defs = [ST] in
-def LI : Format8<0b00100000, (outs GR16:$rd), (ins i16imm:$imm),
+def LI : Format8<0b0000, (outs GR16:$rd), (ins i16imm:$imm),
                  "LI\t$rd,$imm",
                  [(set GR16:$rd, imm:$imm)]>;
 
@@ -432,8 +432,8 @@ def Arr : Format1_Reg_TwoAddr<0b1010, 0, (outs GR16:$rd), (ins GR16:$rs1, GR16:$
   let Constraints = "$rd = $rs1";
 }
 
-// AI - Add Immediate
-def AI : Format8<0b00100001, (outs GR16:$rd), (ins GR16:$rs, i16imm:$imm),
+// AI - Add Immediate (subop=2)
+def AI : Format8<0b0010, (outs GR16:$rd), (ins GR16:$rs, i16imm:$imm),
                  "AI\t$rs,$imm",
                  [(set GR16:$rd, (add GR16:$rs, imm:$imm))]> {
   let Constraints = "$rd = $rs";
@@ -511,8 +511,8 @@ def SOCrr : Format1_Reg_TwoAddr<0b1110, 0, (outs GR16:$rd), (ins GR16:$rs1, GR16
   let Constraints = "$rd = $rs1";
 }
 
-// ORI - OR Immediate
-def ORI : Format8<0b00100011, (outs GR16:$rd), (ins GR16:$rs, i16imm:$imm),
+// ORI - OR Immediate (subop=6)
+def ORI : Format8<0b0110, (outs GR16:$rd), (ins GR16:$rs, i16imm:$imm),
                   "ORI\t$rs,$imm",
                   [(set GR16:$rd, (or GR16:$rs, imm:$imm))]> {
   let Constraints = "$rd = $rs";
@@ -526,8 +526,8 @@ def SZCrr : Format1_Reg_TwoAddr<0b0100, 0, (outs GR16:$rd), (ins GR16:$rs1, GR16
   let Constraints = "$rd = $rs1";
 }
 
-// ANDI - AND Immediate
-def ANDI : Format8<0b00100010, (outs GR16:$rd), (ins GR16:$rs, i16imm:$imm),
+// ANDI - AND Immediate (subop=4)
+def ANDI : Format8<0b0100, (outs GR16:$rd), (ins GR16:$rs, i16imm:$imm),
                    "ANDI\t$rs,$imm",
                    [(set GR16:$rd, (and GR16:$rs, imm:$imm))]> {
   let Constraints = "$rd = $rs";
@@ -636,8 +636,8 @@ def Crr : Format1_Reg_Cmp<0b1000, 0, (outs), (ins GR16:$rs1, GR16:$rs2),
                           "C\t$rs1,$rs2",
                           [(TMS9900cmp GR16:$rs1, GR16:$rs2)]>;
 
-// CI - Compare Immediate
-def CI : Format8_Cmp<0b00100100, (outs), (ins GR16:$rs, i16imm:$imm),
+// CI - Compare Immediate (subop=8)
+def CI : Format8_Cmp<0b1000, (outs), (ins GR16:$rs, i16imm:$imm),
                      "CI\t$rs,$imm",
                  [(TMS9900cmp GR16:$rs, imm:$imm)]>;
 }

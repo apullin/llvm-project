@@ -122,19 +122,27 @@ void TMS9900AsmBackend::applyFixup(const MCAssembler &Asm, const MCFixup &Fixup,
                                     uint64_t Value, bool IsResolved,
                                     const MCSubtargetInfo *STI) const {
   Value = adjustFixupValue(Fixup, Value, Asm.getContext());
-  MCFixupKindInfo Info = getFixupKindInfo(Fixup.getKind());
   if (!Value)
     return; // Doesn't change encoding.
 
-  // Shift the value into position.
-  Value <<= Info.TargetOffset;
-
   unsigned Offset = Fixup.getOffset();
-  unsigned NumBytes = alignTo(Info.TargetSize + Info.TargetOffset, 8) / 8;
+  unsigned Kind = Fixup.getKind();
 
+  // Handle TMS9900-specific fixups
+  if (Kind == TMS9900::fixup_tms9900_pcrel_8) {
+    // 8-bit displacement in the LOW byte of a 16-bit instruction word
+    // For big-endian, low byte is at offset+1
+    assert(Offset + 2 <= Data.size() && "Invalid fixup offset!");
+    Data[Offset + 1] = Value & 0xFF;
+    return;
+  }
+
+  // For 16-bit fixups, write in big-endian order
+  MCFixupKindInfo Info = getFixupKindInfo(static_cast<MCFixupKind>(Kind));
+  unsigned NumBytes = alignTo(Info.TargetSize + Info.TargetOffset, 8) / 8;
   assert(Offset + NumBytes <= Data.size() && "Invalid fixup offset!");
 
-  // TMS9900 is big-endian, so we need to write bytes in big-endian order
+  // TMS9900 is big-endian
   for (unsigned i = 0; i != NumBytes; ++i) {
     Data[Offset + i] |= uint8_t((Value >> ((NumBytes - 1 - i) * 8)) & 0xff);
   }

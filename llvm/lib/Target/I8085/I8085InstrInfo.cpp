@@ -116,10 +116,25 @@ void I8085InstrInfo::copyPhysReg(MachineBasicBlock &MBB,
         .addReg(srcHigh, getKillRegState(KillSrc));
   BuildMI(MBB, MI, DL, get(Opc), destLow)
         .addReg(srcLow, getKillRegState(KillSrc));    
-  }
-  else{
-  Opc = I8085::MOV_32;
-  BuildMI(MBB, MI, DL, get(Opc), DestReg)
+  } else if (I8085::GR32RegClass.contains(DestReg, SrcReg)) {
+    Opc = I8085::MOV_32;
+    BuildMI(MBB, MI, DL, get(Opc), DestReg)
+        .addReg(SrcReg, getKillRegState(KillSrc));
+  } else if (I8085::GR32RegClass.contains(DestReg) &&
+             I8085::GR8RegClass.contains(SrcReg)) {
+    BuildMI(MBB, MI, DL, get(I8085::ZEXT8TO32), DestReg)
+        .addReg(SrcReg, getKillRegState(KillSrc));
+  } else if (I8085::GR32RegClass.contains(DestReg) &&
+             I8085::GR16RegClass.contains(SrcReg)) {
+    BuildMI(MBB, MI, DL, get(I8085::AEXT16TO32), DestReg)
+        .addReg(SrcReg, getKillRegState(KillSrc));
+  } else if (I8085::GR8RegClass.contains(DestReg) &&
+             I8085::GR32RegClass.contains(SrcReg)) {
+    BuildMI(MBB, MI, DL, get(I8085::TRUNC32TO8), DestReg)
+        .addReg(SrcReg, getKillRegState(KillSrc));
+  } else if (I8085::GR16RegClass.contains(DestReg) &&
+             I8085::GR32RegClass.contains(SrcReg)) {
+    BuildMI(MBB, MI, DL, get(I8085::TRUNC32TO16), DestReg)
         .addReg(SrcReg, getKillRegState(KillSrc));
   }
 }

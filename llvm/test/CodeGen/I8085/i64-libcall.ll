@@ -66,3 +66,13 @@ entry:
   %r = ashr i64 %a, %bb
   ret i64 %r
 }
+
+declare i64 @llvm.ctlz.i64(i64, i1)
+
+define i64 @clz64(i64 %a) {
+; CHECK-LABEL: clz64:
+; CHECK: CALL __clzdi2
+entry:
+  %r = call i64 @llvm.ctlz.i64(i64 %a, i1 false)
+  ret i64 %r
+}

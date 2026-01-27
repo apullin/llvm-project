@@ -39,6 +39,8 @@ unsigned I8085ELFObjectWriter::getRelocType(MCContext &Ctx, const MCValue &Targe
                                           bool IsPCRel) const {
   MCSymbolRefExpr::VariantKind Modifier = Target.getAccessVariant();
   switch (Fixup.getTargetKind()) {
+  case FK_Data_1:
+    return ELF::R_I8085_8;
   case FK_Data_2:
     return ELF::R_I8085_16;
   case I8085::fixup_16:

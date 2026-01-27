@@ -31,6 +31,7 @@
 #include "llvm/MC/MCStreamer.h"
 #include "llvm/MC/MCSymbol.h"
 #include "llvm/MC/TargetRegistry.h"
+#include "llvm/Support/Debug.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/raw_ostream.h"
 
@@ -81,7 +82,7 @@ void I8085AsmPrinter::emitBasicBlockStart(const MachineBasicBlock &MBB) {
 void I8085AsmPrinter::printOperand(const MachineInstr *MI, unsigned OpNo,
                                  raw_ostream &O) {
   const MachineOperand &MO = MI->getOperand(OpNo);
-  MO.dump();
+  LLVM_DEBUG(MO.dump());
   switch (MO.getType()) {
   case MachineOperand::MO_Register:
     O << I8085InstPrinter::getPrettyRegisterName(MO.getReg(), MRI);

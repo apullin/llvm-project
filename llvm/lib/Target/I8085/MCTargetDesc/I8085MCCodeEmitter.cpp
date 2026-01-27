@@ -25,6 +25,7 @@
 #include "llvm/MC/MCRegisterInfo.h"
 #include "llvm/MC/MCSubtargetInfo.h"
 #include "llvm/Support/Casting.h"
+#include "llvm/Support/Debug.h"
 #include "llvm/Support/EndianStream.h"
 #include "llvm/Support/raw_ostream.h"
 
@@ -171,7 +172,7 @@ void I8085MCCodeEmitter::encodeInstruction(const MCInst &MI,
   unsigned Size = Desc.getSize();
 
   if(Size==0){
-    MI.dump();
+    LLVM_DEBUG(MI.dump());
   }
 
   assert(Size > 0 && "Instruction size cannot be zero");

@@ -1,0 +1,1 @@
+# RUN: python3 %S/opcode-roundtrip.py llvm-mc

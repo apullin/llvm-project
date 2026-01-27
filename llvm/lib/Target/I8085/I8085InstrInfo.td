@@ -19,6 +19,7 @@ include "I8085InstrFormats.td"
 def SDT_I8085CallSeqStart : SDCallSeqStart<[SDTCisVT<0, i16>, SDTCisVT<1, i16>]>;
 def SDT_I8085CallSeqEnd : SDCallSeqEnd<[SDTCisVT<0, i16>, SDTCisVT<1, i16>]>;
 def SDT_I8085Call : SDTypeProfile<0, -1, [SDTCisVT<0, iPTR>]>;
+def SDT_I8085TCRet : SDTypeProfile<0, 2, [SDTCisPtrTy<0>, SDTCisVT<1, i16>]>;
 def SDT_I8085Wrapper : SDTypeProfile<1, 1, [SDTCisSameAs<0, 1>, SDTCisPtrTy<0>]>;
 def SDT_I8085Brcond
     : SDTypeProfile<0, 2, [SDTCisVT<0, OtherVT>, SDTCisVT<1, i8>]>;
@@ -44,6 +45,8 @@ def I8085callseq_end : SDNode<"ISD::CALLSEQ_END", SDT_I8085CallSeqEnd,
 
 def I8085call : SDNode<"I8085ISD::CALL", SDT_I8085Call,
                      [SDNPHasChain, SDNPOutGlue, SDNPOptInGlue, SDNPVariadic]>;
+def I8085tcret : SDNode<"I8085ISD::TC_RETURN", SDT_I8085TCRet,
+                      [SDNPHasChain, SDNPOptInGlue, SDNPVariadic]>;
 
 def I8085Wrapper : SDNode<"I8085ISD::WRAPPER", SDT_I8085Wrapper>;
 
@@ -524,6 +527,11 @@ let Uses = [SP] in def CALL : F6<0b11001101,(outs), (ins imm16Addr:$k),
                                        "CALL $k", [(I8085call imm:$k)]>;
 }
 
+let isCall = 1, isTerminator = 1, isReturn = 1, isBarrier = 1, Uses = [SP] in {
+  def TCRETURN : I8085Pseudo<(outs), (ins imm16Addr:$dst, I8085Imm16:$adj),
+                             "TCRETURN $dst", []>;
+}
+
 let isTerminator = 1, isReturn = 1, isBarrier = 1 in {
   def RET : F1<0b11001001, (outs), (ins), "RET", [(I8085retflag)]>;
 }
@@ -532,6 +540,10 @@ def RST : FRST<(outs), (ins I8085Imm8: $k), "RST $k", []>;
 
 def : Pat<(I8085call(i16 tglobaladdr:$dst)), (CALL tglobaladdr:$dst)>;
 def : Pat<(I8085call(i16 texternalsym:$dst)), (CALL texternalsym:$dst)>;
+def : Pat<(I8085tcret (i16 tglobaladdr:$dst), imm:$adj),
+          (TCRETURN tglobaladdr:$dst, imm:$adj)>;
+def : Pat<(I8085tcret (i16 texternalsym:$dst), imm:$adj),
+          (TCRETURN texternalsym:$dst, imm:$adj)>;
 
 
 

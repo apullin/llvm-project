@@ -181,6 +181,7 @@ const char *I8085TargetLowering::getTargetNodeName(unsigned Opcode) const {
     NODE(RET_FLAG);
     NODE(RETI_FLAG);
     NODE(CALL);
+    NODE(TC_RETURN);
     NODE(WRAPPER);
     NODE(LSL);
     NODE(LSR);
@@ -876,6 +877,34 @@ uint8_t twos_complement(uint8_t val) { return -(unsigned int)val;}
 //                  Call Calling Convention Implementation
 //===----------------------------------------------------------------------===//
 
+static bool isEligibleForTailCallOptimization(
+    TargetLowering::CallLoweringInfo &CLI, CCState &CCInfo,
+    MachineFunction &MF) {
+  if (!CLI.IsTailCall)
+    return false;
+
+  const Function &Caller = MF.getFunction();
+  if (Caller.getFnAttribute("disable-tail-calls").getValueAsString() == "true")
+    return false;
+
+  if (CLI.IsVarArg)
+    return false;
+
+  if (CCInfo.getStackSize() != 0)
+    return false;
+
+  if (MF.getFrameInfo().hasVarSizedObjects())
+    return false;
+
+  for (const ISD::OutputArg &Out : CLI.Outs) {
+    if (Out.Flags.isByVal() || Out.Flags.isSRet() || Out.Flags.isInReg() ||
+        Out.Flags.isNest())
+      return false;
+  }
+
+  return true;
+}
+
 
 SDValue I8085TargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
                                      SmallVectorImpl<SDValue> &InVals) const {
@@ -892,9 +921,6 @@ SDValue I8085TargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
 
   MachineFunction &MF = DAG.getMachineFunction();
 
-  // I8085 does not yet support tail call optimization.
-  isTailCall = false;
-
   // Analyze operands of the call, assigning locations to each operand.
   SmallVector<CCValAssign, 16> ArgLocs;
   CCState CCInfo(CallConv, isVarArg, DAG.getMachineFunction(), ArgLocs,
@@ -902,6 +928,8 @@ SDValue I8085TargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
 
 
   CCInfo.AnalyzeCallOperands(Outs, ArgCC_I8085_Vararg);
+
+  isTailCall = isEligibleForTailCallOptimization(CLI, CCInfo, MF);
 
   // If the callee is a GlobalAddress/ExternalSymbol node (quite common, every
   // direct call is) turn it into a TargetGlobalAddress/TargetExternalSymbol
@@ -943,7 +971,8 @@ SDValue I8085TargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
     RegsToPass.push_back(std::make_pair(VA.getLocReg(), Arg));
   }
 
-   Chain = DAG.getCALLSEQ_START(Chain, NumBytes, 0, DL);
+  if (!isTailCall)
+    Chain = DAG.getCALLSEQ_START(Chain, NumBytes, 0, DL);
 
   // Second, stack arguments have to walked.
   // Previously this code created chained stores but those chained stores appear
@@ -1014,15 +1043,33 @@ SDValue I8085TargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
   assert(Mask && "Missing call preserved mask for calling convention");
   Ops.push_back(DAG.getRegisterMask(Mask));
 
-  if (InFlag.getNode()) {
+  if (InFlag.getNode())
     Ops.push_back(InFlag);
+
+  if (isTailCall) {
+    SmallVector<SDValue, 8> TailOps;
+    TailOps.push_back(Chain);
+    TailOps.push_back(Callee);
+    TailOps.push_back(DAG.getConstant(0, DL, MVT::i16));
+
+    for (auto Reg : RegsToPass)
+      TailOps.push_back(
+          DAG.getRegister(Reg.first, Reg.second.getValueType()));
+
+    TailOps.push_back(DAG.getRegisterMask(Mask));
+
+    if (InFlag.getNode())
+      TailOps.push_back(InFlag);
+
+    MF.getFrameInfo().setHasTailCall();
+    return DAG.getNode(I8085ISD::TC_RETURN, DL, NodeTys, TailOps);
   }
 
   Chain = DAG.getNode(I8085ISD::CALL, DL, NodeTys, Ops);
   InFlag = Chain.getValue(1);
 
   // Create the CALLSEQ_END node.
-  Chain = DAG.getCALLSEQ_END(Chain, NumBytes,0, InFlag, DL);
+  Chain = DAG.getCALLSEQ_END(Chain, NumBytes, 0, InFlag, DL);
 
   if (!Ins.empty()) {
     InFlag = Chain.getValue(1);

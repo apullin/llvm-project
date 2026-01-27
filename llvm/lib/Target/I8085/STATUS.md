@@ -11,7 +11,7 @@ clang/runtime support. It is intended as a living checklist.
 - [x] i32 lowering coverage beyond basic add/sub (audit all i32 pseudos)
 - [x] i64/u64 lowering via libcalls (mul/div/rem/shift)
 - [x] varargs ABI validation with real C frontend
-- [ ] tail calls
+- [x] tail calls
 - [x] inline asm constraints and register allocation stress tests
 
 ## MC / Asm / Disasm
@@ -25,7 +25,7 @@ clang/runtime support. It is intended as a living checklist.
 - [x] libcall names set for mul/div/rem (signed + unsigned)
 - [x] minimal compiler-rt builtins for mul/div/rem (signed + unsigned)
 - [x] sysroot libgcc built from compiler-rt builtins (i64 + shifts + clz/ctz)
-- [ ] calling convention doc + validation tests for aggregates/struct returns
+- [x] calling convention doc + validation tests for aggregates/struct returns
 - [x] startup/CRT objects (data copy + bss + stack)
 - [x] default linker script
 

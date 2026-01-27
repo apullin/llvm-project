@@ -32,6 +32,8 @@ enum NodeType {
   /// Represents an abstract call instruction,
   /// which includes a bunch of information.
   CALL,
+  /// Tail call return.
+  TC_RETURN,
   /// A wrapper node for TargetConstantPool,
   /// TargetExternalSymbol, and TargetGlobalAddress.
   WRAPPER,

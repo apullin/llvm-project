@@ -15,6 +15,7 @@
 
 #include "I8085InstrInfo.h"
 #include "MCTargetDesc/I8085MCExpr.h"
+#include "MCTargetDesc/I8085MCTargetDesc.h"
 
 #include "llvm/CodeGen/AsmPrinter.h"
 #include "llvm/IR/Mangler.h"
@@ -64,53 +65,59 @@ MCOperand I8085MCInstLower::lowerSymbolOperand(const MachineOperand &MO,
 
 void I8085MCInstLower::lowerInstruction(const MachineInstr &MI,
                                       MCInst &OutMI) const {
-  OutMI.setOpcode(MI.getOpcode());
-
-  for (MachineOperand const &MO : MI.operands()) {
-    MCOperand MCOp;
-
+  auto lowerSingleOperand = [&](const MachineOperand &MO) -> MCOperand {
     switch (MO.getType()) {
     default:
       MI.print(errs());
       llvm_unreachable("unknown operand type");
     case MachineOperand::MO_Register:
-      // Ignore all implicit register operands.
       if (MO.isImplicit())
-        continue;
-      MCOp = MCOperand::createReg(MO.getReg());
-      break;
+        return MCOperand();
+      return MCOperand::createReg(MO.getReg());
     case MachineOperand::MO_Immediate:
-      MCOp = MCOperand::createImm(MO.getImm());
-      break;
+      return MCOperand::createImm(MO.getImm());
     case MachineOperand::MO_GlobalAddress:
-      MCOp = lowerSymbolOperand(MO, Printer.getSymbol(MO.getGlobal()));
-      break;
+      return lowerSymbolOperand(MO, Printer.getSymbol(MO.getGlobal()));
     case MachineOperand::MO_ExternalSymbol:
-      MCOp = lowerSymbolOperand(
+      return lowerSymbolOperand(
           MO, Printer.GetExternalSymbolSymbol(MO.getSymbolName()));
-      break;
-    case MachineOperand::MO_MachineBasicBlock:{
-        const llvm::MachineFunction *MF = MO.getMBB()->getParent();
-        MCContext &ctx = MF->getContext();
-        MCOp = MCOperand::createExpr(
-        MCSymbolRefExpr::create(ctx.getOrCreateSymbol("LBB" + Twine(MF->getFunctionNumber()) +
-                                                     "_" + Twine(MO.getMBB()->getNumber())),
-                                Ctx));
-        break;
+    case MachineOperand::MO_MachineBasicBlock: {
+      const llvm::MachineFunction *MF = MO.getMBB()->getParent();
+      MCContext &ctx = MF->getContext();
+      return MCOperand::createExpr(
+          MCSymbolRefExpr::create(ctx.getOrCreateSymbol(
+                                      "LBB" + Twine(MF->getFunctionNumber()) +
+                                      "_" + Twine(MO.getMBB()->getNumber())),
+                                  Ctx));
     }
-    case MachineOperand::MO_RegisterMask:
-      continue;
     case MachineOperand::MO_BlockAddress:
-      MCOp = lowerSymbolOperand(
+      return lowerSymbolOperand(
           MO, Printer.GetBlockAddressSymbol(MO.getBlockAddress()));
-      break;
     case MachineOperand::MO_JumpTableIndex:
-      MCOp = lowerSymbolOperand(MO, Printer.GetJTISymbol(MO.getIndex()));
-      break;
+      return lowerSymbolOperand(MO, Printer.GetJTISymbol(MO.getIndex()));
     case MachineOperand::MO_ConstantPoolIndex:
-      MCOp = lowerSymbolOperand(MO, Printer.GetCPISymbol(MO.getIndex()));
-      break;
+      return lowerSymbolOperand(MO, Printer.GetCPISymbol(MO.getIndex()));
+    case MachineOperand::MO_RegisterMask:
+      return MCOperand();
     }
+  };
+
+  if (MI.getOpcode() == I8085::TCRETURN) {
+    OutMI.setOpcode(I8085::JMP);
+    MCOperand MCOp = lowerSingleOperand(MI.getOperand(0));
+    if (MCOp.isValid())
+      OutMI.addOperand(MCOp);
+    return;
+  }
+
+  OutMI.setOpcode(MI.getOpcode());
+
+  for (MachineOperand const &MO : MI.operands()) {
+    MCOperand MCOp;
+
+    MCOp = lowerSingleOperand(MO);
+    if (!MCOp.isValid())
+      continue;
 
     OutMI.addOperand(MCOp);
   }

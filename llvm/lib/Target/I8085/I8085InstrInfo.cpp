@@ -262,6 +262,8 @@ unsigned I8085InstrInfo::getInstSizeInBytes(const MachineInstr &MI) const {
   unsigned Opcode = MI.getOpcode();
 
   switch (Opcode) {
+  case I8085::TCRETURN:
+    return 3;
   // A regular instruction
   default: {
     const MCInstrDesc &Desc = get(Opcode);

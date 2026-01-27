@@ -28,6 +28,7 @@
 #include "ToolChains/Haiku.h"
 #include "ToolChains/Hexagon.h"
 #include "ToolChains/Hurd.h"
+#include "ToolChains/I8085.h"
 #include "ToolChains/Lanai.h"
 #include "ToolChains/Linux.h"
 #include "ToolChains/MSP430.h"
@@ -6484,6 +6485,10 @@ const ToolChain &Driver::getToolChain(const ArgList &Args,
         break;
       case llvm::Triple::avr:
         TC = std::make_unique<toolchains::AVRToolChain>(*this, Target, Args);
+        break;
+      case llvm::Triple::i8085:
+        TC =
+            std::make_unique<toolchains::I8085ToolChain>(*this, Target, Args);
         break;
       case llvm::Triple::msp430:
         TC =

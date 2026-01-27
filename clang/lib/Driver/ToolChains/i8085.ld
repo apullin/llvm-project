@@ -10,6 +10,10 @@ MEMORY
 
 SECTIONS
 {
+  .vectors : {
+    KEEP(*(.vectors))
+  } > FLASH
+
   .text : {
     *(.text .text.* .init .fini)
   } > FLASH

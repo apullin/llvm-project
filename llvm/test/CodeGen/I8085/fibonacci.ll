@@ -271,38 +271,26 @@ define signext i16 @fibonacci(i16 noundef signext %0) #0 {
 	;CHECK: DAD SP
 	;CHECK: MOV M, E
 	;CHECK: CALL fibonacci
-	;CHECK: LXI H, 7
-	;CHECK: DAD SP
-	;CHECK: MOV M, B
-	;CHECK: LXI H, 6
-	;CHECK: DAD SP
-	;CHECK: MOV M, C
 	;CHECK: MVI D, 0
 	;CHECK: MVI E, 2
 	;CHECK: LXI H, 11
 	;CHECK: DAD SP
-	;CHECK: MOV B, M
+	;CHECK: MOV H, M
 	;CHECK: LXI H, 10
 	;CHECK: DAD SP
-	;CHECK: MOV C, M
-	;CHECK: MOV A, C
+	;CHECK: MOV L, M
+	;CHECK: MOV A, L
 	;CHECK: SUB E
-	;CHECK: MOV C, A
-	;CHECK: MOV A, B
+	;CHECK: MOV L, A
+	;CHECK: MOV A, H
 	;CHECK: SBB D
-	;CHECK: MOV B, A
+	;CHECK: MOV H, A
 	;CHECK: LXI H, 1
 	;CHECK: DAD SP
-	;CHECK: MOV M, B
+	;CHECK: MOV M, H
 	;CHECK: LXI H, 0
 	;CHECK: DAD SP
-	;CHECK: MOV M, C
-	;CHECK: LXI H, 7
-	;CHECK: DAD SP
-	;CHECK: MOV B, M
-	;CHECK: LXI H, 6
-	;CHECK: DAD SP
-	;CHECK: MOV C, M
+	;CHECK: MOV M, L
 	;CHECK: LXI H, 14
 	;CHECK: MVI M, 0
 	;CHECK: LXI H, 13
@@ -473,4 +461,3 @@ define signext i16 @fibonacci(i16 noundef signext %0) #0 {
   %25 = load i16, ptr %2, align 2
   ret i16 %25
 }
-

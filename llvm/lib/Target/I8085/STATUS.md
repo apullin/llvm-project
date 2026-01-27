@@ -24,6 +24,7 @@ clang/runtime support. It is intended as a living checklist.
 ## ABI / Runtime
 - [x] libcall names set for mul/div/rem (signed + unsigned)
 - [x] minimal compiler-rt builtins for mul/div/rem (signed + unsigned)
+- [x] sysroot libgcc built from compiler-rt builtins (i64 + shifts + clz/ctz)
 - [ ] calling convention doc + validation tests for aggregates/struct returns
 - [x] startup/CRT objects (data copy + bss + stack)
 - [x] default linker script
@@ -43,4 +44,4 @@ clang/runtime support. It is intended as a living checklist.
 - Frame/stack ABI is minimal; verify with simulator once available.
 - 32-bit lowering uses pseudo-registers with zero-page memory; needs audit.
 - No floating point support.
-- libc/libgcc in sysroot are stubs; real runtime still needed.
+- libc in sysroot is a stub; real runtime still needed.

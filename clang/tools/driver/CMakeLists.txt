@@ -98,6 +98,46 @@ set(I8085_CRT_OBJECTS
   "${I8085_SYSROOT_LIB_DIR}/empty.o"
 )
 
+set(I8085_BUILTINS_DIR "${LLVM_MAIN_SRC_DIR}/../compiler-rt/lib/builtins")
+set(I8085_LIBGCC_SOURCES
+  "${I8085_BUILTINS_DIR}/i8085/int_mul_div.c"
+  "${I8085_BUILTINS_DIR}/muldi3.c"
+  "${I8085_BUILTINS_DIR}/divdi3.c"
+  "${I8085_BUILTINS_DIR}/udivdi3.c"
+  "${I8085_BUILTINS_DIR}/moddi3.c"
+  "${I8085_BUILTINS_DIR}/umoddi3.c"
+  "${I8085_BUILTINS_DIR}/udivmoddi4.c"
+  "${I8085_BUILTINS_DIR}/ashldi3.c"
+  "${I8085_BUILTINS_DIR}/ashrdi3.c"
+  "${I8085_BUILTINS_DIR}/lshrdi3.c"
+  "${I8085_BUILTINS_DIR}/ashlsi3.c"
+  "${I8085_BUILTINS_DIR}/ashrsi3.c"
+  "${I8085_BUILTINS_DIR}/lshrsi3.c"
+  "${I8085_BUILTINS_DIR}/clzsi2.c"
+  "${I8085_BUILTINS_DIR}/ctzsi2.c"
+  "${I8085_BUILTINS_DIR}/clzdi2.c"
+  "${I8085_BUILTINS_DIR}/ctzdi2.c"
+  "${I8085_BUILTINS_DIR}/cmpdi2.c"
+  "${I8085_BUILTINS_DIR}/ucmpdi2.c"
+  "${I8085_BUILTINS_DIR}/negdi2.c"
+)
+
+set(I8085_LIBGCC_OBJ_DIR "${I8085_SYSROOT_LIB_DIR}/builtins")
+set(I8085_LIBGCC_OBJECTS "")
+foreach(src ${I8085_LIBGCC_SOURCES})
+  get_filename_component(base "${src}" NAME_WE)
+  list(APPEND I8085_LIBGCC_OBJECTS "${I8085_LIBGCC_OBJ_DIR}/${base}.o")
+endforeach()
+
+set(I8085_LIBGCC_CFLAGS
+  --target=i8085-unknown-elf
+  -O2
+  -ffreestanding
+  -fno-builtin
+  -fno-stack-protector
+  -I${I8085_BUILTINS_DIR}
+)
+
 add_custom_command(
   OUTPUT ${I8085_SYSROOT_INC_DIR}
   COMMAND ${CMAKE_COMMAND} -E make_directory ${I8085_SYSROOT_INC_DIR}
@@ -180,6 +220,30 @@ add_custom_target(clang-i8085-sysroot
     ${I8085_CRT_OBJECTS})
 
 add_dependencies(clang clang-i8085-sysroot)
+
+add_custom_command(
+  TARGET clang POST_BUILD
+  COMMAND ${CMAKE_COMMAND} -E make_directory ${I8085_LIBGCC_OBJ_DIR}
+  COMMAND ${CMAKE_COMMAND} -E make_directory ${I8085_SYSROOT_LIB_DIR}
+  COMMAND ${CMAKE_COMMAND} -E rm -f ${I8085_SYSROOT_LIB_DIR}/libgcc.a
+  COMMENT "Preparing i8085 libgcc build"
+  VERBATIM)
+
+foreach(src ${I8085_LIBGCC_SOURCES})
+  get_filename_component(base "${src}" NAME_WE)
+  add_custom_command(
+    TARGET clang POST_BUILD
+    COMMAND $<TARGET_FILE:clang> ${I8085_LIBGCC_CFLAGS} -c ${src}
+            -o ${I8085_LIBGCC_OBJ_DIR}/${base}.o
+    VERBATIM)
+endforeach()
+
+add_custom_command(
+  TARGET clang POST_BUILD
+  COMMAND ${LLVM_RUNTIME_OUTPUT_INTDIR}/llvm-ar rcs
+          ${I8085_SYSROOT_LIB_DIR}/libgcc.a ${I8085_LIBGCC_OBJECTS}
+  COMMENT "Building i8085 libgcc from compiler-rt builtins"
+  VERBATIM)
 
 if(NOT CLANG_LINKS_TO_CREATE)
   set(CLANG_LINKS_TO_CREATE clang++ clang-cl clang-cpp)

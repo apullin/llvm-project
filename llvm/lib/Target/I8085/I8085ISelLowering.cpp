@@ -111,10 +111,10 @@ I8085TargetLowering::I8085TargetLowering(const I8085TargetMachine &TM,
   setOperationAction(ISD::CTLZ_ZERO_UNDEF, MVT::i32, Custom);
   setOperationAction(ISD::CTLZ, MVT::i64, Custom);
   setOperationAction(ISD::CTLZ_ZERO_UNDEF, MVT::i64, Custom);
-  setOperationAction(ISD::CTTZ, MVT::i32, Expand);
-  setOperationAction(ISD::CTTZ_ZERO_UNDEF, MVT::i32, Expand);
-  setOperationAction(ISD::CTTZ, MVT::i64, Expand);
-  setOperationAction(ISD::CTTZ_ZERO_UNDEF, MVT::i64, Expand);
+  setOperationAction(ISD::CTTZ, MVT::i32, Custom);
+  setOperationAction(ISD::CTTZ_ZERO_UNDEF, MVT::i32, Custom);
+  setOperationAction(ISD::CTTZ, MVT::i64, Custom);
+  setOperationAction(ISD::CTTZ_ZERO_UNDEF, MVT::i64, Custom);
   setOperationAction(ISD::CTPOP, MVT::i32, Expand);
   setOperationAction(ISD::CTPOP, MVT::i64, Expand);
 
@@ -152,6 +152,8 @@ I8085TargetLowering::I8085TargetLowering(const I8085TargetMachine &TM,
 
   setLibcallName(RTLIB::CTLZ_I32, "__clzsi2");
   setLibcallName(RTLIB::CTLZ_I64, "__clzdi2");
+  setLibcallName(RTLIB::CTTZ_I32, "__ctzsi2");
+  setLibcallName(RTLIB::CTTZ_I64, "__ctzdi2");
 
   setLibcallName(RTLIB::SHL_I64, "__ashldi3");
   setLibcallName(RTLIB::SRL_I64, "__lshrdi3");
@@ -330,6 +332,19 @@ SDValue I8085TargetLowering::LowerOperation(SDValue Op, SelectionDAG &DAG) const
     if (VT == MVT::i32 || VT == MVT::i64) {
       RTLIB::Libcall LC =
           (VT == MVT::i32) ? RTLIB::CTLZ_I32 : RTLIB::CTLZ_I64;
+      MakeLibCallOptions CallOptions;
+      SDValue Result;
+      SDValue Chain;
+      std::tie(Result, Chain) =
+          makeLibCall(DAG, LC, VT, {Op.getOperand(0)}, CallOptions, DL);
+      return Result;
+    }
+    break;
+  case ISD::CTTZ:
+  case ISD::CTTZ_ZERO_UNDEF:
+    if (VT == MVT::i32 || VT == MVT::i64) {
+      RTLIB::Libcall LC =
+          (VT == MVT::i32) ? RTLIB::CTTZ_I32 : RTLIB::CTTZ_I64;
       MakeLibCallOptions CallOptions;
       SDValue Result;
       SDValue Chain;

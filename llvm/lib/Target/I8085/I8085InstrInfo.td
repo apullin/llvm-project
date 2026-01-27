@@ -485,11 +485,13 @@ def LOAD_16_ADDR_CONTENT : I8085Pseudo<(outs GR16: $dst),
 
 def STORE_8_ADDR_CONTENT : I8085Pseudo<(outs),
                        (ins GR16: $addr, GR8: $src),
-                       "STORE_8_ADDR_CONTENT $addr, $src", []>;
+                       "STORE_8_ADDR_CONTENT $addr, $src",
+                       [(store i8: $src, i16: $addr)]>;
 
 def STORE_16_ADDR_CONTENT : I8085Pseudo<(outs),
                        (ins GR16: $addr, GR16: $src),
-                       "STORE_16_ADDR_CONTENT $addr, $src", []>;
+                       "STORE_16_ADDR_CONTENT $addr, $src",
+                       [(store i16: $src, i16: $addr)]>;
 }  
 
 

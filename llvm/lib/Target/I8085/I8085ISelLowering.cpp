@@ -107,10 +107,10 @@ I8085TargetLowering::I8085TargetLowering(const I8085TargetMachine &TM,
     setOperationAction(ISD::CTTZ_ZERO_UNDEF, VT, Expand);
     setOperationAction(ISD::CTPOP, VT, Expand);
   }
-  setOperationAction(ISD::CTLZ, MVT::i32, LibCall);
-  setOperationAction(ISD::CTLZ_ZERO_UNDEF, MVT::i32, LibCall);
-  setOperationAction(ISD::CTLZ, MVT::i64, LibCall);
-  setOperationAction(ISD::CTLZ_ZERO_UNDEF, MVT::i64, LibCall);
+  setOperationAction(ISD::CTLZ, MVT::i32, Custom);
+  setOperationAction(ISD::CTLZ_ZERO_UNDEF, MVT::i32, Custom);
+  setOperationAction(ISD::CTLZ, MVT::i64, Custom);
+  setOperationAction(ISD::CTLZ_ZERO_UNDEF, MVT::i64, Custom);
   setOperationAction(ISD::CTTZ, MVT::i32, Expand);
   setOperationAction(ISD::CTTZ_ZERO_UNDEF, MVT::i32, Expand);
   setOperationAction(ISD::CTTZ, MVT::i64, Expand);
@@ -324,6 +324,19 @@ SDValue I8085TargetLowering::LowerOperation(SDValue Op, SelectionDAG &DAG) const
     if (VT == MVT::i64)
       return lowerI64LibCall(RTLIB::UREM_I64, Op.getOperand(0),
                              Op.getOperand(1));
+    break;
+  case ISD::CTLZ:
+  case ISD::CTLZ_ZERO_UNDEF:
+    if (VT == MVT::i32 || VT == MVT::i64) {
+      RTLIB::Libcall LC =
+          (VT == MVT::i32) ? RTLIB::CTLZ_I32 : RTLIB::CTLZ_I64;
+      MakeLibCallOptions CallOptions;
+      SDValue Result;
+      SDValue Chain;
+      std::tie(Result, Chain) =
+          makeLibCall(DAG, LC, VT, {Op.getOperand(0)}, CallOptions, DL);
+      return Result;
+    }
     break;
   case ISD::SHL:
   case ISD::SRL:

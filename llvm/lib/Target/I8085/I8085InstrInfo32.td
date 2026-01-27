@@ -130,7 +130,8 @@ def LOAD_32_ADDR_CONTENT : I8085Pseudo<(outs GR32: $dst),
 
 def STORE_32_ADDR_CONTENT : I8085Pseudo<(outs),
                        (ins GR16: $addr, GR32: $src),
-                       "STORE_32_ADDR_CONTENT $addr, $src", []>;
+                       "STORE_32_ADDR_CONTENT $addr, $src",
+                       [(store i32: $src, i16: $addr)]>;
 
 }
 

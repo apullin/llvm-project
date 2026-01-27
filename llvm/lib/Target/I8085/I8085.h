@@ -29,11 +29,13 @@ FunctionPass *createI8085ISelDag(I8085TargetMachine &TM,
                                
 FunctionPass *createI8085ExpandPseudoPass();
 FunctionPass *createI8085ExpandPseudo32Pass();
+FunctionPass *createI8085PeepholePass();
 FunctionPass *createI8085FrameAnalyzerPass();
 FunctionPass *createI8085BranchSelectionPass();
 
 void initializeI8085ExpandPseudoPass(PassRegistry &);
 void initializeI8085ExpandPseudo32Pass(PassRegistry &);
+void initializeI8085PeepholePass(PassRegistry &);
 void initializeI8085DAGToDAGISelLegacyPass(PassRegistry &);
 
 /// Contains the I8085 backend.

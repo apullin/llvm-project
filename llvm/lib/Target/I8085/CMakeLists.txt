@@ -24,6 +24,7 @@ add_llvm_target(I8085CodeGen
   I8085ISelLowering.cpp
   I8085CompareLowering.cpp
   I8085MCInstLower.cpp
+  I8085Peephole.cpp
   I8085RegisterInfo.cpp
   I8085Subtarget.cpp
   I8085TargetMachine.cpp

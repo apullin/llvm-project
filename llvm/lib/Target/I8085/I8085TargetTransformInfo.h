@@ -19,6 +19,7 @@
 #include "llvm/CodeGen/BasicTTIImpl.h"
 #include "llvm/CodeGen/TargetLowering.h"
 #include "llvm/Support/MathExtras.h"
+#include <algorithm>
 
 namespace llvm {
 
@@ -32,6 +33,23 @@ class I8085TTIImpl : public BasicTTIImplBase<I8085TTIImpl> {
 
   const I8085Subtarget *getST() const { return ST; }
   const I8085TargetLowering *getTLI() const { return TLI; }
+
+  unsigned getTypeScale(Type *Ty) const {
+    if (!Ty)
+      return 1;
+    if (Ty->isVectorTy())
+      return 16;
+    if (!Ty->isIntegerTy())
+      return 1;
+    unsigned Bits = Ty->getPrimitiveSizeInBits();
+    if (Bits <= 8)
+      return 1;
+    if (Bits <= 16)
+      return 2;
+    if (Bits <= 32)
+      return 8;
+    return 16;
+  }
 
 public:
   explicit I8085TTIImpl(const I8085TargetMachine *TM, const Function &F)
@@ -85,15 +103,45 @@ public:
     case ISD::UDIV:
     case ISD::SREM:
     case ISD::UREM:
+      if (Ty && Ty->isIntegerTy(64))
+        return 64 * Base;
       return 32 * Base;
     default:
       break;
     }
 
-    if (Ty && Ty->isIntegerTy(32))
-      return 8 * Base;
+    if (!Ty || !Ty->isIntegerTy())
+      return Base;
 
-    return Base;
+    return Base * getTypeScale(Ty);
+  }
+
+  InstructionCost getCastInstrCost(unsigned Opcode, Type *Dst, Type *Src,
+                                   TTI::CastContextHint CCH,
+                                   TTI::TargetCostKind CostKind,
+                                   const Instruction *I = nullptr) {
+    InstructionCost Base =
+        BaseT::getCastInstrCost(Opcode, Dst, Src, CCH, CostKind, I);
+    return Base * std::max(getTypeScale(Dst), getTypeScale(Src));
+  }
+
+  InstructionCost getCmpSelInstrCost(unsigned Opcode, Type *ValTy, Type *CondTy,
+                                     CmpInst::Predicate VecPred,
+                                     TTI::TargetCostKind CostKind,
+                                     const Instruction *I = nullptr) {
+    InstructionCost Base =
+        BaseT::getCmpSelInstrCost(Opcode, ValTy, CondTy, VecPred, CostKind, I);
+    return Base * getTypeScale(ValTy);
+  }
+
+  InstructionCost
+  getMemoryOpCost(unsigned Opcode, Type *Src, MaybeAlign Alignment,
+                  unsigned AddressSpace, TTI::TargetCostKind CostKind,
+                  TTI::OperandValueInfo OpInfo = {TTI::OK_AnyValue, TTI::OP_None},
+                  const Instruction *I = nullptr) {
+    InstructionCost Base = BaseT::getMemoryOpCost(Opcode, Src, Alignment,
+                                                  AddressSpace, CostKind, OpInfo, I);
+    return Base * getTypeScale(Src);
   }
 };
 

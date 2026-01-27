@@ -39,6 +39,8 @@ clang/runtime support. It is intended as a living checklist.
 - [x] MC relocation tests
 - [x] end-to-end clang -> asm -> object smoke test
 - [x] end-to-end link smoke test (lld)
+- [x] TTI cost model smoke tests
+- [x] peephole tests for LXI step folding
 
 ## Known Gaps / Risks
 - Frame/stack ABI is minimal; verify with simulator once available.

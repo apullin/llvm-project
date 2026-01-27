@@ -23,6 +23,9 @@ class LLVM_LIBRARY_VISIBILITY I8085ToolChain : public Generic_ELF {
 public:
   I8085ToolChain(const Driver &D, const llvm::Triple &Triple,
                  const llvm::opt::ArgList &Args);
+  void
+  AddClangSystemIncludeArgs(const llvm::opt::ArgList &DriverArgs,
+                            llvm::opt::ArgStringList &CC1Args) const override;
 
   bool isPICDefault() const override { return false; }
   bool isPIEDefault(const llvm::opt::ArgList &Args) const override {
@@ -42,6 +45,7 @@ protected:
 
 private:
   std::string DefaultLinkerScriptArg;
+  std::string DefaultSysRoot;
 };
 
 } // end namespace toolchains

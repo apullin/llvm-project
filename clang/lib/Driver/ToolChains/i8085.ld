@@ -7,7 +7,7 @@ SECTIONS
   . = 0x0000;
 
   .text : {
-    *(.text .text.*)
+    *(.text .text.* .init .fini)
   }
 
   .rodata : {
@@ -15,11 +15,20 @@ SECTIONS
   }
 
   .data : {
+    _sdata = .;
     *(.data .data.*)
+    _edata = .;
   }
 
   .bss (NOLOAD) : {
+    _sbss = .;
     *(.bss .bss.*)
     *(COMMON)
+    _ebss = .;
   }
+
+  _end = .;
 }
+
+PROVIDE(_stack = 0xffff);
+PROVIDE(_sidata = LOADADDR(.data));

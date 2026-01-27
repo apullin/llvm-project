@@ -24,12 +24,12 @@ clang/runtime support. It is intended as a living checklist.
 - [x] libcall names set for mul/sdiv/srem (i8/i16/i32)
 - [x] minimal compiler-rt builtins for mul/div/rem
 - [ ] calling convention doc + validation tests for aggregates/struct returns
-- [ ] startup/CRT objects
+- [x] startup/CRT objects (minimal)
 - [x] default linker script
 
 ## Clang Driver
 - [x] TargetInfo and minimal toolchain stub
-- [ ] sysroot / include path conventions
+- [x] sysroot / include path conventions (resource-dir sysroot)
 - [x] driver tests for `-target i8085-unknown-elf`
 
 ## Tooling / Tests
@@ -42,3 +42,4 @@ clang/runtime support. It is intended as a living checklist.
 - Frame/stack ABI is minimal; verify with simulator once available.
 - 32-bit lowering uses pseudo-registers with zero-page memory; needs audit.
 - No floating point support.
+- libc/libgcc in sysroot are stubs; real runtime still needed.

@@ -75,6 +75,112 @@ add_custom_command(
 add_custom_target(clang-i8085-ldscript DEPENDS ${I8085_LD_DST})
 add_dependencies(clang clang-i8085-ldscript)
 
+set(I8085_SYSROOT_DIR "${I8085_RESOURCE_DIR}/i8085")
+set(I8085_SYSROOT_LIB_DIR "${I8085_SYSROOT_DIR}/lib")
+set(I8085_SYSROOT_INC_DIR "${I8085_SYSROOT_DIR}/include")
+
+set(I8085_CRT_SOURCES
+  "${CLANG_SOURCE_DIR}/lib/Driver/ToolChains/i8085-crt1.s"
+  "${CLANG_SOURCE_DIR}/lib/Driver/ToolChains/i8085-crti.s"
+  "${CLANG_SOURCE_DIR}/lib/Driver/ToolChains/i8085-crtn.s"
+  "${CLANG_SOURCE_DIR}/lib/Driver/ToolChains/i8085-crtbegin.s"
+  "${CLANG_SOURCE_DIR}/lib/Driver/ToolChains/i8085-crtend.s"
+  "${CLANG_SOURCE_DIR}/lib/Driver/ToolChains/i8085-libc.s"
+)
+
+set(I8085_CRT_OBJECTS
+  "${I8085_SYSROOT_LIB_DIR}/crt1.o"
+  "${I8085_SYSROOT_LIB_DIR}/crti.o"
+  "${I8085_SYSROOT_LIB_DIR}/crtn.o"
+  "${I8085_SYSROOT_LIB_DIR}/crtbegin.o"
+  "${I8085_SYSROOT_LIB_DIR}/crtend.o"
+  "${I8085_SYSROOT_LIB_DIR}/libc.o"
+  "${I8085_SYSROOT_LIB_DIR}/empty.o"
+)
+
+add_custom_command(
+  OUTPUT ${I8085_SYSROOT_INC_DIR}
+  COMMAND ${CMAKE_COMMAND} -E make_directory ${I8085_SYSROOT_INC_DIR}
+  COMMENT "Creating i8085 sysroot include directory"
+  VERBATIM)
+
+add_custom_command(
+  OUTPUT ${I8085_SYSROOT_LIB_DIR}/crt1.o
+  COMMAND ${CMAKE_COMMAND} -E make_directory ${I8085_SYSROOT_LIB_DIR}
+  COMMAND ${LLVM_RUNTIME_OUTPUT_INTDIR}/llvm-mc -triple=i8085-unknown-elf -filetype=obj
+          ${CLANG_SOURCE_DIR}/lib/Driver/ToolChains/i8085-crt1.s
+          -o ${I8085_SYSROOT_LIB_DIR}/crt1.o
+  DEPENDS ${CLANG_SOURCE_DIR}/lib/Driver/ToolChains/i8085-crt1.s llvm-mc)
+
+add_custom_command(
+  OUTPUT ${I8085_SYSROOT_LIB_DIR}/crti.o
+  COMMAND ${CMAKE_COMMAND} -E make_directory ${I8085_SYSROOT_LIB_DIR}
+  COMMAND ${LLVM_RUNTIME_OUTPUT_INTDIR}/llvm-mc -triple=i8085-unknown-elf -filetype=obj
+          ${CLANG_SOURCE_DIR}/lib/Driver/ToolChains/i8085-crti.s
+          -o ${I8085_SYSROOT_LIB_DIR}/crti.o
+  DEPENDS ${CLANG_SOURCE_DIR}/lib/Driver/ToolChains/i8085-crti.s llvm-mc)
+
+add_custom_command(
+  OUTPUT ${I8085_SYSROOT_LIB_DIR}/crtn.o
+  COMMAND ${CMAKE_COMMAND} -E make_directory ${I8085_SYSROOT_LIB_DIR}
+  COMMAND ${LLVM_RUNTIME_OUTPUT_INTDIR}/llvm-mc -triple=i8085-unknown-elf -filetype=obj
+          ${CLANG_SOURCE_DIR}/lib/Driver/ToolChains/i8085-crtn.s
+          -o ${I8085_SYSROOT_LIB_DIR}/crtn.o
+  DEPENDS ${CLANG_SOURCE_DIR}/lib/Driver/ToolChains/i8085-crtn.s llvm-mc)
+
+add_custom_command(
+  OUTPUT ${I8085_SYSROOT_LIB_DIR}/crtbegin.o
+  COMMAND ${CMAKE_COMMAND} -E make_directory ${I8085_SYSROOT_LIB_DIR}
+  COMMAND ${LLVM_RUNTIME_OUTPUT_INTDIR}/llvm-mc -triple=i8085-unknown-elf -filetype=obj
+          ${CLANG_SOURCE_DIR}/lib/Driver/ToolChains/i8085-crtbegin.s
+          -o ${I8085_SYSROOT_LIB_DIR}/crtbegin.o
+  DEPENDS ${CLANG_SOURCE_DIR}/lib/Driver/ToolChains/i8085-crtbegin.s llvm-mc)
+
+add_custom_command(
+  OUTPUT ${I8085_SYSROOT_LIB_DIR}/crtend.o
+  COMMAND ${CMAKE_COMMAND} -E make_directory ${I8085_SYSROOT_LIB_DIR}
+  COMMAND ${LLVM_RUNTIME_OUTPUT_INTDIR}/llvm-mc -triple=i8085-unknown-elf -filetype=obj
+          ${CLANG_SOURCE_DIR}/lib/Driver/ToolChains/i8085-crtend.s
+          -o ${I8085_SYSROOT_LIB_DIR}/crtend.o
+  DEPENDS ${CLANG_SOURCE_DIR}/lib/Driver/ToolChains/i8085-crtend.s llvm-mc)
+
+add_custom_command(
+  OUTPUT ${I8085_SYSROOT_LIB_DIR}/libc.o
+  COMMAND ${CMAKE_COMMAND} -E make_directory ${I8085_SYSROOT_LIB_DIR}
+  COMMAND ${LLVM_RUNTIME_OUTPUT_INTDIR}/llvm-mc -triple=i8085-unknown-elf -filetype=obj
+          ${CLANG_SOURCE_DIR}/lib/Driver/ToolChains/i8085-libc.s
+          -o ${I8085_SYSROOT_LIB_DIR}/libc.o
+  DEPENDS ${CLANG_SOURCE_DIR}/lib/Driver/ToolChains/i8085-libc.s llvm-mc)
+
+add_custom_command(
+  OUTPUT ${I8085_SYSROOT_LIB_DIR}/empty.o
+  COMMAND ${CMAKE_COMMAND} -E make_directory ${I8085_SYSROOT_LIB_DIR}
+  COMMAND ${LLVM_RUNTIME_OUTPUT_INTDIR}/llvm-mc -triple=i8085-unknown-elf -filetype=obj
+          ${CLANG_SOURCE_DIR}/lib/Driver/ToolChains/i8085-crtend.s
+          -o ${I8085_SYSROOT_LIB_DIR}/empty.o
+  DEPENDS ${CLANG_SOURCE_DIR}/lib/Driver/ToolChains/i8085-crtend.s llvm-mc)
+
+add_custom_command(
+  OUTPUT ${I8085_SYSROOT_LIB_DIR}/libc.a
+  COMMAND ${LLVM_RUNTIME_OUTPUT_INTDIR}/llvm-ar rcs ${I8085_SYSROOT_LIB_DIR}/libc.a
+          ${I8085_SYSROOT_LIB_DIR}/libc.o
+  DEPENDS ${I8085_SYSROOT_LIB_DIR}/libc.o llvm-ar)
+
+add_custom_command(
+  OUTPUT ${I8085_SYSROOT_LIB_DIR}/libgcc.a
+  COMMAND ${LLVM_RUNTIME_OUTPUT_INTDIR}/llvm-ar rcs ${I8085_SYSROOT_LIB_DIR}/libgcc.a
+          ${I8085_SYSROOT_LIB_DIR}/empty.o
+  DEPENDS ${I8085_SYSROOT_LIB_DIR}/empty.o llvm-ar)
+
+add_custom_target(clang-i8085-sysroot
+  DEPENDS
+    ${I8085_SYSROOT_INC_DIR}
+    ${I8085_SYSROOT_LIB_DIR}/libc.a
+    ${I8085_SYSROOT_LIB_DIR}/libgcc.a
+    ${I8085_CRT_OBJECTS})
+
+add_dependencies(clang clang-i8085-sysroot)
+
 if(NOT CLANG_LINKS_TO_CREATE)
   set(CLANG_LINKS_TO_CREATE clang++ clang-cl clang-cpp)
 endif()

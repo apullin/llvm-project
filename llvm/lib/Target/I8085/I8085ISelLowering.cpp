@@ -99,6 +99,9 @@ I8085TargetLowering::I8085TargetLowering(const I8085TargetMachine &TM,
   setOperationAction(ISD::SHL_PARTS, MVT::i32, Expand);
   setOperationAction(ISD::SRA_PARTS, MVT::i32, Expand);
   setOperationAction(ISD::SRL_PARTS, MVT::i32, Expand);
+  setOperationAction(ISD::VASTART, MVT::Other, Custom);
+  setOperationAction(ISD::VAEND, MVT::Other, Custom);
+  setOperationAction(ISD::VAARG, MVT::Other, Expand);
 
   for (MVT VT : {MVT::i8, MVT::i16}) {
     setOperationAction(ISD::CTLZ, VT, Expand);
@@ -191,6 +194,68 @@ const char *I8085TargetLowering::getTargetNodeName(unsigned Opcode) const {
     NODE(SELECT_CC);
 #undef NODE
   }
+}
+
+TargetLowering::ConstraintType
+I8085TargetLowering::getConstraintType(StringRef Constraint) const {
+  if (Constraint.size() == 1) {
+    switch (Constraint[0]) {
+    case 'r':
+      return C_RegisterClass;
+    case 'I':
+      return C_Immediate;
+    default:
+      break;
+    }
+  }
+  return TargetLowering::getConstraintType(Constraint);
+}
+
+std::pair<unsigned, const TargetRegisterClass *>
+I8085TargetLowering::getRegForInlineAsmConstraint(
+    const TargetRegisterInfo *TRI, StringRef Constraint, MVT VT) const {
+  if (Constraint.size() == 1) {
+    switch (Constraint[0]) {
+    case 'r':
+      if (VT == MVT::i8)
+        return std::make_pair(0U, &I8085::GR8RegClass);
+      if (VT == MVT::i16)
+        return std::make_pair(0U, &I8085::GR16RegClass);
+      if (VT == MVT::i32)
+        return std::make_pair(0U, &I8085::GR32RegClass);
+      break;
+    default:
+      break;
+    }
+  }
+
+  return TargetLowering::getRegForInlineAsmConstraint(TRI, Constraint, VT);
+}
+
+void I8085TargetLowering::LowerAsmOperandForConstraint(
+    SDValue Op, StringRef Constraint, std::vector<SDValue> &Ops,
+    SelectionDAG &DAG) const {
+  if (Constraint.size() != 1)
+    return;
+
+  switch (Constraint[0]) {
+  default:
+    break;
+  case 'I': {
+    const ConstantSDNode *C = dyn_cast<ConstantSDNode>(Op);
+    if (!C)
+      return;
+
+    uint64_t Val = C->getZExtValue();
+    if (!isUInt<8>(Val))
+      return;
+
+    Ops.push_back(DAG.getTargetConstant(Val, SDLoc(Op), Op.getValueType()));
+    return;
+  }
+  }
+
+  TargetLowering::LowerAsmOperandForConstraint(Op, Constraint, Ops, DAG);
 }
 
 EVT I8085TargetLowering::getSetCCResultType(const DataLayout &DL, LLVMContext &,
@@ -302,6 +367,10 @@ SDValue I8085TargetLowering::LowerOperation(SDValue Op, SelectionDAG &DAG) const
   switch (Op.getOpcode()) {
   default:
     llvm_unreachable("Don't know how to custom lower this!");
+  case ISD::VASTART:
+    return LowerVASTART(Op, DAG);
+  case ISD::VAEND:
+    return LowerVAEND(Op, DAG);
   case ISD::MUL:
     if (VT == MVT::i64)
       return lowerI64LibCall(RTLIB::MUL_I64, Op.getOperand(0),
@@ -399,6 +468,26 @@ SDValue I8085TargetLowering::LowerOperation(SDValue Op, SelectionDAG &DAG) const
   }
 
   return SDValue();
+}
+
+SDValue I8085TargetLowering::LowerVASTART(SDValue Op,
+                                       SelectionDAG &DAG) const {
+  const MachineFunction &MF = DAG.getMachineFunction();
+  const I8085MachineFunctionInfo *AFI = MF.getInfo<I8085MachineFunctionInfo>();
+  const Value *SV = cast<SrcValueSDNode>(Op.getOperand(2))->getValue();
+  auto DL = DAG.getDataLayout();
+  SDLoc dl(Op);
+
+  // Store the address of the first vararg argument into the va_list.
+  SDValue FI =
+      DAG.getFrameIndex(AFI->getVarArgsFrameIndex(), getPointerTy(DL));
+
+  return DAG.getStore(Op.getOperand(0), dl, FI, Op.getOperand(1),
+                      MachinePointerInfo(SV));
+}
+
+SDValue I8085TargetLowering::LowerVAEND(SDValue Op, SelectionDAG &DAG) const {
+  return Op.getOperand(0);
 }
 
 /// Replace a node with an illegal result type

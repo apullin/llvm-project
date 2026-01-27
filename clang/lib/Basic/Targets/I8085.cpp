@@ -40,7 +40,7 @@ bool I8085TargetInfo::validateAsmConstraint(
     Info.setAllowsRegister();
     return true;
   case 'I':
-    Info.setRequiresImmediate(0, 0xff);
+    Info.setRequiresImmediate();
     return true;
   default:
     return false;

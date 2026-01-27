@@ -10,15 +10,15 @@ clang/runtime support. It is intended as a living checklist.
 - [x] large frame offsets (no 6-bit offset restriction)
 - [x] i32 lowering coverage beyond basic add/sub (audit all i32 pseudos)
 - [x] i64/u64 lowering via libcalls (mul/div/rem/shift)
-- [ ] varargs ABI validation with real C frontend
+- [x] varargs ABI validation with real C frontend
 - [ ] tail calls
-- [ ] inline asm constraints and register allocation stress tests
+- [x] inline asm constraints and register allocation stress tests
 
 ## MC / Asm / Disasm
 - [x] opcode roundtrip and MC coverage for core instruction groups
 - [x] RST encoding validation
 - [x] ELF relocation emission for absolute 16-bit fixups
-- [ ] symbol modifiers / target exprs (hi8/lo8/pm) wiring for i8085
+- [x] symbol modifiers / target exprs (hi8/lo8/pm) wiring for i8085
 - [x] assembler diagnostics coverage for illegal operands/ranges
 
 ## ABI / Runtime

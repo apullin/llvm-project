@@ -595,6 +595,19 @@ def : Pat<(i8(load(I8085Wrapper tglobaladdr
 def : Pat<(i16(I8085Wrapper tglobaladdr : $dst)), 
           (LOAD_16_WITH_IMM_ADDR tglobaladdr : $dst)>;
 
+def : Pat<(i16(load(I8085Wrapper tconstpool
+                    : $dst))),
+          (LOAD_16_WITH_IMM_ADDR tconstpool
+           : $dst)>;
+
+def : Pat<(i8(load(I8085Wrapper tconstpool
+                   : $dst))),
+          (LOAD_8_WITH_IMM_ADDR tconstpool
+           : $dst)>;
+
+def : Pat<(i16(I8085Wrapper tconstpool : $dst)),
+          (LOAD_16_WITH_IMM_ADDR tconstpool : $dst)>;
+
 
 let Defs = [SREG],
     hasSideEffects = 0 in  def FRMIDX : I8085Pseudo<(outs GR16: $dst),

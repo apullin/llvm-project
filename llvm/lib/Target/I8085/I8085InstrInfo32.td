@@ -310,3 +310,8 @@ def : Pat<(i32(load(I8085Wrapper tglobaladdr
                     : $dst))),
           (LOAD_32_WITH_IMM_ADDR tglobaladdr
            : $dst)>;
+
+def : Pat<(i32(load(I8085Wrapper tconstpool
+                    : $dst))),
+          (LOAD_32_WITH_IMM_ADDR tconstpool
+           : $dst)>;

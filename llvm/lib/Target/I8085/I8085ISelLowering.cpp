@@ -159,6 +159,7 @@ I8085TargetLowering::I8085TargetLowering(const I8085TargetMachine &TM,
 
   setOperationAction(ISD::GlobalAddress, MVT::i16, Custom);
   setOperationAction(ISD::BlockAddress, MVT::i16, Custom);
+  setOperationAction(ISD::ConstantPool, MVT::i16, Custom);
 
   setMinFunctionAlignment(Align(2));
   setMinimumJumpTableEntries(UINT_MAX);
@@ -215,6 +216,18 @@ SDValue I8085TargetLowering::LowerBlockAddress(SDValue Op,
   const BlockAddress *BA = cast<BlockAddressSDNode>(Op)->getBlockAddress();
 
   SDValue Result = DAG.getTargetBlockAddress(BA, getPointerTy(DL));
+
+  return DAG.getNode(I8085ISD::WRAPPER, SDLoc(Op), getPointerTy(DL), Result);
+}
+
+SDValue I8085TargetLowering::LowerConstantPool(SDValue Op,
+                                              SelectionDAG &DAG) const {
+  auto DL = DAG.getDataLayout();
+  const ConstantPoolSDNode *CP = cast<ConstantPoolSDNode>(Op);
+
+  SDValue Result =
+      DAG.getTargetConstantPool(CP->getConstVal(), getPointerTy(DL),
+                                CP->getAlign(), CP->getOffset());
 
   return DAG.getNode(I8085ISD::WRAPPER, SDLoc(Op), getPointerTy(DL), Result);
 }
@@ -353,6 +366,8 @@ SDValue I8085TargetLowering::LowerOperation(SDValue Op, SelectionDAG &DAG) const
     return LowerGlobalAddress(Op, DAG);
   case ISD::BlockAddress:
     return LowerBlockAddress(Op, DAG);
+  case ISD::ConstantPool:
+    return LowerConstantPool(Op, DAG);
   }
 
   return SDValue();

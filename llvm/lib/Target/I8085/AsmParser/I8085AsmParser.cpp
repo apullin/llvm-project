@@ -341,6 +341,23 @@ bool I8085AsmParser::MatchAndEmitInstruction(SMLoc Loc, unsigned &Opcode,
 
   switch (MatchResult) {
   case Match_Success:
+    // Reject MOV M, M (0x76 is HLT).
+    if (Inst.getOpcode() == I8085::MOV && Inst.getNumOperands() >= 2 &&
+        Inst.getOperand(0).isReg() && Inst.getOperand(1).isReg() &&
+        Inst.getOperand(0).getReg() == I8085::M &&
+        Inst.getOperand(1).getReg() == I8085::M) {
+      return Error(Loc, "invalid instruction: MOV M, M");
+    }
+    if (Inst.getOpcode() == I8085::MOV_M && Inst.getNumOperands() >= 1 &&
+        Inst.getOperand(0).isReg() &&
+        Inst.getOperand(0).getReg() == I8085::M) {
+      return Error(Loc, "invalid instruction: MOV M, M");
+    }
+    if (Inst.getOpcode() == I8085::MOV_FROM_M && Inst.getNumOperands() >= 1 &&
+        Inst.getOperand(0).isReg() &&
+        Inst.getOperand(0).getReg() == I8085::M) {
+      return Error(Loc, "invalid instruction: MOV M, M");
+    }
     return emit(Inst, Loc, Out);
   case Match_MissingFeature:
     return missingFeature(Loc, ErrorInfo);

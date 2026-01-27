@@ -254,6 +254,110 @@ template <> bool I8085ExpandPseudo32::expand<I8085::RR_32>(Block &MBB, BlockIt M
   return true;
 }
 
+template <> bool I8085ExpandPseudo32::expand<I8085::ASR_32>(Block &MBB, BlockIt MBBI) {
+  MachineInstr &MI = *MBBI;
+
+  unsigned srcReg = MI.getOperand(0).getReg();
+  
+  int address[]={11,12,13,14,15,16,17,18};
+  int index = 0;
+
+  if(srcReg==I8085::IBX){
+      index=4;
+  }
+
+  // Set carry from sign bit of the high byte.
+  buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[index+3]);
+  buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::A,RegState::Define);
+  buildMI(MBB, MBBI, I8085::RLC);
+
+  // Shift high byte through carry to preserve sign.
+  buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[index+3]);
+  buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::A,RegState::Define);
+  buildMI(MBB, MBBI, I8085::RAR);
+  buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::A);
+
+  for(int i=2;i>-1;i--){
+    buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[index+i]);
+    buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::A,RegState::Define);
+    buildMI(MBB, MBBI, I8085::RAR);
+    buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::A);
+  }
+
+  MI.eraseFromParent();
+  return true;
+}
+
+template <> bool I8085ExpandPseudo32::expand<I8085::STORE_32_ADDR_CONTENT>(Block &MBB, BlockIt MBBI) {
+  MachineInstr &MI = *MBBI;
+
+  unsigned addrReg = MI.getOperand(0).getReg();
+  unsigned srcReg = MI.getOperand(1).getReg();
+
+  int address[]={11,12,13,14,15,16,17,18};
+  int index = 0;
+
+  if(srcReg==I8085::IBX){
+      index=4;
+  }
+
+  bool addrIsHL = (addrReg == I8085::HL);
+  bool addrIsSP = (addrReg == I8085::SP);
+  unsigned addrLow = 0, addrHigh = 0;
+  bool haveAddr = true;
+  if (!addrIsSP) {
+    if (addrReg == I8085::BC) {
+      addrLow = I8085::C;
+      addrHigh = I8085::B;
+    } else if (addrReg == I8085::DE) {
+      addrLow = I8085::E;
+      addrHigh = I8085::D;
+    } else if (addrReg == I8085::HL) {
+      addrLow = I8085::L;
+      addrHigh = I8085::H;
+    } else {
+      haveAddr = false;
+    }
+  }
+
+  if (!haveAddr)
+    return false;
+
+  if (addrIsHL)
+    buildMI(MBB, MBBI, I8085::PUSH).addReg(I8085::HL);
+
+  for(int i=0;i<4;i++){
+    // Load byte i from the 32-bit source.
+    buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[i+index]);
+    buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::A,RegState::Define);
+
+    if (addrIsHL) {
+      buildMI(MBB, MBBI, I8085::POP).addReg(I8085::HL);
+    } else if (addrIsSP) {
+      buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(0);
+      buildMI(MBB, MBBI, I8085::DAD).addReg(I8085::SP);
+    } else {
+      buildMI(MBB, MBBI, I8085::MOV).addReg(I8085::H, RegState::Define).addReg(addrHigh);
+      buildMI(MBB, MBBI, I8085::MOV).addReg(I8085::L, RegState::Define).addReg(addrLow);
+    }
+
+    if (!addrIsHL) {
+      for (int j = 0; j < i; ++j)
+        buildMI(MBB, MBBI, I8085::INX).addReg(I8085::HL, RegState::Define);
+    }
+
+    buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::A);
+
+    if (addrIsHL && i < 3) {
+      buildMI(MBB, MBBI, I8085::INX).addReg(I8085::HL, RegState::Define);
+      buildMI(MBB, MBBI, I8085::PUSH).addReg(I8085::HL);
+    }
+  }
+
+  MI.eraseFromParent();
+  return true;
+}
+
 
 template <> bool I8085ExpandPseudo32::expand<I8085::RL_32>(Block &MBB, BlockIt MBBI) {
   const I8085Subtarget &STI = MBB.getParent()->getSubtarget<I8085Subtarget>();
@@ -392,10 +496,23 @@ template <> bool I8085ExpandPseudo32::expand<I8085::SEXT16TO32>(Block &MBB, Bloc
   unsigned destReg = MI.getOperand(0).getReg();
   unsigned srcReg = MI.getOperand(1).getReg();
 
-  unsigned opOneLow,opOneHigh;
-
-  if(srcReg==I8085::BC){  opOneLow=I8085::C;  opOneHigh=I8085::B; }
-  if(srcReg==I8085::DE){  opOneLow=I8085::E;  opOneHigh=I8085::D; }
+  bool addrIsSP = (srcReg == I8085::SP);
+  unsigned opOneLow = 0, opOneHigh = 0;
+  bool haveAddr = true;
+  if (!addrIsSP) {
+    if (srcReg == I8085::BC) {
+      opOneLow = I8085::C;
+      opOneHigh = I8085::B;
+    } else if (srcReg == I8085::DE) {
+      opOneLow = I8085::E;
+      opOneHigh = I8085::D;
+    } else if (srcReg == I8085::HL) {
+      opOneLow = I8085::L;
+      opOneHigh = I8085::H;
+    } else {
+      haveAddr = false;
+    }
+  }
 
   
   int address[]={11,12,13,14,15,16,17,18};
@@ -983,34 +1100,50 @@ template <> bool I8085ExpandPseudo32::expand<I8085::LOAD_32_WITH_IMM_ADDR>(Block
 }
 
 template <> bool I8085ExpandPseudo32::expand<I8085::LOAD_32_ADDR_CONTENT>(Block &MBB, BlockIt MBBI) {
-  const I8085Subtarget &STI = MBB.getParent()->getSubtarget<I8085Subtarget>();
   MachineInstr &MI = *MBBI;
 
   unsigned destReg = MI.getOperand(0).getReg();
   unsigned srcReg = MI.getOperand(1).getReg();
 
-  unsigned opOneLow,opOneHigh;
+  bool addrIsSP = (srcReg == I8085::SP);
+  unsigned opOneLow = 0, opOneHigh = 0;
+  bool haveAddr = true;
+  if (!addrIsSP) {
+    if (srcReg == I8085::BC) {
+      opOneLow = I8085::C;
+      opOneHigh = I8085::B;
+    } else if (srcReg == I8085::DE) {
+      opOneLow = I8085::E;
+      opOneHigh = I8085::D;
+    } else if (srcReg == I8085::HL) {
+      opOneLow = I8085::L;
+      opOneHigh = I8085::H;
+    } else {
+      haveAddr = false;
+    }
+  }
 
-  if(srcReg==I8085::BC){  opOneLow=I8085::C;  opOneHigh=I8085::B; }
-  if(srcReg==I8085::DE){  opOneLow=I8085::E;  opOneHigh=I8085::D; }
-  
   int address[]={11,12,13,14,15,16,17,18};
   int index = 0;
 
   if(destReg==I8085::IBX){  index=4; }
-  
+
+  if (!haveAddr)
+    return false;
+
   for(int i=0;i<4;i++){
-      buildMI(MBB, MBBI,  I8085::MOV).addReg(I8085::H, RegState::Define).addReg(opOneHigh);
-      buildMI(MBB, MBBI,  I8085::MOV).addReg(I8085::L, RegState::Define).addReg(opOneLow);
-      
-      if(i>0){
-        buildMI(MBB, MBBI, I8085::INX).addReg(I8085::HL,RegState::Define);
+      if (addrIsSP) {
+        buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(0);
+        buildMI(MBB, MBBI, I8085::DAD).addReg(I8085::SP);
+      } else {
+        buildMI(MBB, MBBI,  I8085::MOV).addReg(I8085::H, RegState::Define).addReg(opOneHigh);
+        buildMI(MBB, MBBI,  I8085::MOV).addReg(I8085::L, RegState::Define).addReg(opOneLow);
       }
 
-      buildMI(MBB, MBBI,  I8085::MOV_FROM_M).addReg(I8085::A,RegState::Define);
+      for (int j = 0; j < i; ++j)
+        buildMI(MBB, MBBI, I8085::INX).addReg(I8085::HL,RegState::Define);
 
-      buildMI(MBB, MBBI,  I8085::MOV).addReg(opOneHigh, RegState::Define).addReg(I8085::H);
-      buildMI(MBB, MBBI,  I8085::MOV).addReg(opOneLow, RegState::Define).addReg(I8085::L);
+      buildMI(MBB, MBBI,  I8085::MOV_FROM_M).addReg(I8085::A,RegState::Define);
 
       buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[i+index]);
       buildMI(MBB, MBBI,  I8085::MOV_M).addReg(I8085::A);
@@ -1037,6 +1170,7 @@ bool I8085ExpandPseudo32::expandMI(Block &MBB, BlockIt MBBI) {
     EXPAND(I8085::AND_32);
     EXPAND(I8085::RL_32);
     EXPAND(I8085::RR_32);
+    EXPAND(I8085::ASR_32);
     EXPAND(I8085::SEXT32_INREG_16);
     EXPAND(I8085::SEXT32_INREG_8);
     EXPAND(I8085::TRUNC32TO16);
@@ -1049,6 +1183,7 @@ bool I8085ExpandPseudo32::expandMI(Block &MBB, BlockIt MBBI) {
     EXPAND(I8085::ZEXT8TO32);
     EXPAND(I8085::LOAD_32_OFFSET_WITH_SP);
     EXPAND(I8085::STORE_32_AT_OFFSET_WITH_SP);
+    EXPAND(I8085::STORE_32_ADDR_CONTENT);
     EXPAND(I8085::JMP_32_IF_POSITIVE);
     EXPAND(I8085::JMP_32_IF_SAME_SIGN);
     EXPAND(I8085::JMP_32_IF_NOT_EQUAL);

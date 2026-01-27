@@ -76,7 +76,8 @@ void I8085AsmPrinter::emitBasicBlockStart(const MachineBasicBlock &MBB) {
   const llvm::MachineFunction *MF = MBB.getParent();
   MCContext &Ctx = MF->getContext();
   
-  OutStreamer->emitLabel(Ctx.getOrCreateSymbol("LBB" +Twine(MF->getFunctionNumber()) +Twine(MBB.getNumber())));
+  OutStreamer->emitLabel(Ctx.getOrCreateSymbol("LBB" + Twine(MF->getFunctionNumber()) +
+                                              "_" + Twine(MBB.getNumber())));
 }
 
 void I8085AsmPrinter::printOperand(const MachineInstr *MI, unsigned OpNo,

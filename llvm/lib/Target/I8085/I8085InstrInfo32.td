@@ -73,12 +73,18 @@ let Constraints = "$src = $rd", Defs=[SREG]  in {
               (ins GR32: $src, GR8: $rr),
               "SRA_32\t$rd, $rr",
               [(set i32: $rd, (sra i32: $src, i8: $rr))]>;                                   
+  def SRL_32
+      : I8085InserterPseudo<(outs GR32: $rd),
+              (ins GR32: $src, GR8: $rr),
+              "SRL_32\t$rd, $rr",
+              [(set i32: $rd, (srl i32: $src, i8: $rr))]>;                                   
 }
 
 
 let Constraints = "$rs = $rd", Defs=[SREG]  in {
   let Defs=[SREG,A], Uses=[A] in def RL_32 : I8085Pseudo<(outs GR32: $rd), (ins GR32: $rs), "RL_32 $rs", []>;
   let Defs=[SREG,A], Uses=[A] in def RR_32 : I8085Pseudo<(outs GR32: $rd), (ins GR32: $rs), "RR_32 $rs", []>;
+  let Defs=[SREG,A], Uses=[A] in def ASR_32 : I8085Pseudo<(outs GR32: $rd), (ins GR32: $rs), "ASR_32 $rs", []>;
 }
 
 let Uses=[SP] in {
@@ -114,6 +120,10 @@ def LOAD_32_WITH_IMM_ADDR : I8085Pseudo<(outs GR32: $dst),
 def LOAD_32_ADDR_CONTENT : I8085Pseudo<(outs GR32: $dst),
                        (ins GR16: $src),
                        "LOAD_32_ADDR_CONTENT $dst, $src", [(set i32: $dst, (load i16: $src))]>;
+
+def STORE_32_ADDR_CONTENT : I8085Pseudo<(outs),
+                       (ins GR16: $addr, GR32: $src),
+                       "STORE_32_ADDR_CONTENT $addr, $src", []>;
 
 }
 

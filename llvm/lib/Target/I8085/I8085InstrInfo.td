@@ -172,6 +172,11 @@ let Constraints = "$src = $rd", Defs=[SREG]  in {
               (ins GR8: $src, GR8: $rr),
               "SRA_8\t$rd, $rr",
               [(set i8: $rd, (sra i8: $src, i8: $rr))]>;
+  def SRL_8
+      : I8085InserterPseudo<(outs GR8: $rd),
+              (ins GR8: $src, GR8: $rr),
+              "SRL_8\t$rd, $rr",
+              [(set i8: $rd, (srl i8: $src, i8: $rr))]>;
 
   def SHL_16
       : I8085InserterPseudo<(outs GR16: $rd),
@@ -184,6 +189,11 @@ let Constraints = "$src = $rd", Defs=[SREG]  in {
               (ins GR16: $src, GR8: $rr),
               "SRA_16\t$rd, $rr",
               [(set i16: $rd, (sra i16: $src, i8: $rr))]>;            
+  def SRL_16
+      : I8085InserterPseudo<(outs GR16: $rd),
+              (ins GR16: $src, GR8: $rr),
+              "SRL_16\t$rd, $rr",
+              [(set i16: $rd, (srl i16: $src, i8: $rr))]>;            
 }
 
 let Defs=[SREG,A], Uses=[A] in def SUB : F2<0b10010,(outs), (ins GR8: $rs), "SUB $rs", []>;
@@ -304,9 +314,11 @@ def OUT : F5<0b11010011,(outs), (ins i8imm: $k), "OUT $k", []>;
 let Constraints = "$rs = $rd", Defs=[SREG]  in {
   let Defs=[SREG,A], Uses=[A] in def RL_8 : I8085Pseudo<(outs GR8: $rd), (ins GR8: $rs), "RL_8 $rs", []>;
   let Defs=[SREG,A], Uses=[A] in def RR_8 : I8085Pseudo<(outs GR8: $rd), (ins GR8: $rs), "RR_8 $rs", []>;
+  let Defs=[SREG,A], Uses=[A] in def ASR_8 : I8085Pseudo<(outs GR8: $rd), (ins GR8: $rs), "ASR_8 $rs", []>;
 
   let Defs=[SREG,A], Uses=[A] in def RL_16 : I8085Pseudo<(outs GR16: $rd), (ins GR16: $rs), "RL_16 $rs", []>;
   let Defs=[SREG,A], Uses=[A] in def RR_16 : I8085Pseudo<(outs GR16: $rd), (ins GR16: $rs), "RR_16 $rs", []>;
+  let Defs=[SREG,A], Uses=[A] in def ASR_16 : I8085Pseudo<(outs GR16: $rd), (ins GR16: $rs), "ASR_16 $rs", []>;
 }
 
 let Defs=[SREG,A], Uses=[A] in def RLC : F1<0b00000111,(outs), (ins), "RLC", []>;
@@ -457,6 +469,14 @@ def LOAD_8_ADDR_CONTENT : I8085Pseudo<(outs GR8: $dst),
 def LOAD_16_ADDR_CONTENT : I8085Pseudo<(outs GR16: $dst),
                        (ins GR16: $src),
                        "LOAD_16_ADDR_CONTENT $dst, $src", [(set i16: $dst, (load i16: $src))]>;
+
+def STORE_8_ADDR_CONTENT : I8085Pseudo<(outs),
+                       (ins GR16: $addr, GR8: $src),
+                       "STORE_8_ADDR_CONTENT $addr, $src", []>;
+
+def STORE_16_ADDR_CONTENT : I8085Pseudo<(outs),
+                       (ins GR16: $addr, GR16: $src),
+                       "STORE_16_ADDR_CONTENT $addr, $src", []>;
 }  
 
 

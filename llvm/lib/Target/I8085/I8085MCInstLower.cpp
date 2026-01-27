@@ -93,7 +93,9 @@ void I8085MCInstLower::lowerInstruction(const MachineInstr &MI,
         const llvm::MachineFunction *MF = MO.getMBB()->getParent();
         MCContext &ctx = MF->getContext();
         MCOp = MCOperand::createExpr(
-        MCSymbolRefExpr::create(ctx.getOrCreateSymbol("LBB" +Twine(MF->getFunctionNumber()) +Twine(MO.getMBB()->getNumber())), Ctx));
+        MCSymbolRefExpr::create(ctx.getOrCreateSymbol("LBB" + Twine(MF->getFunctionNumber()) +
+                                                     "_" + Twine(MO.getMBB()->getNumber())),
+                                Ctx));
         break;
     }
     case MachineOperand::MO_RegisterMask:

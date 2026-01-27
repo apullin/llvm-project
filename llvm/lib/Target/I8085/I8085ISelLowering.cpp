@@ -53,7 +53,11 @@ I8085TargetLowering::I8085TargetLowering(const I8085TargetMachine &TM,
   setSupportsUnalignedAtomics(true);
 
   setTruncStoreAction(MVT::i16, MVT::i8, Expand);
+  setTruncStoreAction(MVT::i32, MVT::i8, Expand);
   setTruncStoreAction(MVT::i32, MVT::i16, Expand);
+
+  for (MVT VT : {MVT::i1, MVT::i8, MVT::i16, MVT::i32})
+    setOperationAction(ISD::SIGN_EXTEND_INREG, VT, Custom);
 
   for (MVT VT : MVT::integer_valuetypes()) {
     for (auto N : {ISD::EXTLOAD, ISD::SEXTLOAD, ISD::ZEXTLOAD}) {
@@ -95,6 +99,11 @@ I8085TargetLowering::I8085TargetLowering(const I8085TargetMachine &TM,
   setOperationAction(ISD::SHL_PARTS, MVT::i32, Expand);
   setOperationAction(ISD::SRA_PARTS, MVT::i32, Expand);
   setOperationAction(ISD::SRL_PARTS, MVT::i32, Expand);
+
+  for (MVT VT : {MVT::i8, MVT::i16, MVT::i32, MVT::i64}) {
+    setOperationAction(ISD::SELECT, VT, Expand);
+    setOperationAction(ISD::SELECT_CC, VT, Expand);
+  }
 
   setLibcallName(RTLIB::MUL_I8, "__mul8");
   setLibcallName(RTLIB::MUL_I16, "__mul16");
@@ -295,6 +304,17 @@ SDValue I8085TargetLowering::LowerOperation(SDValue Op, SelectionDAG &DAG) const
       return lowerI64LibCall(LC, LHS, RHS);
     }
     break;
+  case ISD::SIGN_EXTEND_INREG: {
+    SDValue Val = Op.getOperand(0);
+    EVT FromVT = cast<VTSDNode>(Op.getOperand(1))->getVT();
+    unsigned FromBits = FromVT.getScalarSizeInBits();
+    unsigned ToBits = VT.getScalarSizeInBits();
+    if (FromBits >= ToBits)
+      return Val;
+    SDValue ShiftAmt = DAG.getConstant(ToBits - FromBits, DL, VT);
+    SDValue Shl = DAG.getNode(ISD::SHL, DL, VT, Val, ShiftAmt);
+    return DAG.getNode(ISD::SRA, DL, VT, Shl, ShiftAmt);
+  }
   case ISD::GlobalAddress:
     return LowerGlobalAddress(Op, DAG);
   case ISD::BlockAddress:
@@ -1066,23 +1086,26 @@ MachineBasicBlock *I8085TargetLowering::insertShiftSet(MachineInstr &MI,
 
   unsigned tempHolderOne,tempHolderTwo;
   int rrOpcode;
-  if(Opc==I8085::SHL_16 || Opc==I8085::SRA_16){
+  if(Opc==I8085::SHL_16 || Opc==I8085::SRA_16 || Opc==I8085::SRL_16){
       rrOpcode = I8085::RR_16;
       if(Opc==I8085::SHL_16) rrOpcode=I8085::RL_16;
+      if(Opc==I8085::SRA_16) rrOpcode=I8085::ASR_16;
       tempHolderOne = MF->getRegInfo().createVirtualRegister(getRegClassFor(MVT::i16));
       tempHolderTwo = MF->getRegInfo().createVirtualRegister(getRegClassFor(MVT::i16));
   }
 
-  if(Opc==I8085::SHL_8 || Opc==I8085::SRA_8){
+  if(Opc==I8085::SHL_8 || Opc==I8085::SRA_8 || Opc==I8085::SRL_8){
       rrOpcode = I8085::RR_8;
       if(Opc==I8085::SHL_8) rrOpcode=I8085::RL_8;
+      if(Opc==I8085::SRA_8) rrOpcode=I8085::ASR_8;
       tempHolderOne = MF->getRegInfo().createVirtualRegister(getRegClassFor(MVT::i8));
       tempHolderTwo = MF->getRegInfo().createVirtualRegister(getRegClassFor(MVT::i8));
   }
 
-  if(Opc==I8085::SHL_32 || Opc==I8085::SRA_32){
+  if(Opc==I8085::SHL_32 || Opc==I8085::SRA_32 || Opc==I8085::SRL_32){
       rrOpcode = I8085::RR_32;
       if(Opc==I8085::SHL_32) rrOpcode=I8085::RL_32;
+      if(Opc==I8085::SRA_32) rrOpcode=I8085::ASR_32;
       tempHolderOne = MF->getRegInfo().createVirtualRegister(getRegClassFor(MVT::i32));
       tempHolderTwo = MF->getRegInfo().createVirtualRegister(getRegClassFor(MVT::i32));
   }
@@ -1207,10 +1230,13 @@ MachineBasicBlock *I8085TargetLowering::EmitInstrWithCustomInserter(MachineInstr
 
   case I8085::SHL_8:
   case I8085::SRA_8:
+  case I8085::SRL_8:
   case I8085::SHL_16:
   case I8085::SRA_16:
+  case I8085::SRL_16:
   case I8085::SHL_32:
   case I8085::SRA_32:
+  case I8085::SRL_32:
     return insertShiftSet(MI, MBB);      
   }
 

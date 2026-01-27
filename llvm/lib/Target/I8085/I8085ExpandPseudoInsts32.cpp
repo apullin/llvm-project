@@ -235,6 +235,9 @@ template <> bool I8085ExpandPseudo32::expand<I8085::RR_32>(Block &MBB, BlockIt M
       index=4;
   }
 
+  // Clear carry before rotate-through-carry sequence.
+  buildMI(MBB, MBBI, I8085::XRA).addReg(I8085::A);
+
   for(int i=3;i>-1;i--){
     buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[index+i]);
     buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::A,RegState::Define);
@@ -264,6 +267,9 @@ template <> bool I8085ExpandPseudo32::expand<I8085::RL_32>(Block &MBB, BlockIt M
   if(srcReg==I8085::IBX){
       index=4;
   }
+
+  // Clear carry before rotate-through-carry sequence.
+  buildMI(MBB, MBBI, I8085::XRA).addReg(I8085::A);
 
   for(int i=0;i<4;i++){
     buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[index+i]);
@@ -823,6 +829,10 @@ template <> bool I8085ExpandPseudo32::expand<I8085::LOAD_32>(Block &MBB, BlockIt
   return true;
 }
 
+template <> bool I8085ExpandPseudo32::expand<I8085::MVI_32>(Block &MBB, BlockIt MBBI) {
+  return expand<I8085::LOAD_32>(MBB, MBBI);
+}
+
 
 template <> bool I8085ExpandPseudo32::expand<I8085::JMP_32_IF_NOT_EQUAL>(Block &MBB, BlockIt MBBI) {
   const I8085Subtarget &STI = MBB.getParent()->getSubtarget<I8085Subtarget>();
@@ -1052,6 +1062,7 @@ bool I8085ExpandPseudo32::expandMI(Block &MBB, BlockIt MBBI) {
     EXPAND(I8085::LOAD_32_WITH_ADDR);
     EXPAND(I8085::LOAD_32_WITH_IMM_ADDR);
     EXPAND(I8085::LOAD_32_ADDR_CONTENT);
+    EXPAND(I8085::MVI_32);
   }
 #undef EXPAND
   return false;

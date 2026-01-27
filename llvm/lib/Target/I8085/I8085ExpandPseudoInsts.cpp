@@ -1018,8 +1018,8 @@ template <> bool I8085ExpandPseudo::expand<I8085::TRUNC16TO8>(Block &MBB, BlockI
   unsigned operand = MI.getOperand(1).getReg();
 
   unsigned operandLow,operandHigh;
-  if(operand==I8085::BC){  operandLow=I8085::C;  operandHigh=I8085::B; }
-  if(operand==I8085::DE){  operandLow=I8085::E;  operandHigh=I8085::D; }
+  if (!getPairRegs(operand, operandLow, operandHigh))
+    return false;
   
   buildMI(MBB, MBBI, I8085::MOV)
     .addReg(destReg,RegState::Define)
@@ -1037,8 +1037,8 @@ template <> bool I8085ExpandPseudo::expand<I8085::SEXT8TO16>(Block &MBB, BlockIt
   unsigned operand = MI.getOperand(1).getReg();
 
   unsigned destLow,destHigh;
-  if(destReg==I8085::BC){  destLow=I8085::C;  destHigh=I8085::B; }
-  if(destReg==I8085::DE){  destLow=I8085::E;  destHigh=I8085::D; }
+  if (!getPairRegs(destReg, destLow, destHigh))
+    return false;
   
   buildMI(MBB, MBBI, I8085::MOV)
     .addReg(I8085::A,RegState::Define)
@@ -1071,8 +1071,8 @@ template <> bool I8085ExpandPseudo::expand<I8085::ZEXT8TO16>(Block &MBB, BlockIt
   unsigned operand = MI.getOperand(1).getReg();
 
   unsigned destLow,destHigh;
-  if(destReg==I8085::BC){  destLow=I8085::C;  destHigh=I8085::B; }
-  if(destReg==I8085::DE){  destLow=I8085::E;  destHigh=I8085::D; }
+  if (!getPairRegs(destReg, destLow, destHigh))
+    return false;
   
   buildMI(MBB, MBBI, I8085::MOV)
     .addReg(I8085::A,RegState::Define)
@@ -1102,8 +1102,8 @@ template <> bool I8085ExpandPseudo::expand<I8085::RL_16>(Block &MBB, BlockIt MBB
   unsigned reg = MI.getOperand(0).getReg();
 
   unsigned regLow,regHigh;
-  if(reg==I8085::BC){  regLow=I8085::C;  regHigh=I8085::B; }
-  if(reg==I8085::DE){  regLow=I8085::E;  regHigh=I8085::D; }
+  if (!getPairRegs(reg, regLow, regHigh))
+    return false;
   
   buildMI(MBB, MBBI, I8085::MOV)
     .addReg(I8085::A,RegState::Define)
@@ -1148,8 +1148,8 @@ template <> bool I8085ExpandPseudo::expand<I8085::RR_16>(Block &MBB, BlockIt MBB
   unsigned reg = MI.getOperand(0).getReg();
 
   unsigned regLow,regHigh;
-  if(reg==I8085::BC){  regLow=I8085::C;  regHigh=I8085::B; }
-  if(reg==I8085::DE){  regLow=I8085::E;  regHigh=I8085::D; }
+  if (!getPairRegs(reg, regLow, regHigh))
+    return false;
 
   buildMI(MBB, MBBI, I8085::MOV)
     .addReg(I8085::A,RegState::Define)
@@ -1240,9 +1240,8 @@ template <> bool I8085ExpandPseudo::expand<I8085::JMP_16_IF>(Block &MBB, BlockIt
   unsigned operandOne = MI.getOperand(0).getReg();
 
   unsigned opOneLow,opOneHigh;
-
-  if(operandOne==I8085::BC){  opOneLow=I8085::C;  opOneHigh=I8085::B; }
-  if(operandOne==I8085::DE){  opOneLow=I8085::E;  opOneHigh=I8085::D; }
+  if (!getPairRegs(operandOne, opOneLow, opOneHigh))
+    return false;
 
   buildMI(MBB, MBBI, I8085::MOV)
     .addReg(I8085::A,RegState::Define)
@@ -1277,12 +1276,10 @@ template <> bool I8085ExpandPseudo::expand<I8085::JMP_16_IF_NOT_EQUAL>(Block &MB
 
   unsigned opOneLow,opOneHigh;
   unsigned opTwoLow,opTwoHigh;
-
-  if(operandOne==I8085::BC){  opOneLow=I8085::C;  opOneHigh=I8085::B; }
-  if(operandOne==I8085::DE){  opOneLow=I8085::E;  opOneHigh=I8085::D; }
-
-  if(operandTwo==I8085::BC){  opTwoLow=I8085::C;  opTwoHigh=I8085::B; }
-  if(operandTwo==I8085::DE){  opTwoLow=I8085::E;  opTwoHigh=I8085::D; }
+  if (!getPairRegs(operandOne, opOneLow, opOneHigh))
+    return false;
+  if (!getPairRegs(operandTwo, opTwoLow, opTwoHigh))
+    return false;
 
   buildMI(MBB, MBBI, I8085::MOV)
     .addReg(I8085::A,RegState::Define)
@@ -1319,12 +1316,10 @@ template <> bool I8085ExpandPseudo::expand<I8085::JMP_16_IF_SAME_SIGN>(Block &MB
 
   unsigned opOneLow,opOneHigh;
   unsigned opTwoLow,opTwoHigh;
-
-  if(operandOne==I8085::BC){  opOneLow=I8085::C;  opOneHigh=I8085::B; }
-  if(operandOne==I8085::DE){  opOneLow=I8085::E;  opOneHigh=I8085::D; }
-
-  if(operandTwo==I8085::BC){  opTwoLow=I8085::C;  opTwoHigh=I8085::B; }
-  if(operandTwo==I8085::DE){  opTwoLow=I8085::E;  opTwoHigh=I8085::D; }
+  if (!getPairRegs(operandOne, opOneLow, opOneHigh))
+    return false;
+  if (!getPairRegs(operandTwo, opTwoLow, opTwoHigh))
+    return false;
 
   buildMI(MBB, MBBI, I8085::MOV)
     .addReg(I8085::A,RegState::Define)
@@ -1350,9 +1345,8 @@ template <> bool I8085ExpandPseudo::expand<I8085::JMP_16_IF_POSITIVE>(Block &MBB
   unsigned operandOne = MI.getOperand(0).getReg();
 
   unsigned opOneLow,opOneHigh;
-
-  if(operandOne==I8085::BC){  opOneLow=I8085::C;  opOneHigh=I8085::B; }
-  if(operandOne==I8085::DE){  opOneLow=I8085::E;  opOneHigh=I8085::D; }
+  if (!getPairRegs(operandOne, opOneLow, opOneHigh))
+    return false;
 
 
   buildMI(MBB, MBBI, I8085::MOV)

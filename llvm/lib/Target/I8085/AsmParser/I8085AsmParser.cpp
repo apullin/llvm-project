@@ -654,13 +654,12 @@ bool I8085AsmParser::ParseInstruction(ParseInstructionInfo &Info,
 
 bool I8085AsmParser::ParseDirective(llvm::AsmToken DirectiveID) {
   StringRef IDVal = DirectiveID.getIdentifier();
-  if (IDVal.lower() == ".long") {
-    parseLiteralValues(SIZE_LONG, DirectiveID.getLoc());
-  } else if (IDVal.lower() == ".word" || IDVal.lower() == ".short") {
-    parseLiteralValues(SIZE_WORD, DirectiveID.getLoc());
-  } else if (IDVal.lower() == ".byte") {
-    parseLiteralValues(1, DirectiveID.getLoc());
-  }
+  if (IDVal.lower() == ".long")
+    return parseLiteralValues(SIZE_LONG, DirectiveID.getLoc());
+  if (IDVal.lower() == ".word" || IDVal.lower() == ".short")
+    return parseLiteralValues(SIZE_WORD, DirectiveID.getLoc());
+  if (IDVal.lower() == ".byte")
+    return parseLiteralValues(1, DirectiveID.getLoc());
   return true;
 }
 

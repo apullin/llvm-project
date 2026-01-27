@@ -52,6 +52,12 @@ void I8085AsmBackend::adjustFixupValue(const MCFixup &Fixup,
   default:
     llvm_unreachable("unhandled fixup");
   
+  case FK_Data_1:
+    Value &= 0xff;
+    break;
+  case FK_Data_2:
+    Value &= 0xffff;
+    break;
   case I8085::fixup_16:
     Value &= 0xffff;
     break;

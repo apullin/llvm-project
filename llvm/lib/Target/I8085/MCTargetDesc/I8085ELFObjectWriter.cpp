@@ -38,11 +38,11 @@ unsigned I8085ELFObjectWriter::getRelocType(MCContext &Ctx, const MCValue &Targe
                                           const MCFixup &Fixup,
                                           bool IsPCRel) const {
   MCSymbolRefExpr::VariantKind Modifier = Target.getAccessVariant();
-  switch ((unsigned)Fixup.getKind()) {
-
+  switch (Fixup.getTargetKind()) {
+  case FK_Data_2:
+    return ELF::R_I8085_16;
   case I8085::fixup_16:
     return ELF::R_I8085_16;
-
   default:
     llvm_unreachable("invalid fixup kind!");
   }

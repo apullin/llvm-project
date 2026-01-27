@@ -60,6 +60,8 @@ TargetInfo *elf::getTarget() {
     return getARMTargetInfo();
   case EM_AVR:
     return getAVRTargetInfo();
+  case EM_I8085:
+    return getI8085TargetInfo();
   case EM_HEXAGON:
     return getHexagonTargetInfo();
   case EM_LOONGARCH:

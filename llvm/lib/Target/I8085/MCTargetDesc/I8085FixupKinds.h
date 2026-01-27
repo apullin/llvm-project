@@ -26,6 +26,17 @@ namespace I8085 {
 enum Fixups {
   // /// A 16-bit address I8085 fixup.
   fixup_16 = FirstTargetFixupKind,
+  fixup_lo8,
+  fixup_hi8,
+  fixup_hh8,
+  fixup_hhi8,
+  fixup_pm_lo8,
+  fixup_pm_hi8,
+  fixup_pm_hh8,
+  fixup_pm,
+  fixup_lo8_gs,
+  fixup_hi8_gs,
+  fixup_gs,
 
   // Marker
   LastTargetFixupKind,

@@ -61,6 +61,33 @@ void I8085AsmBackend::adjustFixupValue(const MCFixup &Fixup,
   case I8085::fixup_16:
     Value &= 0xffff;
     break;
+  case I8085::fixup_lo8:
+    Value &= 0xff;
+    break;
+  case I8085::fixup_hi8:
+    Value = (Value >> 8) & 0xff;
+    break;
+  case I8085::fixup_hh8:
+    Value = (Value >> 16) & 0xff;
+    break;
+  case I8085::fixup_hhi8:
+    Value = (Value >> 24) & 0xff;
+    break;
+  case I8085::fixup_pm_lo8:
+  case I8085::fixup_lo8_gs:
+    Value = (Value >> 1) & 0xff;
+    break;
+  case I8085::fixup_pm_hi8:
+  case I8085::fixup_hi8_gs:
+    Value = (Value >> 9) & 0xff;
+    break;
+  case I8085::fixup_pm_hh8:
+    Value = (Value >> 17) & 0xff;
+    break;
+  case I8085::fixup_pm:
+  case I8085::fixup_gs:
+    Value = (Value >> 1) & 0xffff;
+    break;
 
   }
 }
@@ -104,6 +131,17 @@ MCFixupKindInfo const &I8085AsmBackend::getFixupKindInfo(MCFixupKind Kind) const
   // this by saying that the fixup is the size of the entire instruction.
   const static MCFixupKindInfo Infos[I8085::NumTargetFixupKinds] = {
       {"fixup_16", 0, 16, 0},
+      {"fixup_lo8", 0, 8, 0},
+      {"fixup_hi8", 0, 8, 0},
+      {"fixup_hh8", 0, 8, 0},
+      {"fixup_hhi8", 0, 8, 0},
+      {"fixup_pm_lo8", 0, 8, 0},
+      {"fixup_pm_hi8", 0, 8, 0},
+      {"fixup_pm_hh8", 0, 8, 0},
+      {"fixup_pm", 0, 16, 0},
+      {"fixup_lo8_gs", 0, 8, 0},
+      {"fixup_hi8_gs", 0, 8, 0},
+      {"fixup_gs", 0, 16, 0},
   };
 
   if (Kind < FirstTargetFixupKind)
@@ -130,6 +168,17 @@ bool I8085AsmBackend::shouldForceRelocation(const MCAssembler &Asm,
   default:
     return false;
   case I8085::fixup_16:
+  case I8085::fixup_lo8:
+  case I8085::fixup_hi8:
+  case I8085::fixup_hh8:
+  case I8085::fixup_hhi8:
+  case I8085::fixup_pm_lo8:
+  case I8085::fixup_pm_hi8:
+  case I8085::fixup_pm_hh8:
+  case I8085::fixup_pm:
+  case I8085::fixup_lo8_gs:
+  case I8085::fixup_hi8_gs:
+  case I8085::fixup_gs:
     return true;
   }
 }

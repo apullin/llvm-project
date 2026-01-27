@@ -45,6 +45,28 @@ unsigned I8085ELFObjectWriter::getRelocType(MCContext &Ctx, const MCValue &Targe
     return ELF::R_I8085_16;
   case I8085::fixup_16:
     return ELF::R_I8085_16;
+  case I8085::fixup_lo8:
+    return ELF::R_I8085_LO8;
+  case I8085::fixup_hi8:
+    return ELF::R_I8085_HI8;
+  case I8085::fixup_hh8:
+    return ELF::R_I8085_HH8;
+  case I8085::fixup_hhi8:
+    return ELF::R_I8085_HHI8;
+  case I8085::fixup_pm_lo8:
+    return ELF::R_I8085_PM_LO8;
+  case I8085::fixup_pm_hi8:
+    return ELF::R_I8085_PM_HI8;
+  case I8085::fixup_pm_hh8:
+    return ELF::R_I8085_PM_HH8;
+  case I8085::fixup_pm:
+    return ELF::R_I8085_PM;
+  case I8085::fixup_lo8_gs:
+    return ELF::R_I8085_LO8_GS;
+  case I8085::fixup_hi8_gs:
+    return ELF::R_I8085_HI8_GS;
+  case I8085::fixup_gs:
+    return ELF::R_I8085_GS;
   default:
     llvm_unreachable("invalid fixup kind!");
   }

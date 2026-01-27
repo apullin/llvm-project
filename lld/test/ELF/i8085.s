@@ -5,7 +5,7 @@
 # RUN: llvm-objdump -s -j .data %t | FileCheck %s
 
 # CHECK: Contents of section .data:
-# CHECK: 34122000 20
+# CHECK: 34122000 20220024
 
   .text
   .globl _start
@@ -17,3 +17,5 @@ _start:
 ref:
   .word ext
   .byte ext
+  .word ext+2
+  .byte ext+4

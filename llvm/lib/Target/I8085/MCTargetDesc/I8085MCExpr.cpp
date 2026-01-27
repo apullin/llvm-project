@@ -104,51 +104,67 @@ int64_t I8085MCExpr::evaluateAsInt64(int64_t Value) const {
 
   switch (Kind) {
   case I8085MCExpr::VK_I8085_LO8:
-    Value &= 0xff;
-    break;
+    return static_cast<uint64_t>(Value) & 0xff;
   case I8085MCExpr::VK_I8085_HI8:
-    Value &= 0xff00;
-    Value >>= 8;
-    break;
+    return (static_cast<uint64_t>(Value) >> 8) & 0xff;
   case I8085MCExpr::VK_I8085_HH8:
-    Value &= 0xff0000;
-    Value >>= 16;
-    break;
+    return (static_cast<uint64_t>(Value) >> 16) & 0xff;
   case I8085MCExpr::VK_I8085_HHI8:
-    Value &= 0xff000000;
-    Value >>= 24;
-    break;
+    return (static_cast<uint64_t>(Value) >> 24) & 0xff;
   case I8085MCExpr::VK_I8085_PM_LO8:
   case I8085MCExpr::VK_I8085_LO8_GS:
-    Value >>= 1; // Program memory addresses must always be shifted by one.
-    Value &= 0xff;
-    break;
+    return (static_cast<uint64_t>(Value) >> 1) & 0xff;
   case I8085MCExpr::VK_I8085_PM_HI8:
   case I8085MCExpr::VK_I8085_HI8_GS:
-    Value >>= 1; // Program memory addresses must always be shifted by one.
-    Value &= 0xff00;
-    Value >>= 8;
-    break;
+    return (static_cast<uint64_t>(Value) >> 9) & 0xff;
   case I8085MCExpr::VK_I8085_PM_HH8:
-    Value >>= 1; // Program memory addresses must always be shifted by one.
-    Value &= 0xff0000;
-    Value >>= 16;
-    break;
+    return (static_cast<uint64_t>(Value) >> 17) & 0xff;
   case I8085MCExpr::VK_I8085_PM:
   case I8085MCExpr::VK_I8085_GS:
-    Value >>= 1; // Program memory addresses must always be shifted by one.
-    break;
-
+    return (static_cast<uint64_t>(Value) >> 1) & 0xffff;
   case I8085MCExpr::VK_I8085_None:
     llvm_unreachable("Uninitialized expression.");
   }
-  return static_cast<uint64_t>(Value) & 0xff;
+  return 0;
 }
 
 I8085::Fixups I8085MCExpr::getFixupKind() const {
   I8085::Fixups Kind = I8085::Fixups::LastTargetFixupKind;
 
   switch (getKind()) {
+  case VK_I8085_LO8:
+    Kind = I8085::fixup_lo8;
+    break;
+  case VK_I8085_HI8:
+    Kind = I8085::fixup_hi8;
+    break;
+  case VK_I8085_HH8:
+    Kind = I8085::fixup_hh8;
+    break;
+  case VK_I8085_HHI8:
+    Kind = I8085::fixup_hhi8;
+    break;
+  case VK_I8085_PM_LO8:
+    Kind = I8085::fixup_pm_lo8;
+    break;
+  case VK_I8085_PM_HI8:
+    Kind = I8085::fixup_pm_hi8;
+    break;
+  case VK_I8085_PM_HH8:
+    Kind = I8085::fixup_pm_hh8;
+    break;
+  case VK_I8085_PM:
+    Kind = I8085::fixup_pm;
+    break;
+  case VK_I8085_LO8_GS:
+    Kind = I8085::fixup_lo8_gs;
+    break;
+  case VK_I8085_HI8_GS:
+    Kind = I8085::fixup_hi8_gs;
+    break;
+  case VK_I8085_GS:
+    Kind = I8085::fixup_gs;
+    break;
   case VK_I8085_None:
     llvm_unreachable("Uninitialized expression");
   }

@@ -358,6 +358,15 @@ bool I8085AsmParser::MatchAndEmitInstruction(SMLoc Loc, unsigned &Opcode,
         Inst.getOperand(0).getReg() == I8085::M) {
       return Error(Loc, "invalid instruction: MOV M, M");
     }
+    if (Inst.getOpcode() == I8085::RST) {
+      if (Inst.getNumOperands() < 1 || !Inst.getOperand(0).isImm()) {
+        return Error(Loc, "RST requires an immediate in range 0..7");
+      }
+      int64_t Imm = Inst.getOperand(0).getImm();
+      if (!isUInt<3>(Imm)) {
+        return Error(Loc, "RST immediate out of range (expected 0..7)");
+      }
+    }
     return emit(Inst, Loc, Out);
   case Match_MissingFeature:
     return missingFeature(Loc, ErrorInfo);

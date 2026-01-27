@@ -284,6 +284,10 @@ let Defs=[SREG,A], Uses=[A] in def XRA : F2<0b10101,(outs), (ins GR8: $rs), "XRA
 let Defs=[SREG,A], Uses=[A] in def ANI : F5<0b11100110,(outs), (ins i8imm: $k), "ANI $k", []>;
 let Defs=[SREG,A], Uses=[A] in def ORI : F5<0b11110110,(outs), (ins i8imm: $k), "ORI $k", []>;
 let Defs=[SREG,A], Uses=[A] in def XRI : F5<0b11101110,(outs), (ins i8imm: $k), "XRI $k", []>;
+let Defs=[SREG,A], Uses=[A] in def CPI : F5<0b11111110,(outs), (ins i8imm: $k), "CPI $k", []>;
+
+let Defs=[A] in def IN : F5<0b11011011,(outs), (ins i8imm: $k), "IN $k", []>;
+let Uses=[A] in def OUT : F5<0b11010011,(outs), (ins i8imm: $k), "OUT $k", []>;
 
 
 //===----------------------------------------------------------------------===//
@@ -309,6 +313,22 @@ def RRC : F1<0b00001111,(outs), (ins), "RRC", []>;
 def RAL : F1<0b00010111,(outs), (ins), "RAL", []>;
 def RAR : F1<0b00011111,(outs), (ins), "RAR", []>;
 
+def NOP : F1<0b00000000,(outs), (ins), "NOP", []>;
+def HLT : F1<0b01110110,(outs), (ins), "HLT", []>;
+
+def DAA : F1<0b00100111,(outs), (ins), "DAA", []>;
+def STC : F1<0b00110111,(outs), (ins), "STC", []>;
+def CMC : F1<0b00111111,(outs), (ins), "CMC", []>;
+
+def DI : F1<0b11110011,(outs), (ins), "DI", []>;
+def EI : F1<0b11111011,(outs), (ins), "EI", []>;
+def RIM : F1<0b00100000,(outs), (ins), "RIM", []>;
+def SIM : F1<0b00110000,(outs), (ins), "SIM", []>;
+
+def XCHG : F1<0b11101011,(outs), (ins), "XCHG", []>;
+def XTHL : F1<0b11100011,(outs), (ins), "XTHL", []>;
+def PCHL : F1<0b11101001,(outs), (ins), "PCHL", []>;
+
 
 
 //===----------------------------------------------------------------------===//
@@ -333,24 +353,31 @@ def mspi : Operand<iPTR> {
 }
 
 
-def LXI : F4<0b0001,(outs GR8: $rd), (ins i16imm: $k), "LXI $rd, $k", []>;
-def INX : F8<0b0011,(outs GR8: $rd), (ins), "INX $rd", []>;
+def LXI : F4<0b0001,(outs GR16: $rd), (ins i16imm: $k), "LXI $rd, $k", []>;
+def INX : F8<0b0011,(outs GR16: $rd), (ins), "INX $rd", []>;
+def DCX : F8<0b1011,(outs GR16: $rd), (ins), "DCX $rd", []>;
+
+let Uses=[A] in def STAX : F8<0b0010,(outs), (ins GR16BD: $rd), "STAX $rd", []>;
+let Defs=[A] in def LDAX : F8<0b1010,(outs), (ins GR16BD: $rd), "LDAX $rd", []>;
 
 let Uses = [H,L] in {
   let Defs=[SREG,H,L] in def DAD : F7<(outs), (ins GR16: $rs), "DAD $rs", []>;
 
-  let Defs=[SP] in def SPHL : F1<0b11111001,(outs), (ins), "SPHL", []>;                          
+  let Defs=[SP] in def SPHL : F1<0b11111001,(outs), (ins), "SPHL", []>;
 
-  def SHLD : F1<0b00100010,(outs), (ins i16imm: $k), "SHLD $k", []>;   
+  let Uses=[H,L] in def SHLD : F6<0b00100010,(outs), (ins imm16Addr: $k), "SHLD $k", []>;
 
-  def LHLD : F1<0b00101010,(outs), (ins i16imm: $k), "LHLD $k", []>;                      
+  let Defs=[H,L] in def LHLD : F6<0b00101010,(outs), (ins imm16Addr: $k), "LHLD $k", []>;
   
   let Uses=[H,L] in def MOV_M  : FMOV_T_M<(outs), (ins GR8: $rs), "MOV M, $rs", []>;
 
   let Uses=[H,L] in def MOV_FROM_M  : FMOV_F_M<(outs GR8: $rd), (ins), "MOV $rd, M", []>;
 
-  def MVI_M : F1<0b00111110,(outs), (ins i8imm: $k), "MVI M, $k", []>; 
+  def MVI_M : F5<0b00111110,(outs), (ins i8imm: $k), "MVI M, $k", []>;
 }          
+
+let Uses=[A] in def STA : F6<0b00110010,(outs), (ins imm16Addr: $k), "STA $k", []>;
+let Defs=[A] in def LDA : F6<0b00111010,(outs), (ins imm16Addr: $k), "LDA $k", []>;
 
 let Defs=[SP], Uses=[SP] in {
 
@@ -401,7 +428,10 @@ def STORE_16_AT_OFFSET_WITH_SP : I8085Pseudo<(outs),
                        (ins GR16: $src, i16imm: $offset),
                        "STORE_16_SP_AT_OFFSET\t$offset, $src", [(store i16: $src, imm: $offset)]>;                       
 
-}
+}       
+
+def POP : F10<0b0001,(outs GR16PP: $rd), (ins), "POP $rd", []>;
+def PUSH : F10<0b0101,(outs), (ins GR16PP: $rd), "PUSH $rd", []>;
 
 let Uses=[SP] in {
 
@@ -436,6 +466,8 @@ let Uses = [SP] in def CALL : F6<0b11001101,(outs), (ins imm16Addr:$k),
 let isTerminator = 1, isReturn = 1, isBarrier = 1 in {
   def RET : F1<0b11001001, (outs), (ins), "RET", [(I8085retflag)]>;
 }
+
+def RST : FRST<(outs), (ins i8imm: $k), "RST $k", []>;
 
 def : Pat<(I8085call(i16 tglobaladdr:$dst)), (CALL tglobaladdr:$dst)>;
 def : Pat<(I8085call(i16 texternalsym:$dst)), (CALL texternalsym:$dst)>;

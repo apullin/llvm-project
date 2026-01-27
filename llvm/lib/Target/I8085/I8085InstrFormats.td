@@ -191,7 +191,7 @@ class F4<bits<4> opcode,dag outs, dag ins, string asmstr, list<dag> pattern>
   bits<16> k;
 
   let Inst{23-22} = 0b00;
-  let Inst{21-20} = rd{2-1};
+  let Inst{21-20} = rd{1-0};
   let Inst{19-16} = opcode;
   let Inst{15-0} = k;
 }
@@ -254,7 +254,7 @@ class F7<dag outs, dag ins, string asmstr, list<dag> pattern>
   bits<3> rs;
 
   let Inst{7-6} = 0b00;
-  let Inst{5-4} = rs{2-1};
+  let Inst{5-4} = rs{1-0};
   let Inst{3-0} = 0b1001;
 }
 
@@ -271,7 +271,39 @@ class F8<bits<4> opcode,dag outs, dag ins, string asmstr, list<dag> pattern>
   bits<3> rd;
 
   let Inst{7-6} = 0b00;
-  let Inst{5-4} = rd{2-1};
+  let Inst{5-4} = rd{1-0};
   let Inst{3-0} = opcode;
 }
 
+//===----------------------------------------------------------------------===//
+// PUSH/POP Instr Format
+// |11DD|oooo|
+// o - Instruction Specific Opcode
+//        0001 - POP
+//        0101 - PUSH
+// D - Register Pair (BC, DE, HL, PSW)
+//===----------------------------------------------------------------------===//
+class F10<bits<4> opcode,dag outs, dag ins, string asmstr, list<dag> pattern>
+    : I8085Inst8<outs, ins, asmstr, pattern> {
+
+  bits<3> rd;
+
+  let Inst{7-6} = 0b11;
+  let Inst{5-4} = rd{1-0};
+  let Inst{3-0} = opcode;
+}
+
+//===----------------------------------------------------------------------===//
+// RST Instr Format
+// |11KK|K111|
+// K - restart vector (0-7)
+//===----------------------------------------------------------------------===//
+class FRST<dag outs, dag ins, string asmstr, list<dag> pattern>
+    : I8085Inst8<outs, ins, asmstr, pattern> {
+
+  bits<3> k;
+
+  let Inst{7-6} = 0b11;
+  let Inst{5-3} = k;
+  let Inst{2-0} = 0b111;
+}

@@ -137,7 +137,7 @@ bool I8085ExpandPseudo::expand<I8085::LOAD_16_ADDR_CONTENT>(Block &MBB, BlockIt 
   buildMI(MBB, MBBI,  I8085::MOV).addReg(I8085::H, RegState::Define).addReg(srcHighReg);
   buildMI(MBB, MBBI,  I8085::MOV).addReg(I8085::L, RegState::Define).addReg(srcLowReg);
   buildMI(MBB, MBBI,  I8085::MOV_FROM_M).addReg(destLowReg ,RegState::Define);
-  buildMI(MBB, MBBI,  I8085::INX).addReg(I8085::H, RegState::Define);
+  buildMI(MBB, MBBI,  I8085::INX).addReg(I8085::HL, RegState::Define);
   buildMI(MBB, MBBI,  I8085::MOV_FROM_M).addReg(destHighReg ,RegState::Define);
 
   MI.eraseFromParent();
@@ -239,7 +239,7 @@ const I8085Subtarget &STI = MBB.getParent()->getSubtarget<I8085Subtarget>();
 
   const GlobalValue* amount = MI.getOperand(1).getGlobal();
 
-  buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::H,RegState::Define).addGlobalAddress(amount);
+  buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addGlobalAddress(amount);
   buildMI(MBB, MBBI, I8085::DAD).addReg(I8085::SP);
   buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(destReg,RegState::Define);
 
@@ -269,11 +269,11 @@ bool I8085ExpandPseudo::expand<I8085::LOAD_16_WITH_IMM_ADDR>(Block &MBB, BlockIt
 
   const GlobalValue* amount = MI.getOperand(1).getGlobal();
 
-  buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::H,RegState::Define).addGlobalAddress(amount,1);
+  buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addGlobalAddress(amount,1);
   buildMI(MBB, MBBI, I8085::DAD).addReg(I8085::SP);
   buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(highReg,RegState::Define);
 
-  buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::H,RegState::Define).addGlobalAddress(amount);
+  buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addGlobalAddress(amount);
   buildMI(MBB, MBBI, I8085::DAD).addReg(I8085::SP);
   buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(lowReg,RegState::Define);
 

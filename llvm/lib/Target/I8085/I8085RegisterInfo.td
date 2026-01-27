@@ -59,6 +59,10 @@ def CCR : RegisterClass<"I8085", [i8], 8, (add SREG)> {
   let CopyCost = -1; // Don't allow copying of status registers
 }
 
+let SubRegIndices = [sub_lo, sub_hi], CoveredBySubRegs = 1 in {
+def PSW : I8085Reg<3, "PSW", [A, SREG]>, DwarfRegNum<[9]>;
+}
+
 //===----------------------------------------------------------------------===//
 //  32 bit - Imaginary registers, existed in zeroth page
 //===----------------------------------------------------------------------===//
@@ -73,7 +77,17 @@ def GR8 : RegisterClass<"I8085", [i8], 8,
 
 def GR16 : RegisterClass<"I8085", [i16], 8,
                         (
-                            add BC,DE,SP
+                            add BC,DE,HL,SP
+                        )>;
+
+def GR16BD : RegisterClass<"I8085", [i16], 8,
+                        (
+                            add BC,DE
+                        )>;
+
+def GR16PP : RegisterClass<"I8085", [i16], 8,
+                        (
+                            add BC,DE,HL,PSW
                         )>;
 
 def GR32 : RegisterClass<"I8085", [i32], 8,

@@ -157,12 +157,12 @@ bool I8085ExpandPseudo32::binOperationWithImmediateOperand(unsigned opCode, Bloc
 
   
   for(int i=0;i<4;i++){
-      buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::H,RegState::Define).addImm(address[i]);
+      buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[i]);
       buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::A,RegState::Define);
 
       buildMI(MBB, MBBI, opCode).addImm(values[i]);
 
-      buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::H,RegState::Define).addImm(address[i+index]);
+      buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[i+index]);
       buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::A);
   }            
 
@@ -186,14 +186,14 @@ bool I8085ExpandPseudo32::binOperation(unsigned opCode, Block &MBB, BlockIt MBBI
   }
 
   for(int i=0;i<4;i++){
-      buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::H,RegState::Define).addImm(address[i]);
+      buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[i]);
       buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::A,RegState::Define);
 
-      buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::H,RegState::Define).addImm(address[i+4]);
+      buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[i+4]);
 
       buildMI(MBB, MBBI, opCode);
 
-      buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::H,RegState::Define).addImm(address[i+index]);
+      buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[i+index]);
       buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::A);
   }            
 
@@ -236,13 +236,13 @@ template <> bool I8085ExpandPseudo32::expand<I8085::RR_32>(Block &MBB, BlockIt M
   }
 
   for(int i=3;i>-1;i--){
-    buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::H,RegState::Define).addImm(address[index+i]);
+    buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[index+i]);
     buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::A,RegState::Define);
     buildMI(MBB, MBBI, I8085::RAR);
     buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::A);
   }
 
-  buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::H,RegState::Define).addImm(address[index+3]);
+  buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[index+3]);
   buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::A,RegState::Define);
   buildMI(MBB, MBBI, I8085::ANI).addImm(127);  
   buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::A);
@@ -266,13 +266,13 @@ template <> bool I8085ExpandPseudo32::expand<I8085::RL_32>(Block &MBB, BlockIt M
   }
 
   for(int i=0;i<4;i++){
-    buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::H,RegState::Define).addImm(address[index+i]);
+    buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[index+i]);
     buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::A,RegState::Define);
     buildMI(MBB, MBBI, I8085::RAL);
     buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::A);
   }
 
-  buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::H,RegState::Define).addImm(address[index]);
+  buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[index]);
   buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::A,RegState::Define);
   buildMI(MBB, MBBI, I8085::ANI).addImm(254);  
   buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::A);
@@ -295,7 +295,7 @@ template <> bool I8085ExpandPseudo32::expand<I8085::SEXT32_INREG_8>(Block &MBB, 
       index=4; 
   }
 
-  buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::H,RegState::Define).addImm(address[index]);
+  buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[index]);
 
   buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::A,RegState::Define);
 
@@ -305,11 +305,11 @@ template <> bool I8085ExpandPseudo32::expand<I8085::SEXT32_INREG_8>(Block &MBB, 
   buildMI(MBB, MBBI, I8085::SBB)
     .addReg(I8085::A);  // will result in FFh if CF set, 0 else
 
-  buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::H,RegState::Define).addImm(address[index+3]);
+  buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[index+3]);
   buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::A);
-  buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::H,RegState::Define).addImm(address[index+2]);
+  buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[index+2]);
   buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::A);
-  buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::H,RegState::Define).addImm(address[index+1]);
+  buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[index+1]);
   buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::A);
 
   MI.eraseFromParent();
@@ -330,7 +330,7 @@ template <> bool I8085ExpandPseudo32::expand<I8085::SEXT32_INREG_16>(Block &MBB,
       index=4; 
   }
 
-  buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::H,RegState::Define).addImm(address[index+1]);
+  buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[index+1]);
 
   buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::A,RegState::Define);
 
@@ -340,9 +340,9 @@ template <> bool I8085ExpandPseudo32::expand<I8085::SEXT32_INREG_16>(Block &MBB,
   buildMI(MBB, MBBI, I8085::SBB)
     .addReg(I8085::A);  // will result in FFh if CF set, 0 else
 
-  buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::H,RegState::Define).addImm(address[index+3]);
+  buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[index+3]);
   buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::A);
-  buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::H,RegState::Define).addImm(address[index+2]);
+  buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[index+2]);
   buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::A); 
 
   MI.eraseFromParent();
@@ -370,9 +370,9 @@ template <> bool I8085ExpandPseudo32::expand<I8085::TRUNC32TO16>(Block &MBB, Blo
       index=4; 
   }
 
-  buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::H,RegState::Define).addImm(address[index]);
+  buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[index]);
   buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(destLow,RegState::Define);
-  buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::H,RegState::Define).addImm(address[index+1]);
+  buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[index+1]);
   buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(destHigh,RegState::Define);
 
   MI.eraseFromParent();
@@ -399,9 +399,9 @@ template <> bool I8085ExpandPseudo32::expand<I8085::SEXT16TO32>(Block &MBB, Bloc
       index=4; 
   }
 
-  buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::H,RegState::Define).addImm(address[index]);
+  buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[index]);
   buildMI(MBB, MBBI, I8085::MOV_M).addReg(opOneLow);
-  buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::H,RegState::Define).addImm(address[index+1]);
+  buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[index+1]);
   buildMI(MBB, MBBI, I8085::MOV_M).addReg(opOneHigh);
 
   buildMI(MBB, MBBI, I8085::MOV).addReg(I8085::A,RegState::Define).addReg(opOneHigh);
@@ -413,9 +413,9 @@ template <> bool I8085ExpandPseudo32::expand<I8085::SEXT16TO32>(Block &MBB, Bloc
     .addReg(I8085::A);  // will result in FFh if CF set, 0 else
 
 
-  buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::H,RegState::Define).addImm(address[index+3]);
+  buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[index+3]);
   buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::A);
-  buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::H,RegState::Define).addImm(address[index+2]);
+  buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[index+2]);
   buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::A); 
 
   MI.eraseFromParent();
@@ -443,13 +443,13 @@ template <> bool I8085ExpandPseudo32::expand<I8085::ZEXT16TO32>(Block &MBB, Bloc
       index=4; 
   }
 
-  buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::H,RegState::Define).addImm(address[index+3]);
+  buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[index+3]);
   buildMI(MBB, MBBI, I8085::MVI_M).addImm(0);
-  buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::H,RegState::Define).addImm(address[index+2]);
+  buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[index+2]);
   buildMI(MBB, MBBI, I8085::MVI_M).addImm(0);
-  buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::H,RegState::Define).addImm(address[index+1]);
+  buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[index+1]);
   buildMI(MBB, MBBI, I8085::MOV_M).addReg(opOneHigh);
-  buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::H,RegState::Define).addImm(address[index]);
+  buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[index]);
   buildMI(MBB, MBBI, I8085::MOV_M).addReg(opOneLow);       
 
   MI.eraseFromParent();
@@ -476,7 +476,7 @@ template <> bool I8085ExpandPseudo32::expand<I8085::TRUNC32TO8>(Block &MBB, Bloc
       index=4; 
   }
 
-  buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::H,RegState::Define).addImm(address[index]);
+  buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[index]);
   buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(destReg,RegState::Define);
 
   MI.eraseFromParent();
@@ -498,7 +498,7 @@ template <> bool I8085ExpandPseudo32::expand<I8085::SEXT8TO32>(Block &MBB, Block
       index=4; 
   }
 
-  buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::H,RegState::Define).addImm(address[index]);
+  buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[index]);
   buildMI(MBB, MBBI, I8085::MOV_M).addReg(srcReg);
 
   buildMI(MBB, MBBI, I8085::MOV).addReg(I8085::A,RegState::Define).addReg(srcReg);
@@ -510,11 +510,11 @@ template <> bool I8085ExpandPseudo32::expand<I8085::SEXT8TO32>(Block &MBB, Block
     .addReg(I8085::A);  // will result in FFh if CF set, 0 else
 
 
-  buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::H,RegState::Define).addImm(address[index+3]);
+  buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[index+3]);
   buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::A);
-  buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::H,RegState::Define).addImm(address[index+2]);
+  buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[index+2]);
   buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::A);
-  buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::H,RegState::Define).addImm(address[index+1]);
+  buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[index+1]);
   buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::A);
 
   MI.eraseFromParent();
@@ -537,13 +537,13 @@ template <> bool I8085ExpandPseudo32::expand<I8085::ZEXT8TO32>(Block &MBB, Block
       index=4; 
   }
 
-  buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::H,RegState::Define).addImm(address[index+3]);
+  buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[index+3]);
   buildMI(MBB, MBBI, I8085::MVI_M).addImm(0);
-  buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::H,RegState::Define).addImm(address[index+2]);
+  buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[index+2]);
   buildMI(MBB, MBBI, I8085::MVI_M).addImm(0);
-  buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::H,RegState::Define).addImm(address[index+1]);
+  buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[index+1]);
   buildMI(MBB, MBBI, I8085::MOV_M).addReg(0);
-  buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::H,RegState::Define).addImm(address[index]);
+  buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[index]);
   buildMI(MBB, MBBI, I8085::MOV_M).addReg(srcReg);       
 
   MI.eraseFromParent();
@@ -566,19 +566,19 @@ template <> bool I8085ExpandPseudo32::expand<I8085::MOV_32>(Block &MBB, BlockIt 
 
   if(srcReg==I8085::IBX){ 
           for(int i=0;i<4;i++){
-              buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::H,RegState::Define).addImm(address[i+4]);
+              buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[i+4]);
               buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::A,RegState::Define);
 
-              buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::H,RegState::Define).addImm(address[i]);
+              buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[i]);
               buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::A);
           }  
   }
   else{
           for(int i=0;i<4;i++){
-              buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::H,RegState::Define).addImm(address[i]);
+              buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[i]);
               buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::A,RegState::Define);
 
-              buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::H,RegState::Define).addImm(address[i+4]);
+              buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[i+4]);
               buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::A);
           }   
   }         
@@ -605,10 +605,10 @@ template <> bool I8085ExpandPseudo32::expand<I8085::STORE_32>(Block &MBB, BlockI
 
   
   for(int i=0;i<4;i++){
-      buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::H,RegState::Define).addImm(address[i+index]);
+      buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[i+index]);
       buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::A,RegState::Define);
 
-      buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::H,RegState::Define).addImm(offsetToStore+i);
+      buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(offsetToStore+i);
       buildMI(MBB, MBBI, I8085::DAD).addReg(I8085::SP);
       buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::A);
   }            
@@ -634,15 +634,15 @@ template <> bool I8085ExpandPseudo32::expand<I8085::ADD_32>(Block &MBB, BlockIt 
   }
   
   for(int i=0;i<4;i++){
-      buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::H,RegState::Define).addImm(address[i]);
+      buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[i]);
       buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::A,RegState::Define);
 
-      buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::H,RegState::Define).addImm(address[i+4]);
+      buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[i+4]);
 
       if(i>0) buildMI(MBB, MBBI, I8085::ADC_M);
       else buildMI(MBB, MBBI, I8085::ADD_M);
 
-      buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::H,RegState::Define).addImm(address[i+index]);
+      buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[i+index]);
       buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::A);
   }            
 
@@ -674,7 +674,7 @@ template <> bool I8085ExpandPseudo32::expand<I8085::SUBI_32>(Block &MBB, BlockIt
 
   
   for(int i=0;i<4;i++){
-      buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::H,RegState::Define).addImm(address[i]);
+      buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[i]);
       buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::A,RegState::Define);
 
       if(i>0){ 
@@ -684,7 +684,7 @@ template <> bool I8085ExpandPseudo32::expand<I8085::SUBI_32>(Block &MBB, BlockIt
         buildMI(MBB, MBBI, I8085::SUI).addImm(values[i]);
       }
 
-      buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::H,RegState::Define).addImm(address[i+index]);
+      buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[i+index]);
       buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::A);
   }            
 
@@ -709,15 +709,15 @@ template <> bool I8085ExpandPseudo32::expand<I8085::SUB_32>(Block &MBB, BlockIt 
   }
   
   for(int i=0;i<4;i++){
-      buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::H,RegState::Define).addImm(address[i+indexOne]);
+      buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[i+indexOne]);
       buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::A,RegState::Define);
 
-      buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::H,RegState::Define).addImm(address[i+indexTwo]);
+      buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[i+indexTwo]);
 
       if(i>0) buildMI(MBB, MBBI, I8085::SBB_M);
       else buildMI(MBB, MBBI, I8085::SUB_M);
 
-      buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::H,RegState::Define).addImm(address[i+indexOne]);
+      buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[i+indexOne]);
       buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::A);
   }            
 
@@ -750,7 +750,7 @@ template <> bool I8085ExpandPseudo32::expand<I8085::ADDI_32>(Block &MBB, BlockIt
 
   
   for(int i=0;i<4;i++){
-      buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::H,RegState::Define).addImm(address[i]);
+      buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[i]);
       buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::A,RegState::Define);
 
       if(i>0){ 
@@ -760,7 +760,7 @@ template <> bool I8085ExpandPseudo32::expand<I8085::ADDI_32>(Block &MBB, BlockIt
         buildMI(MBB, MBBI, I8085::ADI).addImm(values[i]);
       }
 
-      buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::H,RegState::Define).addImm(address[i+index]);
+      buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[i+index]);
       buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::A);
   }            
 
@@ -783,10 +783,10 @@ template <> bool I8085ExpandPseudo32::expand<I8085::LOAD_32_WITH_ADDR>(Block &MB
 
   
   for(int i=0;i<4;i++){
-      buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::H,RegState::Define).addImm(offsetToLoad+i);
+      buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(offsetToLoad+i);
       buildMI(MBB, MBBI, I8085::DAD).addReg(I8085::SP);
       buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::A,RegState::Define);
-      buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::H,RegState::Define).addImm(address[i+index]);
+      buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[i+index]);
       buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::A);
   }            
 
@@ -815,7 +815,7 @@ template <> bool I8085ExpandPseudo32::expand<I8085::LOAD_32>(Block &MBB, BlockIt
   
   
   for(int i=0;i<4;i++){
-      buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::H,RegState::Define).addImm(address[i+index]);
+      buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[i+index]);
       buildMI(MBB, MBBI, I8085::MVI_M).addImm(values[i]);
   }            
 
@@ -834,9 +834,9 @@ template <> bool I8085ExpandPseudo32::expand<I8085::JMP_32_IF_NOT_EQUAL>(Block &
   int address[]={11,12,13,14,15,16,17,18};
 
   for(int i=0;i<4;i++){
-      buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::H,RegState::Define).addImm(address[i+4]);
+      buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[i+4]);
       buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::A, RegState::Define);
-      buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::H,RegState::Define).addImm(address[i]);
+      buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[i]);
       buildMI(MBB, MBBI, I8085::CMP_M);
       buildMI(MBB, MBBI, I8085::JNZ).addMBB(MI.getOperand(2).getMBB());
   }            
@@ -857,10 +857,10 @@ template <> bool I8085ExpandPseudo32::expand<I8085::JMP_32_IF_SAME_SIGN>(Block &
   int index = 0;
 
 
-  buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::H,RegState::Define).addImm(address[4]);
+  buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[4]);
   buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::A, RegState::Define);
 
-  buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::H,RegState::Define).addImm(address[0]);
+  buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[0]);
 
   buildMI(MBB, MBBI, I8085::XRA_M);
   buildMI(MBB, MBBI, I8085::ANI).addImm(128);  
@@ -882,7 +882,7 @@ template <> bool I8085ExpandPseudo32::expand<I8085::JMP_32_IF_POSITIVE>(Block &M
   if(operandOne==I8085::IBX){  higherByteIndex=7; }
 
 
-  buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::H,RegState::Define).addImm(address[higherByteIndex]);
+  buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[higherByteIndex]);
   buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::A, RegState::Define);
   buildMI(MBB, MBBI, I8085::ANI).addImm(128);  
   buildMI(MBB, MBBI, I8085::JZ).addMBB(MI.getOperand(1).getMBB());
@@ -908,10 +908,10 @@ template <> bool I8085ExpandPseudo32::expand<I8085::STORE_32_AT_OFFSET_WITH_SP>(
 
   
   for(int i=0;i<4;i++){
-      buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::H,RegState::Define).addImm(address[i+index]);
+      buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[i+index]);
       buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::A,RegState::Define);
 
-      buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::H,RegState::Define).addImm(offsetToStore+i);
+      buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(offsetToStore+i);
       buildMI(MBB, MBBI, I8085::DAD).addReg(I8085::SP);
       buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::A);
   }            
@@ -935,10 +935,10 @@ template <> bool I8085ExpandPseudo32::expand<I8085::LOAD_32_OFFSET_WITH_SP>(Bloc
 
   
   for(int i=0;i<4;i++){
-      buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::H,RegState::Define).addImm(offsetToLoad+i);
+      buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(offsetToLoad+i);
       buildMI(MBB, MBBI, I8085::DAD).addReg(I8085::SP);
       buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::A,RegState::Define);
-      buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::H,RegState::Define).addImm(address[i+index]);
+      buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[i+index]);
       buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::A);
   }            
 
@@ -961,10 +961,10 @@ template <> bool I8085ExpandPseudo32::expand<I8085::LOAD_32_WITH_IMM_ADDR>(Block
 
   
   for(int i=0;i<4;i++){
-      buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::H,RegState::Define).addGlobalAddress(amount,i);
+      buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addGlobalAddress(amount,i);
       buildMI(MBB, MBBI, I8085::DAD).addReg(I8085::SP);
       buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::A,RegState::Define);
-      buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::H,RegState::Define).addImm(address[i+index]);
+      buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[i+index]);
       buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::A);
   }            
 
@@ -994,7 +994,7 @@ template <> bool I8085ExpandPseudo32::expand<I8085::LOAD_32_ADDR_CONTENT>(Block 
       buildMI(MBB, MBBI,  I8085::MOV).addReg(I8085::L, RegState::Define).addReg(opOneLow);
       
       if(i>0){
-        buildMI(MBB, MBBI, I8085::INX).addReg(I8085::H,RegState::Define);
+        buildMI(MBB, MBBI, I8085::INX).addReg(I8085::HL,RegState::Define);
       }
 
       buildMI(MBB, MBBI,  I8085::MOV_FROM_M).addReg(I8085::A,RegState::Define);
@@ -1002,7 +1002,7 @@ template <> bool I8085ExpandPseudo32::expand<I8085::LOAD_32_ADDR_CONTENT>(Block 
       buildMI(MBB, MBBI,  I8085::MOV).addReg(opOneHigh, RegState::Define).addReg(I8085::H);
       buildMI(MBB, MBBI,  I8085::MOV).addReg(opOneLow, RegState::Define).addReg(I8085::L);
 
-      buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::H,RegState::Define).addImm(address[i+index]);
+      buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[i+index]);
       buildMI(MBB, MBBI,  I8085::MOV_M).addReg(I8085::A);
   }            
 

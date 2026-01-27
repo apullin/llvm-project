@@ -139,11 +139,37 @@ let isBarrier = 1, isBranch = 1, Uses=[SREG]  in {
    def JP :  F6<0b11110010,(outs),(ins addressTarget: $k),"JP $k", []>;
 
    def JM :  F6<0b11111010,(outs),(ins addressTarget: $k),"JM $k", []>;
+
+   def JPO : F6<0b11100010,(outs),(ins addressTarget: $k),"JPO $k", []>;
+
+   def JPE : F6<0b11101010,(outs),(ins addressTarget: $k),"JPE $k", []>;
 }
 
 let isBarrier = 1, isBranch = 1, isTerminator = 1 in {
    def JMP : F6<0b11000011,(outs),(ins addressTarget:$k),
                                            "JMP $k", [(br bb: $k)]>; 
+}
+
+let isTerminator = 1, isReturn = 1, isBarrier = 1 in {
+   def RNZ : F1<0b11000000,(outs),(ins),"RNZ", []>;
+   def RZ  : F1<0b11001000,(outs),(ins),"RZ", []>;
+   def RNC : F1<0b11010000,(outs),(ins),"RNC", []>;
+   def RC  : F1<0b11011000,(outs),(ins),"RC", []>;
+   def RPO : F1<0b11100000,(outs),(ins),"RPO", []>;
+   def RPE : F1<0b11101000,(outs),(ins),"RPE", []>;
+   def RP  : F1<0b11110000,(outs),(ins),"RP", []>;
+   def RM  : F1<0b11111000,(outs),(ins),"RM", []>;
+}
+
+let isCall = 1 in {
+   def CNZ : F6<0b11000100,(outs),(ins imm16Addr:$k),"CNZ $k", []>;
+   def CZ  : F6<0b11001100,(outs),(ins imm16Addr:$k),"CZ $k", []>;
+   def CNC : F6<0b11010100,(outs),(ins imm16Addr:$k),"CNC $k", []>;
+   def CC  : F6<0b11011100,(outs),(ins imm16Addr:$k),"CC $k", []>;
+   def CPO : F6<0b11100100,(outs),(ins imm16Addr:$k),"CPO $k", []>;
+   def CPE : F6<0b11101100,(outs),(ins imm16Addr:$k),"CPE $k", []>;
+   def CP  : F6<0b11110100,(outs),(ins imm16Addr:$k),"CP $k", []>;
+   def CM  : F6<0b11111100,(outs),(ins imm16Addr:$k),"CM $k", []>;
 }
 
 
@@ -176,4 +202,3 @@ let Defs=[SREG] in {
 }
 
 def CMA : F1<0b00101111,(outs),(ins),"CMA", []>;
-

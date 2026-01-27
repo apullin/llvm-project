@@ -131,7 +131,7 @@ endforeach()
 
 set(I8085_LIBGCC_CFLAGS
   --target=i8085-unknown-elf
-  -O0
+  -Os
   -ffreestanding
   -fno-builtin
   -fno-stack-protector

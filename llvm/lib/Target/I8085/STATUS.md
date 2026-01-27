@@ -24,7 +24,7 @@ clang/runtime support. It is intended as a living checklist.
 - [x] libcall names set for mul/sdiv/srem (i8/i16/i32)
 - [x] minimal compiler-rt builtins for mul/div/rem
 - [ ] calling convention doc + validation tests for aggregates/struct returns
-- [x] startup/CRT objects (minimal)
+- [x] startup/CRT objects (data copy + bss + stack)
 - [x] default linker script
 
 ## Clang Driver

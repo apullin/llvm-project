@@ -88,6 +88,13 @@ bool I8085DAGToDAGISel::SelectAddr(SDNode *Op, SDValue N, SDValue &Base,
     return true;
   }
 
+  // Handle plain register addresses (offset 0).
+  if (isa<RegisterSDNode>(N)) {
+    Base = N;
+    Disp = CurDAG->getTargetConstant(0, dl, MVT::i8);
+    return true;
+  }
+
   // Match simple Reg + uimm6 operands.
   if (N.getOpcode() != ISD::ADD && N.getOpcode() != ISD::SUB &&
       !CurDAG->isBaseWithConstantOffset(N)) {
@@ -422,4 +429,3 @@ FunctionPass *llvm::createI8085ISelDag(I8085TargetMachine &TM,
                                CodeGenOptLevel OptLevel) {
   return new I8085DAGToDAGISelLegacy(TM, OptLevel);
 }
-

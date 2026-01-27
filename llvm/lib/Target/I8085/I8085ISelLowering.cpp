@@ -677,8 +677,6 @@ SDValue I8085TargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
   // effect.
   MachineFrameInfo &MFI = MF.getFrameInfo();
   
-  SDValue StackPtr;
-
   if (HasStackArgs) {
     SmallVector<SDValue, 8> MemOpChains;
     for (; AI != AE; AI++) {
@@ -697,10 +695,13 @@ SDValue I8085TargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
     //       DAG.getStore(Chain, DL, Arg, PtrOff,MachinePointerInfo()));
     // }
     // else{
-      SDValue ptrConstant = DAG.getConstant(0,DL,MVT::i16);
-      MemOpChains.push_back(
-          DAG.getStore(Chain, DL, Arg, ptrConstant,MachinePointerInfo())
-      );
+      SDValue PtrOff = DAG.getNode(
+          ISD::ADD, DL, getPointerTy(DAG.getDataLayout()),
+          DAG.getRegister(I8085::SP, getPointerTy(DAG.getDataLayout())),
+          DAG.getIntPtrConstant(VA.getLocMemOffset(), DL));
+      MemOpChains.push_back(DAG.getStore(
+          Chain, DL, Arg, PtrOff,
+          MachinePointerInfo::getStack(MF, VA.getLocMemOffset())));
     // }
 
     }

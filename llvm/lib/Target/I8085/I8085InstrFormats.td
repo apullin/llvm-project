@@ -233,8 +233,7 @@ class F6<bits<8> opcode,dag outs, dag ins, string asmstr, list<dag> pattern>
   bits<16> k;
 
   let Inst{23-16} = opcode;
-  let Inst{15-8} = k{7-0};
-  let Inst{7-0} = k{15-8};
+  let Inst{15-0} = k;
 }
 
 //===----------------------------------------------------------------------===//

@@ -205,8 +205,8 @@ DecodeStatus I8085Disassembler::getInstruction(MCInst &MI, uint64_t &Size,
     break;
   case 3:
     Insn = (static_cast<uint32_t>(Opcode) << 16) |
-           (static_cast<uint32_t>(Bytes[1]) << 8) |
-           static_cast<uint32_t>(Bytes[2]);
+           (static_cast<uint32_t>(Bytes[2]) << 8) |
+           static_cast<uint32_t>(Bytes[1]);
     S = decodeInstruction(DecoderTable24, MI, Insn, Address, this,
                           STI);
     break;

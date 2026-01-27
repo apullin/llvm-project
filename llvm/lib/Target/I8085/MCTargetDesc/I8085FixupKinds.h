@@ -34,7 +34,7 @@ enum Fixups {
 
 namespace fixups {
 
-template <typename T> inline void adjustBranchTarget(T &val) { val >>= 1; }
+template <typename T> inline void adjustBranchTarget(T &) {}
 
 } // end of namespace fixups
 } // namespace I8085

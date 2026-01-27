@@ -694,6 +694,32 @@ unsigned I8085AsmParser::validateTargetOperandClass(MCParsedAsmOperand &AsmOp,
   I8085Operand &Op = static_cast<I8085Operand &>(AsmOp);
   MatchClassKind Expected = static_cast<MatchClassKind>(ExpectedKind);
 
+  if (Op.isReg()) {
+    unsigned Reg = Op.getReg();
+    unsigned NewReg = Reg;
+
+    switch (Reg) {
+    case I8085::B:
+      NewReg = I8085::BC;
+      break;
+    case I8085::D:
+      NewReg = I8085::DE;
+      break;
+    case I8085::H:
+      NewReg = I8085::HL;
+      break;
+    default:
+      break;
+    }
+
+    if (NewReg != Reg) {
+      Op.makeReg(NewReg);
+      if (validateOperandClass(Op, Expected) == Match_Success)
+        return Match_Success;
+      Op.makeReg(Reg);
+    }
+  }
+
   // If need be, GCC converts bare numbers to register names
   // It's ugly, but GCC supports it.
   if (Op.isImm()) {

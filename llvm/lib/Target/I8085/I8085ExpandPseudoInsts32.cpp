@@ -81,6 +81,35 @@ private:
 
 char I8085ExpandPseudo32::ID = 0;
 
+static void addAddrOperand(MachineInstrBuilder &MIB,
+                           const MachineOperand &MO,
+                           int64_t Offset = 0) {
+  switch (MO.getType()) {
+  case MachineOperand::MO_Immediate:
+    MIB.addImm(MO.getImm() + Offset);
+    break;
+  case MachineOperand::MO_GlobalAddress:
+    MIB.addGlobalAddress(MO.getGlobal(), MO.getOffset() + Offset,
+                         MO.getTargetFlags());
+    break;
+  case MachineOperand::MO_ExternalSymbol:
+    assert((MO.getOffset() + Offset) == 0 &&
+           "external symbol does not support offsets");
+    MIB.addExternalSymbol(MO.getSymbolName(), MO.getTargetFlags());
+    break;
+  case MachineOperand::MO_ConstantPoolIndex:
+    MIB.addConstantPoolIndex(MO.getIndex(), MO.getOffset() + Offset,
+                             MO.getTargetFlags());
+    break;
+  case MachineOperand::MO_BlockAddress:
+    MIB.addBlockAddress(MO.getBlockAddress(), MO.getOffset() + Offset,
+                        MO.getTargetFlags());
+    break;
+  default:
+    llvm_unreachable("unexpected address operand type");
+  }
+}
+
 bool I8085ExpandPseudo32::expandMBB(MachineBasicBlock &MBB) {
   bool Modified = false;
 
@@ -1081,7 +1110,7 @@ template <> bool I8085ExpandPseudo32::expand<I8085::LOAD_32_WITH_IMM_ADDR>(Block
 
   unsigned destReg = MI.getOperand(0).getReg();
 
-  const GlobalValue* amount = MI.getOperand(1).getGlobal();
+  const MachineOperand &AddrMO = MI.getOperand(1);
   
   int address[]={11,12,13,14,15,16,17,18};
   int index = 0;
@@ -1090,7 +1119,9 @@ template <> bool I8085ExpandPseudo32::expand<I8085::LOAD_32_WITH_IMM_ADDR>(Block
 
   
   for(int i=0;i<4;i++){
-      buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addGlobalAddress(amount,i);
+      MachineInstrBuilder Addr =
+          buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL, RegState::Define);
+      addAddrOperand(Addr, AddrMO, i);
       buildMI(MBB, MBBI, I8085::DAD).addReg(I8085::SP);
       buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::A,RegState::Define);
       buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[i+index]);

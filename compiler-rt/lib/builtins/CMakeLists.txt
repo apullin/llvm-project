@@ -660,6 +660,12 @@ set(avr_SOURCES
   ${GENERIC_SOURCES}
 )
 
+# Intel 8085
+set(i8085_SOURCES
+  i8085/int_mul_div.c
+  ${GENERIC_SOURCES}
+)
+
 # hexagon arch
 set(hexagon_SOURCES
   hexagon/common_entry_exit_abi1.S

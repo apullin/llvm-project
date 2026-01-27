@@ -201,4 +201,5 @@ let Defs=[SREG] in {
    def CMP : F2<0b10111,(outs),(ins GR8: $rs),"CMP $rs", []>;
 }
 
+let Defs=[A], Uses=[A] in
 def CMA : F1<0b00101111,(outs),(ins),"CMA", []>;

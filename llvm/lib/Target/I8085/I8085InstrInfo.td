@@ -286,8 +286,10 @@ let Defs=[SREG,A], Uses=[A] in def ORI : F5<0b11110110,(outs), (ins i8imm: $k), 
 let Defs=[SREG,A], Uses=[A] in def XRI : F5<0b11101110,(outs), (ins i8imm: $k), "XRI $k", []>;
 let Defs=[SREG,A], Uses=[A] in def CPI : F5<0b11111110,(outs), (ins i8imm: $k), "CPI $k", []>;
 
-let Defs=[A] in def IN : F5<0b11011011,(outs), (ins i8imm: $k), "IN $k", []>;
-let Uses=[A] in def OUT : F5<0b11010011,(outs), (ins i8imm: $k), "OUT $k", []>;
+let hasSideEffects = 1, Defs=[A] in
+def IN : F5<0b11011011,(outs), (ins i8imm: $k), "IN $k", []>;
+let hasSideEffects = 1, Uses=[A] in
+def OUT : F5<0b11010011,(outs), (ins i8imm: $k), "OUT $k", []>;
 
 
 //===----------------------------------------------------------------------===//
@@ -307,26 +309,31 @@ let Constraints = "$rs = $rd", Defs=[SREG]  in {
   let Defs=[SREG,A], Uses=[A] in def RR_16 : I8085Pseudo<(outs GR16: $rd), (ins GR16: $rs), "RR_16 $rs", []>;
 }
 
-def RLC : F1<0b00000111,(outs), (ins), "RLC", []>;
-def RRC : F1<0b00001111,(outs), (ins), "RRC", []>;
+let Defs=[SREG,A], Uses=[A] in def RLC : F1<0b00000111,(outs), (ins), "RLC", []>;
+let Defs=[SREG,A], Uses=[A] in def RRC : F1<0b00001111,(outs), (ins), "RRC", []>;
 
-def RAL : F1<0b00010111,(outs), (ins), "RAL", []>;
-def RAR : F1<0b00011111,(outs), (ins), "RAR", []>;
+let Defs=[SREG,A], Uses=[A,SREG] in def RAL : F1<0b00010111,(outs), (ins), "RAL", []>;
+let Defs=[SREG,A], Uses=[A,SREG] in def RAR : F1<0b00011111,(outs), (ins), "RAR", []>;
 
 def NOP : F1<0b00000000,(outs), (ins), "NOP", []>;
+let hasSideEffects = 1, isBarrier = 1 in
 def HLT : F1<0b01110110,(outs), (ins), "HLT", []>;
 
-def DAA : F1<0b00100111,(outs), (ins), "DAA", []>;
-def STC : F1<0b00110111,(outs), (ins), "STC", []>;
-def CMC : F1<0b00111111,(outs), (ins), "CMC", []>;
+let Defs=[SREG,A], Uses=[A,SREG] in def DAA : F1<0b00100111,(outs), (ins), "DAA", []>;
+let Defs=[SREG] in def STC : F1<0b00110111,(outs), (ins), "STC", []>;
+let Defs=[SREG], Uses=[SREG] in def CMC : F1<0b00111111,(outs), (ins), "CMC", []>;
 
-def DI : F1<0b11110011,(outs), (ins), "DI", []>;
-def EI : F1<0b11111011,(outs), (ins), "EI", []>;
-def RIM : F1<0b00100000,(outs), (ins), "RIM", []>;
-def SIM : F1<0b00110000,(outs), (ins), "SIM", []>;
+let hasSideEffects = 1 in def DI : F1<0b11110011,(outs), (ins), "DI", []>;
+let hasSideEffects = 1 in def EI : F1<0b11111011,(outs), (ins), "EI", []>;
+let hasSideEffects = 1, Defs=[A] in def RIM : F1<0b00100000,(outs), (ins), "RIM", []>;
+let hasSideEffects = 1, Uses=[A] in def SIM : F1<0b00110000,(outs), (ins), "SIM", []>;
 
+let Defs=[D,E,H,L], Uses=[D,E,H,L] in
 def XCHG : F1<0b11101011,(outs), (ins), "XCHG", []>;
+let Defs=[H,L], Uses=[H,L,SP], hasSideEffects = 1, mayLoad = 1, mayStore = 1 in
 def XTHL : F1<0b11100011,(outs), (ins), "XTHL", []>;
+let Uses=[H,L], isBranch = 1, isBarrier = 1, isTerminator = 1,
+    isIndirectBranch = 1 in
 def PCHL : F1<0b11101001,(outs), (ins), "PCHL", []>;
 
 

@@ -120,7 +120,7 @@ bool I8085RegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
   //: index
 
   MI.getOperand(FIOperandNum).ChangeToRegister(I8085::SP, false);
-  assert(isUInt<6>(Offset) && "Offset is out of range");
+  assert(isInt<16>(Offset) && "Offset is out of range");
   MI.getOperand(FIOperandNum + 1).ChangeToImmediate(Offset);
 
   return false;

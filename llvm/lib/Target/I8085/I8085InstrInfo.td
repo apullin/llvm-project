@@ -199,7 +199,7 @@ let Uses=[H,L] in def ANA_M : F1<0b10100110,(outs), (ins), "ANA M", []>;
 let Uses=[H,L] in def ORA_M : F1<0b10110110,(outs), (ins), "ORA M", []>;
 
 
-let Uses=[H,L],Defs=[SREG,A] in def CMP_M : F1<0b10111101,(outs), (ins), "CMP M", []>;
+let Uses=[H,L],Defs=[SREG,A] in def CMP_M : F1<0b10111110,(outs), (ins), "CMP M", []>;
 let Uses=[H,L],Defs=[SREG,A] in def XRA_M : F1<0b10101110,(outs), (ins), "XRA M", []>;
 
 let Defs=[SREG,A], Uses=[A] in def ADI : F5<0b11000110,(outs), (ins i8imm: $k), "ADI $k", []>;
@@ -373,7 +373,7 @@ let Uses = [H,L] in {
 
   let Uses=[H,L] in def MOV_FROM_M  : FMOV_F_M<(outs GR8: $rd), (ins), "MOV $rd, M", []>;
 
-  def MVI_M : F5<0b00111110,(outs), (ins i8imm: $k), "MVI M, $k", []>;
+  def MVI_M : F5<0b00110110,(outs), (ins i8imm: $k), "MVI M, $k", []>;
 }          
 
 let Uses=[A] in def STA : F6<0b00110010,(outs), (ins imm16Addr: $k), "STA $k", []>;

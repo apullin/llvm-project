@@ -77,10 +77,29 @@ def I8085rolLoop : SDNode<"I8085ISD::ROLLOOP", SDTIntShiftOp>;
 def I8085rorLoop : SDNode<"I8085ISD::RORLOOP", SDTIntShiftOp>;
 def I8085asrLoop : SDNode<"I8085ISD::ASRLOOP", SDTIntShiftOp>;
 
+class I8085ImmAsmOperand<string AsmName> : AsmOperandClass {
+  let Name = AsmName;
+  let RenderMethod = "addImmOperands";
+  let DiagnosticType = !strconcat("Invalid", AsmName);
+}
+
+def I8085Imm8AsmOperand : I8085ImmAsmOperand<"Imm8">;
+def I8085Imm16AsmOperand : I8085ImmAsmOperand<"Imm16">;
+
+def I8085Imm8 : Operand<i8>,
+                ImmLeaf<i8, [{ return Imm >= -128 && Imm <= 255; }] > {
+  let ParserMatchClass = I8085Imm8AsmOperand;
+}
+
+def I8085Imm16 : Operand<i16>,
+                 ImmLeaf<i16, [{ return Imm >= -32768 && Imm <= 65535; }] > {
+  let ParserMatchClass = I8085Imm16AsmOperand;
+}
+
 
 // Address operand for `SP+imm` used by STD{W}SPQRr
 def memspi : Operand<iPTR> { 
-  let MIOperandInfo = (ops GPRSP, i16imm); 
+  let MIOperandInfo = (ops GPRSP, I8085Imm16); 
 }
 
 def imm16Addr : Operand<i16> {
@@ -110,8 +129,8 @@ def addr : ComplexPattern<iPTR, 2, "SelectAddr", [], [SDNPWantRoot]>;
 // sub / add which can clobber SREG.
 let Defs = [SP], Uses = [SP] in {
   def ADJCALLSTACKDOWN : I8085Pseudo<(outs),
-                                (ins i16imm
-                                 : $amt, i16imm
+                                (ins I8085Imm16
+                                 : $amt, I8085Imm16
                                  : $amt2),
                                 "#ADJCALLSTACKDOWN", [(I8085callseq_start timm
                                                        : $amt, timm
@@ -123,8 +142,8 @@ let Defs = [SP], Uses = [SP] in {
   // seems). hasSideEffects needs to be set to true so this instruction isn't
   // considered dead.
   def ADJCALLSTACKUP : I8085Pseudo<(outs),
-               (ins i16imm
-                : $amt1, i16imm
+               (ins I8085Imm16
+                : $amt1, I8085Imm16
                 : $amt2),
                "#ADJCALLSTACKUP", [(I8085callseq_end timm
                                     : $amt1, timm
@@ -225,10 +244,10 @@ let Uses=[H,L] in def ORA_M : F1<0b10110110,(outs), (ins), "ORA M", []>;
 let Uses=[H,L],Defs=[SREG,A] in def CMP_M : F1<0b10111110,(outs), (ins), "CMP M", []>;
 let Uses=[H,L],Defs=[SREG,A] in def XRA_M : F1<0b10101110,(outs), (ins), "XRA M", []>;
 
-let Defs=[SREG,A], Uses=[A] in def ADI : F5<0b11000110,(outs), (ins i8imm: $k), "ADI $k", []>;
-let Defs=[SREG,A], Uses=[A] in def ACI : F5<0b11001110,(outs), (ins i8imm: $k), "ACI $k", []>;
-let Defs=[SREG,A], Uses=[A] in def SBI : F5<0b11011110,(outs), (ins i8imm: $k), "SBI $k", []>;
-let Defs=[SREG,A], Uses=[A] in def SUI : F5<0b11010110,(outs), (ins i8imm: $k), "SUI $k", []>;
+let Defs=[SREG,A], Uses=[A] in def ADI : F5<0b11000110,(outs), (ins I8085Imm8: $k), "ADI $k", []>;
+let Defs=[SREG,A], Uses=[A] in def ACI : F5<0b11001110,(outs), (ins I8085Imm8: $k), "ACI $k", []>;
+let Defs=[SREG,A], Uses=[A] in def SBI : F5<0b11011110,(outs), (ins I8085Imm8: $k), "SBI $k", []>;
+let Defs=[SREG,A], Uses=[A] in def SUI : F5<0b11010110,(outs), (ins I8085Imm8: $k), "SUI $k", []>;
 
 let Constraints = "$rs = $rd", Defs=[SREG]  in {
 
@@ -285,17 +304,17 @@ let Constraints = "$src = $rd", Defs=[SREG]  in {
 
   def ANDI_8
       : I8085Pseudo<(outs GR8: $rd),
-              (ins GR8: $src, i8imm: $val),
+              (ins GR8: $src, I8085Imm8: $val),
               "ANDI_8\t$rd, $val",
               [(set i8: $rd, (and i8: $src, imm: $val))]>;
   def ORI_8
       : I8085Pseudo<(outs GR8: $rd),
-              (ins GR8: $src, i8imm: $val),
+              (ins GR8: $src, I8085Imm8: $val),
               "ORI_8\t$rd, $val",
               [(set i8: $rd, (or i8: $src, imm: $val))]>;
   def XORI_8
       : I8085Pseudo<(outs GR8: $rd),
-              (ins GR8: $src, i8imm: $val),
+              (ins GR8: $src, I8085Imm8: $val),
               "XORI_8\t$rd, $val",
               [(set i8: $rd, (xor i8: $src, imm: $val))]>;                                                                                          
 }
@@ -304,15 +323,15 @@ let Defs=[SREG,A], Uses=[A] in def ANA : F2<0b10100,(outs), (ins GR8: $rs), "ANA
 let Defs=[SREG,A], Uses=[A] in def ORA : F2<0b10110,(outs), (ins GR8: $rs), "ORA $rs", []>;
 let Defs=[SREG,A], Uses=[A] in def XRA : F2<0b10101,(outs), (ins GR8: $rs), "XRA $rs", []>;
 
-let Defs=[SREG,A], Uses=[A] in def ANI : F5<0b11100110,(outs), (ins i8imm: $k), "ANI $k", []>;
-let Defs=[SREG,A], Uses=[A] in def ORI : F5<0b11110110,(outs), (ins i8imm: $k), "ORI $k", []>;
-let Defs=[SREG,A], Uses=[A] in def XRI : F5<0b11101110,(outs), (ins i8imm: $k), "XRI $k", []>;
-let Defs=[SREG,A], Uses=[A] in def CPI : F5<0b11111110,(outs), (ins i8imm: $k), "CPI $k", []>;
+let Defs=[SREG,A], Uses=[A] in def ANI : F5<0b11100110,(outs), (ins I8085Imm8: $k), "ANI $k", []>;
+let Defs=[SREG,A], Uses=[A] in def ORI : F5<0b11110110,(outs), (ins I8085Imm8: $k), "ORI $k", []>;
+let Defs=[SREG,A], Uses=[A] in def XRI : F5<0b11101110,(outs), (ins I8085Imm8: $k), "XRI $k", []>;
+let Defs=[SREG,A], Uses=[A] in def CPI : F5<0b11111110,(outs), (ins I8085Imm8: $k), "CPI $k", []>;
 
 let hasSideEffects = 1, Defs=[A] in
-def IN : F5<0b11011011,(outs), (ins i8imm: $k), "IN $k", []>;
+def IN : F5<0b11011011,(outs), (ins I8085Imm8: $k), "IN $k", []>;
 let hasSideEffects = 1, Uses=[A] in
-def OUT : F5<0b11010011,(outs), (ins i8imm: $k), "OUT $k", []>;
+def OUT : F5<0b11010011,(outs), (ins I8085Imm8: $k), "OUT $k", []>;
 
 
 //===----------------------------------------------------------------------===//
@@ -371,7 +390,7 @@ def PCHL : F1<0b11101001,(outs), (ins), "PCHL", []>;
 
 
 def MVI : FMVI<(outs GR8: $rd),
-                    (ins i8imm: $k),
+                    (ins I8085Imm8: $k),
                     "MVI $rd, $k", [(set i8: $rd, imm: $k)]>;
 
 
@@ -381,11 +400,11 @@ def MOV : FMOV<(outs GR8: $rd),
 
 
 def mspi : Operand<iPTR> { 
-  let MIOperandInfo = (ops GPRSP, i16imm); 
+  let MIOperandInfo = (ops GPRSP, I8085Imm16); 
 }
 
 
-def LXI : F4<0b0001,(outs GR16: $rd), (ins i16imm: $k), "LXI $rd, $k", []>;
+def LXI : F4<0b0001,(outs GR16: $rd), (ins I8085Imm16: $k), "LXI $rd, $k", []>;
 def INX : F8<0b0011,(outs GR16: $rd), (ins), "INX $rd", []>;
 def DCX : F8<0b1011,(outs GR16: $rd), (ins), "DCX $rd", []>;
 
@@ -405,7 +424,7 @@ let Uses = [H,L] in {
 
   let Uses=[H,L] in def MOV_FROM_M  : FMOV_F_M<(outs GR8: $rd), (ins), "MOV $rd, M", []>;
 
-  def MVI_M : F5<0b00110110,(outs), (ins i8imm: $k), "MVI M, $k", []>;
+  def MVI_M : F5<0b00110110,(outs), (ins I8085Imm8: $k), "MVI M, $k", []>;
 }          
 
 let Uses=[A] in def STA : F6<0b00110010,(outs), (ins imm16Addr: $k), "STA $k", []>;
@@ -415,20 +434,20 @@ let Defs=[SP], Uses=[SP] in {
 
 def GROW_STACK_BY 
     : I8085Pseudo<(outs),
-            (ins i16imm: $amount),
+            (ins I8085Imm16: $amount),
             "GROW_STACK_BY $amount",
             []>;
 
 def SHRINK_STACK_BY 
     : I8085Pseudo<(outs),
-            (ins i16imm: $amount),
+            (ins I8085Imm16: $amount),
             "SHRINK_STACK_BY $amount",
             []>;        
 }       
 
 let Uses=[SP] in {
 def LOAD_16 : I8085Pseudo<(outs GR16: $dst),
-                       (ins i16imm: $src),
+                       (ins I8085Imm16: $src),
                        "LOAD_16 $dst, $src", [(set i16
                                              : $dst, imm
                                              : $src)]>; 
@@ -453,11 +472,11 @@ def LOAD_8_WITH_ADDR : I8085Pseudo<(outs GR8: $dst),
 
 
 def STORE_8_AT_OFFSET_WITH_SP : I8085Pseudo<(outs),
-                       (ins GR8: $src, i16imm: $offset),
+                       (ins GR8: $src, I8085Imm16: $offset),
                        "STORE_8_SP_AT_OFFSET\t$offset, $src", [(store i8: $src, imm: $offset)]>;
 
 def STORE_16_AT_OFFSET_WITH_SP : I8085Pseudo<(outs),
-                       (ins GR16: $src, i16imm: $offset),
+                       (ins GR16: $src, I8085Imm16: $offset),
                        "STORE_16_SP_AT_OFFSET\t$offset, $src", [(store i16: $src, imm: $offset)]>;                       
 
 }       
@@ -509,7 +528,7 @@ let isTerminator = 1, isReturn = 1, isBarrier = 1 in {
   def RET : F1<0b11001001, (outs), (ins), "RET", [(I8085retflag)]>;
 }
 
-def RST : FRST<(outs), (ins i8imm: $k), "RST $k", []>;
+def RST : FRST<(outs), (ins I8085Imm8: $k), "RST $k", []>;
 
 def : Pat<(I8085call(i16 tglobaladdr:$dst)), (CALL tglobaladdr:$dst)>;
 def : Pat<(I8085call(i16 texternalsym:$dst)), (CALL texternalsym:$dst)>;

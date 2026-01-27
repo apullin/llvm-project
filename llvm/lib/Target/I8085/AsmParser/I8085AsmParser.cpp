@@ -44,12 +44,18 @@ class I8085AsmParser : public MCTargetAsmParser {
   const MCRegisterInfo *MRI;
   const std::string GENERATE_STUBS = "gs";
 
-  enum I8085MatchResultTy {
-    Match_InvalidRegisterOnTiny = FIRST_TARGET_MATCH_RESULT_TY + 1,
-  };
-
 #define GET_ASSEMBLER_HEADER
 #include "I8085GenAsmMatcher.inc"
+
+public:
+  enum I8085MatchResultTy {
+    Match_InvalidRegisterOnTiny = FIRST_TARGET_MATCH_RESULT_TY,
+#define GET_OPERAND_DIAGNOSTIC_TYPES
+#include "I8085GenAsmMatcher.inc"
+#undef GET_OPERAND_DIAGNOSTIC_TYPES
+  };
+
+private:
 
   bool MatchAndEmitInstruction(SMLoc IDLoc, unsigned &Opcode,
                                OperandVector &Operands, MCStreamer &Out,
@@ -188,6 +194,19 @@ public:
     int64_t Value = CE->getValue();
     return isUInt<8>(Value);
   }
+
+  bool isImmRange(int64_t Min, int64_t Max) const {
+    if (!isImm())
+      return false;
+    const auto *CE = dyn_cast<MCConstantExpr>(getImm());
+    if (!CE)
+      return true;
+    int64_t Value = CE->getValue();
+    return Value >= Min && Value <= Max;
+  }
+
+  bool isImm8() const { return isImmRange(-128, 255); }
+  bool isImm16() const { return isImmRange(-32768, 65535); }
 
   bool isReg() const override { return Kind == k_Register; }
   bool isImm() const override { return Kind == k_Immediate; }
@@ -371,6 +390,9 @@ bool I8085AsmParser::MatchAndEmitInstruction(SMLoc Loc, unsigned &Opcode,
   case Match_MissingFeature:
     return missingFeature(Loc, ErrorInfo);
   case Match_InvalidOperand:
+    return invalidOperand(Loc, Operands, ErrorInfo);
+  case Match_InvalidImm8:
+  case Match_InvalidImm16:
     return invalidOperand(Loc, Operands, ErrorInfo);
   case Match_MnemonicFail:
     return Error(Loc, "invalid instruction");

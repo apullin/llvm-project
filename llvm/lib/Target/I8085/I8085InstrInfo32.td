@@ -112,12 +112,12 @@ def LOAD_32_WITH_ADDR : I8085Pseudo<(outs GR32: $dst),
 
 
 def STORE_32_AT_OFFSET_WITH_SP : I8085Pseudo<(outs),
-                       (ins GR32: $src, i16imm: $offset),
+                       (ins GR32: $src, I8085Imm16: $offset),
                        "STORE_32_SP_AT_OFFSET\t$offset, $src", [(store i32: $src, imm: $offset)]>;                    
 
 
 def LOAD_32_OFFSET_WITH_SP : I8085Pseudo<(outs GR32: $dst),
-                       (ins i16imm: $offset),
+                       (ins I8085Imm16: $offset),
                        "LOAD_32_OFFSET_WITH_SP\t$dst, $offset", [(set i32: $dst, (load imm: $offset))]>;
 
 def LOAD_32_WITH_IMM_ADDR : I8085Pseudo<(outs GR32: $dst),

@@ -40,6 +40,25 @@ namespace llvm {
 I8085InstrInfo::I8085InstrInfo()
     : I8085GenInstrInfo(I8085::ADJCALLSTACKDOWN, I8085::ADJCALLSTACKUP), RI() {}
 
+static bool getPairRegs(MCRegister Reg, unsigned &LowReg, unsigned &HighReg) {
+  switch (Reg) {
+  case I8085::BC:
+    LowReg = I8085::C;
+    HighReg = I8085::B;
+    return true;
+  case I8085::DE:
+    LowReg = I8085::E;
+    HighReg = I8085::D;
+    return true;
+  case I8085::HL:
+    LowReg = I8085::L;
+    HighReg = I8085::H;
+    return true;
+  default:
+    return false;
+  }
+}
+
 void I8085InstrInfo::copyPhysReg(MachineBasicBlock &MBB,
                                MachineBasicBlock::iterator MI,
                                const DebugLoc &DL, MCRegister DestReg,
@@ -55,13 +74,42 @@ void I8085InstrInfo::copyPhysReg(MachineBasicBlock &MBB,
         .addReg(SrcReg, getKillRegState(KillSrc));
   } else if(I8085::GR16RegClass.contains(DestReg, SrcReg)) {
 
-  unsigned destLow,destHigh;
-  if(DestReg==I8085::BC){  destLow=I8085::C;  destHigh=I8085::B; }
-  if(DestReg==I8085::DE){  destLow=I8085::E;  destHigh=I8085::D; }
+  unsigned destLow, destHigh;
+  unsigned srcLow, srcHigh;
 
-  unsigned srcLow,srcHigh;
-  if(SrcReg==I8085::BC){  srcLow=I8085::C;  srcHigh=I8085::B; }
-  if(SrcReg==I8085::DE){  srcLow=I8085::E;  srcHigh=I8085::D; }
+  if (DestReg == I8085::SP) {
+    if (SrcReg == I8085::HL) {
+      BuildMI(MBB, MI, DL, get(I8085::SPHL));
+      return;
+    }
+    if (!getPairRegs(SrcReg, srcLow, srcHigh))
+      return;
+    BuildMI(MBB, MI, DL, get(I8085::MOV), I8085::H)
+        .addReg(srcHigh, getKillRegState(KillSrc));
+    BuildMI(MBB, MI, DL, get(I8085::MOV), I8085::L)
+        .addReg(srcLow, getKillRegState(KillSrc));
+    BuildMI(MBB, MI, DL, get(I8085::SPHL));
+    return;
+  }
+
+  if (SrcReg == I8085::SP) {
+    BuildMI(MBB, MI, DL, get(I8085::LXI), I8085::HL).addImm(0);
+    BuildMI(MBB, MI, DL, get(I8085::DAD)).addReg(I8085::SP);
+    if (DestReg == I8085::HL)
+      return;
+    if (!getPairRegs(DestReg, destLow, destHigh))
+      return;
+    BuildMI(MBB, MI, DL, get(I8085::MOV), destHigh)
+        .addReg(I8085::H);
+    BuildMI(MBB, MI, DL, get(I8085::MOV), destLow)
+        .addReg(I8085::L);
+    return;
+  }
+
+  if (!getPairRegs(DestReg, destLow, destHigh))
+    return;
+  if (!getPairRegs(SrcReg, srcLow, srcHigh))
+    return;
 
   Opc = I8085::MOV;
   BuildMI(MBB, MI, DL, get(Opc), destHigh)

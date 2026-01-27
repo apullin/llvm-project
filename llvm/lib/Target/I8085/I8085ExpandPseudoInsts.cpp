@@ -1399,6 +1399,13 @@ bool I8085ExpandPseudo::expandMI(Block &MBB, BlockIt MBBI) {
   MachineInstr &MI = *MBBI;
   int Opcode = MBBI->getOpcode();
 
+  if (Opcode == I8085::MOV && MI.getNumOperands() >= 2 &&
+      MI.getOperand(0).isReg() && MI.getOperand(1).isReg() &&
+      MI.getOperand(0).getReg() == MI.getOperand(1).getReg()) {
+    MI.eraseFromParent();
+    return true;
+  }
+
 #define EXPAND(Op)                                                             \
   case Op:                                                                     \
     return expand<Op>(MBB, MI)

@@ -20,6 +20,7 @@
 #include "I8085.h"
 #include "I8085MachineFunctionInfo.h"
 #include "I8085TargetObjectFile.h"
+#include "I8085TargetTransformInfo.h"
 #include "MCTargetDesc/I8085MCTargetDesc.h"
 #include "TargetInfo/I8085TargetInfo.h"
 
@@ -101,6 +102,11 @@ const I8085Subtarget *I8085TargetMachine::getSubtargetImpl() const {
 
 const I8085Subtarget *I8085TargetMachine::getSubtargetImpl(const Function &) const {
   return &SubTarget;
+}
+
+TargetTransformInfo
+I8085TargetMachine::getTargetTransformInfo(const Function &F) const {
+  return TargetTransformInfo(I8085TTIImpl(this, F));
 }
 
 //===----------------------------------------------------------------------===//

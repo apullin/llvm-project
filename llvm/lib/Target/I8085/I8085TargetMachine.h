@@ -13,6 +13,7 @@
 #ifndef LLVM_I8085_TARGET_MACHINE_H
 #define LLVM_I8085_TARGET_MACHINE_H
 
+#include "llvm/Analysis/TargetTransformInfo.h"
 #include "llvm/IR/DataLayout.h"
 #include "llvm/Target/TargetMachine.h"
 
@@ -40,6 +41,7 @@ public:
   }
 
   TargetPassConfig *createPassConfig(PassManagerBase &PM) override;
+  TargetTransformInfo getTargetTransformInfo(const Function &F) const override;
 
   MachineFunctionInfo *
   createMachineFunctionInfo(BumpPtrAllocator &Allocator, const Function &F,

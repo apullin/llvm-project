@@ -22,6 +22,7 @@
 #include "Targets/CSKY.h"
 #include "Targets/DirectX.h"
 #include "Targets/Hexagon.h"
+#include "Targets/I8085.h"
 #include "Targets/Lanai.h"
 #include "Targets/Le64.h"
 #include "Targets/LoongArch.h"
@@ -259,6 +260,8 @@ std::unique_ptr<TargetInfo> AllocateTarget(const llvm::Triple &Triple,
 
   case llvm::Triple::avr:
     return std::make_unique<AVRTargetInfo>(Triple, Opts);
+  case llvm::Triple::i8085:
+    return std::make_unique<I8085TargetInfo>(Triple, Opts);
   case llvm::Triple::bpfeb:
   case llvm::Triple::bpfel:
     return std::make_unique<BPFTargetInfo>(Triple, Opts);

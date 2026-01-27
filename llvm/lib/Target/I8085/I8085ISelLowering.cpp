@@ -100,6 +100,15 @@ I8085TargetLowering::I8085TargetLowering(const I8085TargetMachine &TM,
   setOperationAction(ISD::SRA_PARTS, MVT::i32, Expand);
   setOperationAction(ISD::SRL_PARTS, MVT::i32, Expand);
 
+  for (MVT VT : {MVT::i8, MVT::i16}) {
+    setOperationAction(ISD::CTLZ, VT, Expand);
+    setOperationAction(ISD::CTLZ_ZERO_UNDEF, VT, Expand);
+  }
+  setOperationAction(ISD::CTLZ, MVT::i32, LibCall);
+  setOperationAction(ISD::CTLZ_ZERO_UNDEF, MVT::i32, LibCall);
+  setOperationAction(ISD::CTLZ, MVT::i64, LibCall);
+  setOperationAction(ISD::CTLZ_ZERO_UNDEF, MVT::i64, LibCall);
+
   for (MVT VT : {MVT::i8, MVT::i16, MVT::i32}) {
     setOperationAction(ISD::SELECT, VT, Legal);
     setOperationAction(ISD::SELECT_CC, VT, Custom);
@@ -131,6 +140,9 @@ I8085TargetLowering::I8085TargetLowering(const I8085TargetMachine &TM,
   setLibcallName(RTLIB::UREM_I16, "__urem16");
   setLibcallName(RTLIB::UREM_I32, "__urem32");
   setLibcallName(RTLIB::UREM_I64, "__umoddi3");
+
+  setLibcallName(RTLIB::CTLZ_I32, "__clzsi2");
+  setLibcallName(RTLIB::CTLZ_I64, "__clzdi2");
 
   setLibcallName(RTLIB::SHL_I64, "__ashldi3");
   setLibcallName(RTLIB::SRL_I64, "__lshrdi3");

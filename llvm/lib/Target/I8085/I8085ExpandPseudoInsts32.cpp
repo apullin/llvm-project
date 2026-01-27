@@ -467,10 +467,11 @@ template <> bool I8085ExpandPseudo32::expand<I8085::TRUNC32TO16>(Block &MBB, Blo
   unsigned destReg = MI.getOperand(0).getReg();
   unsigned srcReg = MI.getOperand(1).getReg();
 
-  unsigned destLow,destHigh;
+  unsigned destLow = 0, destHigh = 0;
 
   if(destReg==I8085::BC){  destLow=I8085::C;  destHigh=I8085::B; }
   if(destReg==I8085::DE){  destLow=I8085::E;  destHigh=I8085::D; }
+  if(destReg==I8085::HL){  destLow=I8085::L;  destHigh=I8085::H; }
 
   
   int address[]={11,12,13,14,15,16,17,18};
@@ -553,10 +554,11 @@ template <> bool I8085ExpandPseudo32::expand<I8085::ZEXT16TO32>(Block &MBB, Bloc
   unsigned destReg = MI.getOperand(0).getReg();
   unsigned srcReg = MI.getOperand(1).getReg();
 
-  unsigned opOneLow,opOneHigh;
+  unsigned opOneLow = 0, opOneHigh = 0;
 
   if(srcReg==I8085::BC){  opOneLow=I8085::C;  opOneHigh=I8085::B; }
   if(srcReg==I8085::DE){  opOneLow=I8085::E;  opOneHigh=I8085::D; }
+  if(srcReg==I8085::HL){  opOneLow=I8085::L;  opOneHigh=I8085::H; }
 
   
   int address[]={11,12,13,14,15,16,17,18};
@@ -665,7 +667,7 @@ template <> bool I8085ExpandPseudo32::expand<I8085::ZEXT8TO32>(Block &MBB, Block
   buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[index+2]);
   buildMI(MBB, MBBI, I8085::MVI_M).addImm(0);
   buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[index+1]);
-  buildMI(MBB, MBBI, I8085::MOV_M).addReg(0);
+  buildMI(MBB, MBBI, I8085::MVI_M).addImm(0);
   buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[index]);
   buildMI(MBB, MBBI, I8085::MOV_M).addReg(srcReg);       
 

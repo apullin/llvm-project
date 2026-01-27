@@ -7,6 +7,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "I8085.h"
+#include "llvm/Support/VirtualFileSystem.h"
 
 using namespace clang;
 using namespace clang::driver;

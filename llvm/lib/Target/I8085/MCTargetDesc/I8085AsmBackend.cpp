@@ -111,11 +111,7 @@ MCFixupKindInfo const &I8085AsmBackend::getFixupKindInfo(MCFixupKind Kind) const
 
 bool I8085AsmBackend::writeNopData(raw_ostream &OS, uint64_t Count,
                                  const MCSubtargetInfo *STI) const {
-  // If the count is not 2-byte aligned, we must be writing data into the text
-  // section (otherwise we have unaligned instructions, and thus have far
-  // bigger problems), so just write zeros instead.
-  assert((Count % 2) == 0 && "NOP instructions must be 2 bytes");
-
+  // I8085 NOP is a single byte (0x00), so just emit Count bytes.
   OS.write_zeros(Count);
   return true;
 }

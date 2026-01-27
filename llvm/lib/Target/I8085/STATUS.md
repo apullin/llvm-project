@@ -8,7 +8,7 @@ clang/runtime support. It is intended as a living checklist.
 - [x] i8/i16 extend/trunc (zext/sext/trunc)
 - [x] stack argument lowering (SP-relative stores)
 - [x] large frame offsets (no 6-bit offset restriction)
-- [ ] i32 lowering coverage beyond basic add/sub (audit all i32 pseudos)
+- [x] i32 lowering coverage beyond basic add/sub (audit all i32 pseudos)
 - [ ] varargs ABI validation with real C frontend
 - [ ] tail calls
 - [ ] inline asm constraints and register allocation stress tests
@@ -18,7 +18,7 @@ clang/runtime support. It is intended as a living checklist.
 - [x] RST encoding validation
 - [x] ELF relocation emission for absolute 16-bit fixups
 - [ ] symbol modifiers / target exprs (hi8/lo8/pm) wiring for i8085
-- [ ] assembler diagnostics coverage for illegal operands/ranges
+- [x] assembler diagnostics coverage for illegal operands/ranges
 
 ## ABI / Runtime
 - [x] libcall names set for mul/sdiv/srem (i8/i16/i32)
@@ -34,7 +34,8 @@ clang/runtime support. It is intended as a living checklist.
 ## Tooling / Tests
 - [x] CodeGen regression tests for call args and large stack
 - [x] MC relocation tests
-- [ ] end-to-end clang -> asm -> object -> link smoke test
+- [x] end-to-end clang -> asm -> object smoke test
+- [ ] end-to-end link smoke test (needs linker)
 
 ## Known Gaps / Risks
 - Frame/stack ABI is minimal; verify with simulator once available.

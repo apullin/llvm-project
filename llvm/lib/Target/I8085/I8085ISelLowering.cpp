@@ -105,6 +105,7 @@ I8085TargetLowering::I8085TargetLowering(const I8085TargetMachine &TM,
     setOperationAction(ISD::CTLZ_ZERO_UNDEF, VT, Expand);
     setOperationAction(ISD::CTTZ, VT, Expand);
     setOperationAction(ISD::CTTZ_ZERO_UNDEF, VT, Expand);
+    setOperationAction(ISD::CTPOP, VT, Expand);
   }
   setOperationAction(ISD::CTLZ, MVT::i32, LibCall);
   setOperationAction(ISD::CTLZ_ZERO_UNDEF, MVT::i32, LibCall);
@@ -114,6 +115,8 @@ I8085TargetLowering::I8085TargetLowering(const I8085TargetMachine &TM,
   setOperationAction(ISD::CTTZ_ZERO_UNDEF, MVT::i32, Expand);
   setOperationAction(ISD::CTTZ, MVT::i64, Expand);
   setOperationAction(ISD::CTTZ_ZERO_UNDEF, MVT::i64, Expand);
+  setOperationAction(ISD::CTPOP, MVT::i32, Expand);
+  setOperationAction(ISD::CTPOP, MVT::i64, Expand);
 
   for (MVT VT : {MVT::i8, MVT::i16, MVT::i32}) {
     setOperationAction(ISD::SELECT, VT, Legal);

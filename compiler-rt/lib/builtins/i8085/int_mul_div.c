@@ -68,6 +68,48 @@ uint32_t __mul32(uint32_t a, uint32_t b) {
   return res;
 }
 
+uint8_t __udiv8(uint8_t a, uint8_t b) {
+  if (b == 0)
+    return 0;
+  return (uint8_t)i8085_udivmod32(a, b, 0);
+}
+
+uint16_t __udiv16(uint16_t a, uint16_t b) {
+  if (b == 0)
+    return 0;
+  return (uint16_t)i8085_udivmod32(a, b, 0);
+}
+
+uint32_t __udiv32(uint32_t a, uint32_t b) {
+  if (b == 0)
+    return 0;
+  return i8085_udivmod32(a, b, 0);
+}
+
+uint8_t __urem8(uint8_t a, uint8_t b) {
+  if (b == 0)
+    return 0;
+  uint32_t r = 0;
+  (void)i8085_udivmod32(a, b, &r);
+  return (uint8_t)r;
+}
+
+uint16_t __urem16(uint16_t a, uint16_t b) {
+  if (b == 0)
+    return 0;
+  uint32_t r = 0;
+  (void)i8085_udivmod32(a, b, &r);
+  return (uint16_t)r;
+}
+
+uint32_t __urem32(uint32_t a, uint32_t b) {
+  if (b == 0)
+    return 0;
+  uint32_t r = 0;
+  (void)i8085_udivmod32(a, b, &r);
+  return r;
+}
+
 int8_t __sdiv8(int8_t a, int8_t b) {
   int32_t qa = (int32_t)a;
   int32_t qb = (int32_t)b;

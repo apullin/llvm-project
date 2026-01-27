@@ -76,6 +76,14 @@ I8085TargetLowering::I8085TargetLowering(const I8085TargetMachine &TM,
   setOperationAction(ISD::SREM, MVT::i16, LibCall);
   setOperationAction(ISD::SREM, MVT::i32, LibCall);
 
+  setOperationAction(ISD::UDIV, MVT::i8, LibCall);
+  setOperationAction(ISD::UDIV, MVT::i16, LibCall);
+  setOperationAction(ISD::UDIV, MVT::i32, LibCall);
+
+  setOperationAction(ISD::UREM, MVT::i8, LibCall);
+  setOperationAction(ISD::UREM, MVT::i16, LibCall);
+  setOperationAction(ISD::UREM, MVT::i32, LibCall);
+
   setLibcallName(RTLIB::MUL_I8, "__mul8");
   setLibcallName(RTLIB::MUL_I16, "__mul16");
   setLibcallName(RTLIB::MUL_I32, "__mul32");
@@ -87,6 +95,14 @@ I8085TargetLowering::I8085TargetLowering(const I8085TargetMachine &TM,
   setLibcallName(RTLIB::SREM_I8, "__srem8");
   setLibcallName(RTLIB::SREM_I16, "__srem16");
   setLibcallName(RTLIB::SREM_I32, "__srem32");
+
+  setLibcallName(RTLIB::UDIV_I8, "__udiv8");
+  setLibcallName(RTLIB::UDIV_I16, "__udiv16");
+  setLibcallName(RTLIB::UDIV_I32, "__udiv32");
+
+  setLibcallName(RTLIB::UREM_I8, "__urem8");
+  setLibcallName(RTLIB::UREM_I16, "__urem16");
+  setLibcallName(RTLIB::UREM_I32, "__urem32");
 
   setOperationAction(ISD::GlobalAddress, MVT::i16, Custom);
   setOperationAction(ISD::BlockAddress, MVT::i16, Custom);

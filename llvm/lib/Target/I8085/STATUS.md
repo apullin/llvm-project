@@ -21,8 +21,8 @@ clang/runtime support. It is intended as a living checklist.
 - [x] assembler diagnostics coverage for illegal operands/ranges
 
 ## ABI / Runtime
-- [x] libcall names set for mul/sdiv/srem (i8/i16/i32)
-- [x] minimal compiler-rt builtins for mul/div/rem
+- [x] libcall names set for mul/div/rem (signed + unsigned)
+- [x] minimal compiler-rt builtins for mul/div/rem (signed + unsigned)
 - [ ] calling convention doc + validation tests for aggregates/struct returns
 - [x] startup/CRT objects (data copy + bss + stack)
 - [x] default linker script

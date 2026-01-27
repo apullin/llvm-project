@@ -13,6 +13,8 @@
 #include "clang/Driver/Driver.h"
 #include "clang/Driver/ToolChain.h"
 
+#include <string>
+
 namespace clang {
 namespace driver {
 namespace toolchains {
@@ -27,11 +29,19 @@ public:
     return false;
   }
   bool isPICDefaultForced() const override { return true; }
+  const char *getDefaultLinker() const override { return "ld.lld"; }
 
   UnwindLibType
   GetUnwindLibType(const llvm::opt::ArgList &Args) const override {
     return UNW_None;
   }
+
+protected:
+  Tool *buildLinker() const override;
+  void addExtraOpts(llvm::opt::ArgStringList &CmdArgs) const override;
+
+private:
+  std::string DefaultLinkerScriptArg;
 };
 
 } // end namespace toolchains

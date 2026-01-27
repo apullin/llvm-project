@@ -239,6 +239,8 @@ static const char *getLDMOption(const llvm::Triple &T, const ArgList &Args) {
                                                : "armelf_linux_eabi";
   case llvm::Triple::m68k:
     return "m68kelf";
+  case llvm::Triple::i8085:
+    return "i8085elf";
   case llvm::Triple::ppc:
     if (T.isOSLinux())
       return "elf32ppclinux";

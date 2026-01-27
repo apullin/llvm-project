@@ -24,18 +24,19 @@ clang/runtime support. It is intended as a living checklist.
 - [x] libcall names set for mul/sdiv/srem (i8/i16/i32)
 - [x] minimal compiler-rt builtins for mul/div/rem
 - [ ] calling convention doc + validation tests for aggregates/struct returns
-- [ ] startup/CRT objects and default linker scripts
+- [ ] startup/CRT objects
+- [x] default linker script
 
 ## Clang Driver
 - [x] TargetInfo and minimal toolchain stub
 - [ ] sysroot / include path conventions
-- [ ] driver tests for `-target i8085-unknown-elf`
+- [x] driver tests for `-target i8085-unknown-elf`
 
 ## Tooling / Tests
 - [x] CodeGen regression tests for call args and large stack
 - [x] MC relocation tests
 - [x] end-to-end clang -> asm -> object smoke test
-- [ ] end-to-end link smoke test (needs linker)
+- [x] end-to-end link smoke test (lld)
 
 ## Known Gaps / Risks
 - Frame/stack ABI is minimal; verify with simulator once available.

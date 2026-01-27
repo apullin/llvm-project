@@ -78,7 +78,14 @@ let Constraints = "$src = $rd", Defs=[SREG]  in {
               (ins GR32: $src, GR8: $rr),
               "SRL_32\t$rd, $rr",
               [(set i32: $rd, (srl i32: $src, i8: $rr))]>;                                   
+
 }
+
+def SELECT_32
+    : I8085InserterPseudo<(outs GR32: $rd),
+            (ins GR8: $cond, GR32: $tval, GR32: $fval),
+            "SELECT_32\t$rd, $cond, $tval, $fval",
+            []>;
 
 
 let Constraints = "$rs = $rd", Defs=[SREG]  in {

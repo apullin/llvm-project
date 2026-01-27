@@ -100,10 +100,12 @@ I8085TargetLowering::I8085TargetLowering(const I8085TargetMachine &TM,
   setOperationAction(ISD::SRA_PARTS, MVT::i32, Expand);
   setOperationAction(ISD::SRL_PARTS, MVT::i32, Expand);
 
-  for (MVT VT : {MVT::i8, MVT::i16, MVT::i32, MVT::i64}) {
-    setOperationAction(ISD::SELECT, VT, Expand);
-    setOperationAction(ISD::SELECT_CC, VT, Expand);
+  for (MVT VT : {MVT::i8, MVT::i16, MVT::i32}) {
+    setOperationAction(ISD::SELECT, VT, Legal);
+    setOperationAction(ISD::SELECT_CC, VT, Custom);
   }
+  setOperationAction(ISD::SELECT, MVT::i64, Expand);
+  setOperationAction(ISD::SELECT_CC, MVT::i64, Expand);
 
   setLibcallName(RTLIB::MUL_I8, "__mul8");
   setLibcallName(RTLIB::MUL_I16, "__mul16");
@@ -314,6 +316,17 @@ SDValue I8085TargetLowering::LowerOperation(SDValue Op, SelectionDAG &DAG) const
     SDValue ShiftAmt = DAG.getConstant(ToBits - FromBits, DL, VT);
     SDValue Shl = DAG.getNode(ISD::SHL, DL, VT, Val, ShiftAmt);
     return DAG.getNode(ISD::SRA, DL, VT, Shl, ShiftAmt);
+  }
+  case ISD::SELECT_CC: {
+    SDValue LHS = Op.getOperand(0);
+    SDValue RHS = Op.getOperand(1);
+    SDValue TrueV = Op.getOperand(2);
+    SDValue FalseV = Op.getOperand(3);
+    SDValue CC = Op.getOperand(4);
+    EVT CmpVT = LHS.getValueType();
+    EVT CCVT = getSetCCResultType(DAG.getDataLayout(), *DAG.getContext(), CmpVT);
+    SDValue Cond = DAG.getNode(ISD::SETCC, DL, CCVT, LHS, RHS, CC, Op->getFlags());
+    return DAG.getSelect(DL, VT, Cond, TrueV, FalseV, Op->getFlags());
   }
   case ISD::GlobalAddress:
     return LowerGlobalAddress(Op, DAG);
@@ -1159,6 +1172,63 @@ MachineBasicBlock *I8085TargetLowering::insertShiftSet(MachineInstr &MI,
   return continuationMBB;
 }
 
+static MachineBasicBlock *insertSelectPseudo(MachineInstr &MI,
+                                             MachineBasicBlock *MBB) {
+  const I8085InstrInfo &TII = (const I8085InstrInfo &)*MI.getParent()
+                                ->getParent()
+                                ->getSubtarget()
+                                .getInstrInfo();
+  DebugLoc dl = MI.getDebugLoc();
+
+  MachineFunction *MF = MBB->getParent();
+  const BasicBlock *LLVM_BB = MBB->getBasicBlock();
+  MachineBasicBlock *FallThrough = MBB->getFallThrough();
+
+  if (FallThrough != nullptr) {
+    BuildMI(MBB, dl, TII.get(I8085::JMP)).addMBB(FallThrough);
+  }
+
+  MachineBasicBlock *trueMBB = MF->CreateMachineBasicBlock(LLVM_BB);
+  MachineBasicBlock *falseMBB = MF->CreateMachineBasicBlock(LLVM_BB);
+
+  MachineFunction::iterator I;
+  for (I = MF->begin(); I != MF->end() && &(*I) != MBB; ++I)
+    ;
+  if (I != MF->end())
+    ++I;
+  MF->insert(I, trueMBB);
+  MF->insert(I, falseMBB);
+
+  trueMBB->splice(trueMBB->begin(), MBB,
+                  std::next(MachineBasicBlock::iterator(MI)), MBB->end());
+  trueMBB->transferSuccessorsAndUpdatePHIs(MBB);
+
+  unsigned destReg = MI.getOperand(0).getReg();
+  unsigned condReg = MI.getOperand(1).getReg();
+  unsigned trueReg = MI.getOperand(2).getReg();
+  unsigned falseReg = MI.getOperand(3).getReg();
+
+  BuildMI(MBB, dl, TII.get(I8085::JMP_8_IF))
+      .addReg(condReg)
+      .addMBB(trueMBB);
+  BuildMI(MBB, dl, TII.get(I8085::JMP)).addMBB(falseMBB);
+
+  MBB->addSuccessor(falseMBB);
+  MBB->addSuccessor(trueMBB);
+
+  BuildMI(falseMBB, dl, TII.get(I8085::JMP)).addMBB(trueMBB);
+  falseMBB->addSuccessor(trueMBB);
+
+  BuildMI(*trueMBB, trueMBB->begin(), dl, TII.get(I8085::PHI), destReg)
+      .addReg(trueReg)
+      .addMBB(MBB)
+      .addReg(falseReg)
+      .addMBB(falseMBB);
+
+  MI.eraseFromParent();
+  return trueMBB;
+}
+
 
 MachineBasicBlock *I8085TargetLowering::EmitInstrWithCustomInserter(MachineInstr &MI,
                                                MachineBasicBlock *MBB) const {
@@ -1227,6 +1297,11 @@ MachineBasicBlock *I8085TargetLowering::EmitInstrWithCustomInserter(MachineInstr
   case I8085::SET_DIFF_SIGN_LT_32:
   case I8085::SET_DIFF_SIGN_GT_32:
     return insertDifferentSignedCond32Set(MI, MBB);   
+
+  case I8085::SELECT_8:
+  case I8085::SELECT_16:
+  case I8085::SELECT_32:
+    return insertSelectPseudo(MI, MBB);
 
   case I8085::SHL_8:
   case I8085::SRA_8:

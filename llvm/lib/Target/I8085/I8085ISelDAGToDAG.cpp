@@ -374,6 +374,33 @@ template <> bool I8085DAGToDAGISel::select<ISD::SRA>(SDNode *N) {
   return false;
 }
 
+template <> bool I8085DAGToDAGISel::select<ISD::SELECT>(SDNode *N) {
+  SDLoc dl(N);
+  SDValue Cond = N->getOperand(0);
+  SDValue TrueV = N->getOperand(1);
+  SDValue FalseV = N->getOperand(2);
+
+  MVT VT = N->getSimpleValueType(0);
+  unsigned Opc = 0;
+  if (VT == MVT::i8)
+    Opc = I8085::SELECT_8;
+  else if (VT == MVT::i16)
+    Opc = I8085::SELECT_16;
+  else if (VT == MVT::i32)
+    Opc = I8085::SELECT_32;
+  else
+    return false;
+
+  if (Cond.getSimpleValueType() != MVT::i8)
+    Cond = CurDAG->getZExtOrTrunc(Cond, dl, MVT::i8);
+
+  SDValue Ops[] = {Cond, TrueV, FalseV};
+  SDNode *ResNode = CurDAG->getMachineNode(Opc, dl, VT, Ops);
+  ReplaceUses(SDValue(N, 0), SDValue(ResNode, 0));
+  CurDAG->RemoveDeadNode(N);
+  return true;
+}
+
 
 template <> bool I8085DAGToDAGISel::select<ISD::FrameIndex>(SDNode *N) {
   auto DL = CurDAG->getDataLayout();
@@ -552,6 +579,8 @@ bool I8085DAGToDAGISel::trySelect(SDNode *N) {
     return select<ISD::SHL>(N);  
   case ISD::SRA:
     return select<ISD::SRA>(N);
+  case ISD::SELECT:
+    return select<ISD::SELECT>(N);
   case ISD::FrameIndex:
     return select<ISD::FrameIndex>(N);    
   case ISD::LOAD:

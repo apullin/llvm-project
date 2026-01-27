@@ -194,7 +194,20 @@ let Constraints = "$src = $rd", Defs=[SREG]  in {
               (ins GR16: $src, GR8: $rr),
               "SRL_16\t$rd, $rr",
               [(set i16: $rd, (srl i16: $src, i8: $rr))]>;            
+
 }
+
+def SELECT_8
+    : I8085InserterPseudo<(outs GR8: $rd),
+            (ins GR8: $cond, GR8: $tval, GR8: $fval),
+            "SELECT_8\t$rd, $cond, $tval, $fval",
+            []>;
+
+def SELECT_16
+    : I8085InserterPseudo<(outs GR16: $rd),
+            (ins GR8: $cond, GR16: $tval, GR16: $fval),
+            "SELECT_16\t$rd, $cond, $tval, $fval",
+            []>;
 
 let Defs=[SREG,A], Uses=[A] in def SUB : F2<0b10010,(outs), (ins GR8: $rs), "SUB $rs", []>;
 let Defs=[SREG,A], Uses=[A] in def SBB : F2<0b10011,(outs), (ins GR8: $rs), "SBB $rs",[]>;

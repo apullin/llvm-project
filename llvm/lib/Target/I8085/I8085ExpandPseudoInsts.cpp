@@ -1260,6 +1260,10 @@ template <> bool I8085ExpandPseudo::expand<I8085::RL_16>(Block &MBB, BlockIt MBB
   unsigned regLow,regHigh;
   if (!getPairRegs(reg, regLow, regHigh))
     return false;
+
+  // Clear carry before rotating through carry so logical shift inserts 0s.
+  buildMI(MBB, MBBI, I8085::STC);
+  buildMI(MBB, MBBI, I8085::CMC);
   
   buildMI(MBB, MBBI, I8085::MOV)
     .addReg(I8085::A,RegState::Define)
@@ -1306,6 +1310,10 @@ template <> bool I8085ExpandPseudo::expand<I8085::RR_16>(Block &MBB, BlockIt MBB
   unsigned regLow,regHigh;
   if (!getPairRegs(reg, regLow, regHigh))
     return false;
+
+  // Clear carry before rotating through carry so logical shift inserts 0s.
+  buildMI(MBB, MBBI, I8085::STC);
+  buildMI(MBB, MBBI, I8085::CMC);
 
   buildMI(MBB, MBBI, I8085::MOV)
     .addReg(I8085::A,RegState::Define)

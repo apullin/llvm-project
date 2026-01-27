@@ -67,42 +67,63 @@ I8085TargetLowering::I8085TargetLowering(const I8085TargetMachine &TM,
   setOperationAction(ISD::MUL, MVT::i8, LibCall);
   setOperationAction(ISD::MUL, MVT::i16, LibCall);
   setOperationAction(ISD::MUL, MVT::i32, LibCall);
+  setOperationAction(ISD::MUL, MVT::i64, Custom);
 
   setOperationAction(ISD::SDIV, MVT::i8, LibCall);
   setOperationAction(ISD::SDIV, MVT::i16, LibCall);
   setOperationAction(ISD::SDIV, MVT::i32, LibCall);
+  setOperationAction(ISD::SDIV, MVT::i64, Custom);
 
   setOperationAction(ISD::SREM, MVT::i8, LibCall);
   setOperationAction(ISD::SREM, MVT::i16, LibCall);
   setOperationAction(ISD::SREM, MVT::i32, LibCall);
+  setOperationAction(ISD::SREM, MVT::i64, Custom);
 
   setOperationAction(ISD::UDIV, MVT::i8, LibCall);
   setOperationAction(ISD::UDIV, MVT::i16, LibCall);
   setOperationAction(ISD::UDIV, MVT::i32, LibCall);
+  setOperationAction(ISD::UDIV, MVT::i64, Custom);
 
   setOperationAction(ISD::UREM, MVT::i8, LibCall);
   setOperationAction(ISD::UREM, MVT::i16, LibCall);
   setOperationAction(ISD::UREM, MVT::i32, LibCall);
+  setOperationAction(ISD::UREM, MVT::i64, Custom);
+
+  setOperationAction(ISD::SHL, MVT::i64, Custom);
+  setOperationAction(ISD::SRA, MVT::i64, Custom);
+  setOperationAction(ISD::SRL, MVT::i64, Custom);
+  setOperationAction(ISD::SHL_PARTS, MVT::i32, Expand);
+  setOperationAction(ISD::SRA_PARTS, MVT::i32, Expand);
+  setOperationAction(ISD::SRL_PARTS, MVT::i32, Expand);
 
   setLibcallName(RTLIB::MUL_I8, "__mul8");
   setLibcallName(RTLIB::MUL_I16, "__mul16");
   setLibcallName(RTLIB::MUL_I32, "__mul32");
+  setLibcallName(RTLIB::MUL_I64, "__muldi3");
 
   setLibcallName(RTLIB::SDIV_I8, "__sdiv8");
   setLibcallName(RTLIB::SDIV_I16, "__sdiv16");
   setLibcallName(RTLIB::SDIV_I32, "__sdiv32");
+  setLibcallName(RTLIB::SDIV_I64, "__divdi3");
 
   setLibcallName(RTLIB::SREM_I8, "__srem8");
   setLibcallName(RTLIB::SREM_I16, "__srem16");
   setLibcallName(RTLIB::SREM_I32, "__srem32");
+  setLibcallName(RTLIB::SREM_I64, "__moddi3");
 
   setLibcallName(RTLIB::UDIV_I8, "__udiv8");
   setLibcallName(RTLIB::UDIV_I16, "__udiv16");
   setLibcallName(RTLIB::UDIV_I32, "__udiv32");
+  setLibcallName(RTLIB::UDIV_I64, "__udivdi3");
 
   setLibcallName(RTLIB::UREM_I8, "__urem8");
   setLibcallName(RTLIB::UREM_I16, "__urem16");
   setLibcallName(RTLIB::UREM_I32, "__urem32");
+  setLibcallName(RTLIB::UREM_I64, "__umoddi3");
+
+  setLibcallName(RTLIB::SHL_I64, "__ashldi3");
+  setLibcallName(RTLIB::SRL_I64, "__lshrdi3");
+  setLibcallName(RTLIB::SRA_I64, "__ashrdi3");
 
   setOperationAction(ISD::GlobalAddress, MVT::i16, Custom);
   setOperationAction(ISD::BlockAddress, MVT::i16, Custom);
@@ -218,9 +239,62 @@ SDValue I8085TargetLowering::getI8085Cmp(SDValue LHS, SDValue RHS,
 }
 
 SDValue I8085TargetLowering::LowerOperation(SDValue Op, SelectionDAG &DAG) const {
+  SDLoc DL(Op);
+  EVT VT = Op.getValueType();
+
+  auto lowerI64LibCall = [&](RTLIB::Libcall LC, SDValue LHS,
+                             SDValue RHS) -> SDValue {
+    MakeLibCallOptions CallOptions;
+    SDValue Result;
+    SDValue Chain;
+    std::tie(Result, Chain) =
+        makeLibCall(DAG, LC, VT, {LHS, RHS}, CallOptions, DL);
+    return Result;
+  };
+
   switch (Op.getOpcode()) {
   default:
     llvm_unreachable("Don't know how to custom lower this!");
+  case ISD::MUL:
+    if (VT == MVT::i64)
+      return lowerI64LibCall(RTLIB::MUL_I64, Op.getOperand(0),
+                             Op.getOperand(1));
+    break;
+  case ISD::SDIV:
+    if (VT == MVT::i64)
+      return lowerI64LibCall(RTLIB::SDIV_I64, Op.getOperand(0),
+                             Op.getOperand(1));
+    break;
+  case ISD::UDIV:
+    if (VT == MVT::i64)
+      return lowerI64LibCall(RTLIB::UDIV_I64, Op.getOperand(0),
+                             Op.getOperand(1));
+    break;
+  case ISD::SREM:
+    if (VT == MVT::i64)
+      return lowerI64LibCall(RTLIB::SREM_I64, Op.getOperand(0),
+                             Op.getOperand(1));
+    break;
+  case ISD::UREM:
+    if (VT == MVT::i64)
+      return lowerI64LibCall(RTLIB::UREM_I64, Op.getOperand(0),
+                             Op.getOperand(1));
+    break;
+  case ISD::SHL:
+  case ISD::SRL:
+  case ISD::SRA:
+    if (VT == MVT::i64) {
+      SDValue LHS = Op.getOperand(0);
+      SDValue RHS = Op.getOperand(1);
+      if (RHS.getValueType() != MVT::i32)
+        RHS = DAG.getNode(ISD::TRUNCATE, DL, MVT::i32, RHS);
+      RTLIB::Libcall LC =
+          (Op.getOpcode() == ISD::SHL) ? RTLIB::SHL_I64
+          : (Op.getOpcode() == ISD::SRL) ? RTLIB::SRL_I64
+                                         : RTLIB::SRA_I64;
+      return lowerI64LibCall(LC, LHS, RHS);
+    }
+    break;
   case ISD::GlobalAddress:
     return LowerGlobalAddress(Op, DAG);
   case ISD::BlockAddress:

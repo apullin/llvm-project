@@ -9,6 +9,7 @@ clang/runtime support. It is intended as a living checklist.
 - [x] stack argument lowering (SP-relative stores)
 - [x] large frame offsets (no 6-bit offset restriction)
 - [x] i32 lowering coverage beyond basic add/sub (audit all i32 pseudos)
+- [x] i64/u64 lowering via libcalls (mul/div/rem/shift)
 - [ ] varargs ABI validation with real C frontend
 - [ ] tail calls
 - [ ] inline asm constraints and register allocation stress tests

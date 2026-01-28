@@ -1,0 +1,80 @@
+# RUN: llc -O0 -run-pass=i8085-expand-pseudo %s -o - | FileCheck %s
+
+--- |
+  target triple = "i8085-unknown-elf"
+  define void @load16_bc() { ret void }
+  define void @load8_de() { ret void }
+  define void @store8_bc() { ret void }
+  define void @store16_bc() { ret void }
+  define void @frmidx_bc() { ret void }
+...
+
+---
+name:            load16_bc
+body:             |
+  bb.0:
+    liveins: $bc
+    ; CHECK-LABEL: name:            load16_bc
+    ; CHECK: LDAX $bc
+    ; CHECK-NEXT: $e = MOV $a
+    ; CHECK-NEXT: $bc = INX
+    ; CHECK-NEXT: LDAX $bc
+    ; CHECK-NEXT: $d = MOV $a
+    ; CHECK-NEXT: $bc = DCX
+    $de = LOAD_16_ADDR_CONTENT $bc, implicit-def $h, implicit-def $l, implicit $sp
+    RET
+...
+
+---
+name:            load8_de
+body:             |
+  bb.0:
+    liveins: $de
+    ; CHECK-LABEL: name:            load8_de
+    ; CHECK: LDAX $de
+    ; CHECK-NEXT: $c = MOV $a
+    $c = LOAD_8_ADDR_CONTENT $de, implicit-def $h, implicit-def $l, implicit $sp
+    RET
+...
+
+---
+name:            store8_bc
+body:             |
+  bb.0:
+    liveins: $bc, $c
+    ; CHECK-LABEL: name:            store8_bc
+    ; CHECK: $a = MOV $c
+    ; CHECK-NEXT: STAX $bc
+    STORE_8_ADDR_CONTENT $bc, $c, implicit-def $h, implicit-def $l, implicit $sp
+    RET
+...
+
+---
+name:            store16_bc
+body:             |
+  bb.0:
+    liveins: $bc, $de
+    ; CHECK-LABEL: name:            store16_bc
+    ; CHECK: $a = MOV $e
+    ; CHECK-NEXT: STAX $bc
+    ; CHECK-NEXT: $bc = INX
+    ; CHECK-NEXT: $a = MOV $d
+    ; CHECK-NEXT: STAX $bc
+    ; CHECK-NEXT: $bc = DCX
+    STORE_16_ADDR_CONTENT $bc, $de, implicit-def $h, implicit-def $l, implicit $sp
+    RET
+...
+
+---
+name:            frmidx_bc
+body:             |
+  bb.0:
+    liveins: $sp
+    ; CHECK-LABEL: name:            frmidx_bc
+    ; CHECK: $hl = LXI 6
+    ; CHECK: DAD $sp
+    ; CHECK: $b = MOV $h
+    ; CHECK: $c = MOV $l
+    $bc = FRMIDX $sp, 6, implicit-def $sreg, implicit-def $h, implicit-def $l
+    RET
+...

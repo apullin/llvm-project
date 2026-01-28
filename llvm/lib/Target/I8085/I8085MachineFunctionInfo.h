@@ -43,11 +43,13 @@ class I8085MachineFunctionInfo : public MachineFunctionInfo {
 
   /// FrameIndex for start of varargs area.
   int VarArgsFrameIndex;
+  /// FrameIndex for per-function GR32 scratch storage (IAX/IBX bytes).
+  int GR32ScratchFI;
 
   public:
   I8085MachineFunctionInfo(const Function &F, const TargetSubtargetInfo *STI)
       : HasSpills(false), HasAllocas(false), HasStackArgs(false),
-        CalleeSavedFrameSize(0), VarArgsFrameIndex(0) {
+        CalleeSavedFrameSize(0), VarArgsFrameIndex(0), GR32ScratchFI(-1) {
     CallingConv::ID CallConv = F.getCallingConv();
 
     this->IsInterruptHandler =
@@ -78,6 +80,10 @@ class I8085MachineFunctionInfo : public MachineFunctionInfo {
 
   int getVarArgsFrameIndex() const { return VarArgsFrameIndex; }
   void setVarArgsFrameIndex(int Idx) { VarArgsFrameIndex = Idx; }
+
+  int getGR32ScratchFI() const { return GR32ScratchFI; }
+  void setGR32ScratchFI(int Idx) { GR32ScratchFI = Idx; }
+  bool hasGR32ScratchFI() const { return GR32ScratchFI >= 0; }
 };
 
 } // namespace llvm

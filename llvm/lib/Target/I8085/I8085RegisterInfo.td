@@ -64,7 +64,7 @@ def PSW : I8085Reg<3, "PSW", [A, SREG]>, DwarfRegNum<[9]>;
 }
 
 //===----------------------------------------------------------------------===//
-//  32 bit - Imaginary registers, existed in zeroth page
+// 32-bit imaginary registers, backed by per-function scratch storage.
 //===----------------------------------------------------------------------===//
 
 def IAX : I8085Reg<9, "IAX">, DwarfRegNum<[1]>;

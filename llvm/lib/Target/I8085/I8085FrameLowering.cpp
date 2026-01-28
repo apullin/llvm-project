@@ -148,6 +148,42 @@ if(FrameSize) {
   restoreStatusRegister(MF, MBB);
 }
 
+void I8085FrameLowering::processFunctionBeforeFrameFinalized(
+    MachineFunction &MF, RegScavenger *RS) const {
+  (void)RS;
+  I8085MachineFunctionInfo *FuncInfo = MF.getInfo<I8085MachineFunctionInfo>();
+  if (FuncInfo->hasGR32ScratchFI())
+    return;
+
+  bool UsesGR32 = false;
+  for (auto &MBB : MF) {
+    for (auto &MI : MBB) {
+      for (auto &MO : MI.operands()) {
+        if (!MO.isReg())
+          continue;
+        Register Reg = MO.getReg();
+        if (Reg == I8085::IAX || Reg == I8085::IBX) {
+          UsesGR32 = true;
+          break;
+        }
+      }
+      if (UsesGR32)
+        break;
+    }
+    if (UsesGR32)
+      break;
+  }
+
+  if (!UsesGR32)
+    return;
+
+  MachineFrameInfo &MFI = MF.getFrameInfo();
+  int FI = MFI.CreateStackObject(8, Align(1), false);
+  FuncInfo->setGR32ScratchFI(FI);
+  // Ensure we emit a frame adjustment even if there are no spills/allocas.
+  FuncInfo->setHasSpills(true);
+}
+
 // Return true if the specified function should have a dedicated frame
 // pointer register. This is true if the function meets any of the following
 // conditions:

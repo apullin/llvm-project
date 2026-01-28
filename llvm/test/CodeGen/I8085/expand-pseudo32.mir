@@ -13,13 +13,17 @@ body:             |
   bb.0:
     ; CHECK-LABEL: name:            mvi32_iax
     ; CHECK-NOT: MVI_32
-    ; CHECK: $hl = LXI 64
+    ; CHECK: $hl = LXI 0
+    ; CHECK-NEXT: DAD $sp
     ; CHECK-NEXT: MVI_M 4
-    ; CHECK: $hl = LXI 65
+    ; CHECK: $hl = LXI 1
+    ; CHECK-NEXT: DAD $sp
     ; CHECK-NEXT: MVI_M 3
-    ; CHECK: $hl = LXI 66
+    ; CHECK: $hl = LXI 2
+    ; CHECK-NEXT: DAD $sp
     ; CHECK-NEXT: MVI_M 2
-    ; CHECK: $hl = LXI 67
+    ; CHECK: $hl = LXI 3
+    ; CHECK-NEXT: DAD $sp
     ; CHECK-NEXT: MVI_M 1
     $iax = MVI_32 16909060
     RET

@@ -14,14 +14,17 @@
 
 #include "I8085.h"
 #include "I8085InstrInfo.h"
+#include "I8085MachineFunctionInfo.h"
 #include "I8085TargetMachine.h"
 #include "MCTargetDesc/I8085MCTargetDesc.h"
 
+#include "llvm/CodeGen/MachineFrameInfo.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
 #include "llvm/CodeGen/MachineInstrBuilder.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
 #include "llvm/CodeGen/RegisterScavenging.h"
 #include "llvm/CodeGen/TargetRegisterInfo.h"
+#include "llvm/CodeGen/TargetFrameLowering.h"
 #include "llvm/CodeGen/TargetOpcodes.h"
 #include <stdint.h>
 
@@ -57,6 +60,9 @@ private:
 
   const I8085RegisterInfo *TRI;
   const TargetInstrInfo *TII;
+  int ScratchFI = -1;
+  int64_t ScratchBaseOffset = 0;
+  bool HaveScratch = false;
 
 
   bool expandMBB(Block &MBB);
@@ -64,6 +70,12 @@ private:
   template <unsigned OP> bool expand(Block &MBB, BlockIt MBBI);
   bool binOperationWithImmediateOperand(unsigned opCode, Block &MBB, BlockIt MBBI);
   bool binOperation(unsigned opCode, Block &MBB, BlockIt MBBI);
+  int64_t getScratchOffset(unsigned Reg, int ByteIndex) const;
+  void emitScratchAddr(Block &MBB, BlockIt MBBI, unsigned Reg, int ByteIndex);
+  void emitScratchLoad(Block &MBB, BlockIt MBBI, unsigned Reg, int ByteIndex,
+                       unsigned DestReg);
+  void emitScratchStore(Block &MBB, BlockIt MBBI, unsigned Reg, int ByteIndex,
+                        unsigned SrcReg);
 
   MachineInstrBuilder buildMI(Block &MBB, BlockIt MBBI, unsigned Opcode) {
     return BuildMI(MBB, MBBI, MBBI->getDebugLoc(), TII->get(Opcode));
@@ -111,6 +123,36 @@ static void addAddrOperand(MachineInstrBuilder &MIB,
   }
 }
 
+int64_t I8085ExpandPseudo32::getScratchOffset(unsigned Reg,
+                                              int ByteIndex) const {
+  assert(HaveScratch && "GR32 scratch not initialized");
+  int Base = (Reg == I8085::IBX) ? 4 : 0;
+  return ScratchBaseOffset + Base + ByteIndex;
+}
+
+void I8085ExpandPseudo32::emitScratchAddr(Block &MBB, BlockIt MBBI,
+                                          unsigned Reg, int ByteIndex) {
+  int64_t Offset = getScratchOffset(Reg, ByteIndex);
+  buildMI(MBB, MBBI, I8085::LXI)
+      .addReg(I8085::HL, RegState::Define)
+      .addImm(Offset);
+  buildMI(MBB, MBBI, I8085::DAD).addReg(I8085::SP);
+}
+
+void I8085ExpandPseudo32::emitScratchLoad(Block &MBB, BlockIt MBBI,
+                                          unsigned Reg, int ByteIndex,
+                                          unsigned DestReg) {
+  emitScratchAddr(MBB, MBBI, Reg, ByteIndex);
+  buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(DestReg, RegState::Define);
+}
+
+void I8085ExpandPseudo32::emitScratchStore(Block &MBB, BlockIt MBBI,
+                                           unsigned Reg, int ByteIndex,
+                                           unsigned SrcReg) {
+  emitScratchAddr(MBB, MBBI, Reg, ByteIndex);
+  buildMI(MBB, MBBI, I8085::MOV_M).addReg(SrcReg);
+}
+
 bool I8085ExpandPseudo32::expandMBB(MachineBasicBlock &MBB) {
   bool Modified = false;
 
@@ -136,6 +178,15 @@ bool I8085ExpandPseudo32::runOnMachineFunction(MachineFunction &MF) {
   const I8085Subtarget &STI = MF.getSubtarget<I8085Subtarget>();
   TRI = STI.getRegisterInfo();
   TII = STI.getInstrInfo();
+  I8085MachineFunctionInfo *AFI = MF.getInfo<I8085MachineFunctionInfo>();
+  ScratchFI = AFI->getGR32ScratchFI();
+  if (ScratchFI >= 0) {
+    const MachineFrameInfo &MFI = MF.getFrameInfo();
+    const TargetFrameLowering *TFI = STI.getFrameLowering();
+    ScratchBaseOffset = MFI.getObjectOffset(ScratchFI) +
+                        MFI.getStackSize() - TFI->getOffsetOfLocalArea();
+    HaveScratch = true;
+  }
 
   // We need to track liveness in order to use register scavenging.
   MF.getProperties().set(MachineFunctionProperties::Property::TracksLiveness);
@@ -154,6 +205,19 @@ bool I8085ExpandPseudo32::runOnMachineFunction(MachineFunction &MF) {
 
   bool UsesIAX = UsesPhysReg(I8085::IAX);
   bool UsesIBX = UsesPhysReg(I8085::IBX);
+  if ((UsesIAX || UsesIBX) && !HaveScratch) {
+    // Fallback for -run-pass tests where PEI doesn't run.
+    MachineFrameInfo &MFI = MF.getFrameInfo();
+    if (MFI.getObjectIndexBegin() == MFI.getObjectIndexEnd() &&
+        MFI.getStackSize() == 0) {
+      ScratchFI = MFI.CreateStackObject(8, Align(1), false);
+      ScratchBaseOffset = 0;
+      HaveScratch = true;
+      AFI->setGR32ScratchFI(ScratchFI);
+    } else {
+      report_fatal_error("I8085 GR32 scratch slot not allocated");
+    }
+  }
   if (UsesIAX || UsesIBX) {
     MachineBasicBlock &Entry = MF.front();
     auto InsertPt = Entry.begin();
@@ -207,9 +271,6 @@ bool I8085ExpandPseudo32::binOperationWithImmediateOperand(unsigned opCode, Bloc
   unsigned operandOne = MI.getOperand(1).getReg();
   unsigned destReg = operandOne; 
   uint64_t immToAdd = MI.getOperand(2).getImm();
-  
-  int address[]={0x0040,0x0041,0x0042,0x0043,0x0044,0x0045,0x0046,0x0047};
-  int index = 0;
 
   uint8_t nibbleOne = immToAdd & 0x000000FF  ;
   uint8_t nibbleTwo = (immToAdd >> 8) & 0x000000FF  ;
@@ -217,21 +278,12 @@ bool I8085ExpandPseudo32::binOperationWithImmediateOperand(unsigned opCode, Bloc
   uint8_t nibbleFour = (immToAdd >> 24) & 0x000000FF  ;
 
   uint8_t values[]={nibbleOne,nibbleTwo,nibbleThree,nibbleFour};
-
-  if(destReg==I8085::IBX){  
-    index=4; 
-  }
-
   
   for(int i=0;i<4;i++){
-      buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[i]);
-      buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::A,RegState::Define);
-
+      emitScratchLoad(MBB, MBBI, operandOne, i, I8085::A);
       buildMI(MBB, MBBI, opCode).addImm(values[i]);
-
-      buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[i+index]);
-      buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::A);
-  }            
+      emitScratchStore(MBB, MBBI, destReg, i, I8085::A);
+  }
 
   MI.eraseFromParent();
   return true;
@@ -245,24 +297,12 @@ bool I8085ExpandPseudo32::binOperation(unsigned opCode, Block &MBB, BlockIt MBBI
   unsigned destReg = operandOne; 
   unsigned operandTwo = MI.getOperand(2).getReg();
   
-  int address[]={0x0040,0x0041,0x0042,0x0043,0x0044,0x0045,0x0046,0x0047};
-  int index = 0;
-
-  if(destReg==I8085::IBX){  
-      index=4; 
-  }
-
   for(int i=0;i<4;i++){
-      buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[i]);
-      buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::A,RegState::Define);
-
-      buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[i+4]);
-
+      emitScratchLoad(MBB, MBBI, operandOne, i, I8085::A);
+      emitScratchAddr(MBB, MBBI, operandTwo, i);
       buildMI(MBB, MBBI, opCode);
-
-      buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[i+index]);
-      buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::A);
-  }            
+      emitScratchStore(MBB, MBBI, destReg, i, I8085::A);
+  }
 
   MI.eraseFromParent();
   return true;
@@ -294,28 +334,19 @@ template <> bool I8085ExpandPseudo32::expand<I8085::RR_32>(Block &MBB, BlockIt M
   MachineInstr &MI = *MBBI;
 
   unsigned srcReg = MI.getOperand(0).getReg();
-  
-  int address[]={0x0040,0x0041,0x0042,0x0043,0x0044,0x0045,0x0046,0x0047};
-  int index = 0;
-
-  if(srcReg==I8085::IBX){
-      index=4;
-  }
 
   // Clear carry before rotate-through-carry sequence.
   buildMI(MBB, MBBI, I8085::XRA).addReg(I8085::A);
 
   for(int i=3;i>-1;i--){
-    buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[index+i]);
-    buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::A,RegState::Define);
+    emitScratchLoad(MBB, MBBI, srcReg, i, I8085::A);
     buildMI(MBB, MBBI, I8085::RAR);
-    buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::A);
+    emitScratchStore(MBB, MBBI, srcReg, i, I8085::A);
   }
 
-  buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[index+3]);
-  buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::A,RegState::Define);
+  emitScratchLoad(MBB, MBBI, srcReg, 3, I8085::A);
   buildMI(MBB, MBBI, I8085::ANI).addImm(127);  
-  buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::A);
+  emitScratchStore(MBB, MBBI, srcReg, 3, I8085::A);
   
   MI.eraseFromParent();
   return true;
@@ -325,30 +356,20 @@ template <> bool I8085ExpandPseudo32::expand<I8085::ASR_32>(Block &MBB, BlockIt 
   MachineInstr &MI = *MBBI;
 
   unsigned srcReg = MI.getOperand(0).getReg();
-  
-  int address[]={0x0040,0x0041,0x0042,0x0043,0x0044,0x0045,0x0046,0x0047};
-  int index = 0;
-
-  if(srcReg==I8085::IBX){
-      index=4;
-  }
 
   // Set carry from sign bit of the high byte.
-  buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[index+3]);
-  buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::A,RegState::Define);
+  emitScratchLoad(MBB, MBBI, srcReg, 3, I8085::A);
   buildMI(MBB, MBBI, I8085::RLC);
 
   // Shift high byte through carry to preserve sign.
-  buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[index+3]);
-  buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::A,RegState::Define);
+  emitScratchLoad(MBB, MBBI, srcReg, 3, I8085::A);
   buildMI(MBB, MBBI, I8085::RAR);
-  buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::A);
+  emitScratchStore(MBB, MBBI, srcReg, 3, I8085::A);
 
   for(int i=2;i>-1;i--){
-    buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[index+i]);
-    buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::A,RegState::Define);
+    emitScratchLoad(MBB, MBBI, srcReg, i, I8085::A);
     buildMI(MBB, MBBI, I8085::RAR);
-    buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::A);
+    emitScratchStore(MBB, MBBI, srcReg, i, I8085::A);
   }
 
   MI.eraseFromParent();
@@ -360,13 +381,6 @@ template <> bool I8085ExpandPseudo32::expand<I8085::STORE_32_ADDR_CONTENT>(Block
 
   unsigned addrReg = MI.getOperand(0).getReg();
   unsigned srcReg = MI.getOperand(1).getReg();
-
-  int address[]={0x0040,0x0041,0x0042,0x0043,0x0044,0x0045,0x0046,0x0047};
-  int index = 0;
-
-  if(srcReg==I8085::IBX){
-      index=4;
-  }
 
   bool addrIsHL = (addrReg == I8085::HL);
   bool addrIsSP = (addrReg == I8085::SP);
@@ -395,8 +409,7 @@ template <> bool I8085ExpandPseudo32::expand<I8085::STORE_32_ADDR_CONTENT>(Block
 
   for(int i=0;i<4;i++){
     // Load byte i from the 32-bit source.
-    buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[i+index]);
-    buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::A,RegState::Define);
+    emitScratchLoad(MBB, MBBI, srcReg, i, I8085::A);
 
     if (addrIsHL) {
       buildMI(MBB, MBBI, I8085::POP).addReg(I8085::HL);
@@ -431,28 +444,19 @@ template <> bool I8085ExpandPseudo32::expand<I8085::RL_32>(Block &MBB, BlockIt M
   MachineInstr &MI = *MBBI;
 
   unsigned srcReg = MI.getOperand(0).getReg();
-  
-  int address[]={0x0040,0x0041,0x0042,0x0043,0x0044,0x0045,0x0046,0x0047};
-  int index = 0;
-
-  if(srcReg==I8085::IBX){
-      index=4;
-  }
 
   // Clear carry before rotate-through-carry sequence.
   buildMI(MBB, MBBI, I8085::XRA).addReg(I8085::A);
 
   for(int i=0;i<4;i++){
-    buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[index+i]);
-    buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::A,RegState::Define);
+    emitScratchLoad(MBB, MBBI, srcReg, i, I8085::A);
     buildMI(MBB, MBBI, I8085::RAL);
-    buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::A);
+    emitScratchStore(MBB, MBBI, srcReg, i, I8085::A);
   }
 
-  buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[index]);
-  buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::A,RegState::Define);
+  emitScratchLoad(MBB, MBBI, srcReg, 0, I8085::A);
   buildMI(MBB, MBBI, I8085::ANI).addImm(254);  
-  buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::A);
+  emitScratchStore(MBB, MBBI, srcReg, 0, I8085::A);
 
   MI.eraseFromParent();
   return true;
@@ -464,17 +468,7 @@ template <> bool I8085ExpandPseudo32::expand<I8085::SEXT32_INREG_8>(Block &MBB, 
   MachineInstr &MI = *MBBI;
 
   unsigned srcReg = MI.getOperand(0).getReg();
-  
-  int address[]={0x0040,0x0041,0x0042,0x0043,0x0044,0x0045,0x0046,0x0047};
-  int index = 0;
-
-  if(srcReg==I8085::IBX){
-      index=4; 
-  }
-
-  buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[index]);
-
-  buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::A,RegState::Define);
+  emitScratchLoad(MBB, MBBI, srcReg, 0, I8085::A);
 
   buildMI(MBB, MBBI, I8085::ADI)
     .addImm(128); // 80h in hex .. [Adding 80h will set carry flag if HSB is high]
@@ -482,12 +476,9 @@ template <> bool I8085ExpandPseudo32::expand<I8085::SEXT32_INREG_8>(Block &MBB, 
   buildMI(MBB, MBBI, I8085::SBB)
     .addReg(I8085::A);  // will result in FFh if CF set, 0 else
 
-  buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[index+3]);
-  buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::A);
-  buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[index+2]);
-  buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::A);
-  buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[index+1]);
-  buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::A);
+  emitScratchStore(MBB, MBBI, srcReg, 3, I8085::A);
+  emitScratchStore(MBB, MBBI, srcReg, 2, I8085::A);
+  emitScratchStore(MBB, MBBI, srcReg, 1, I8085::A);
 
   MI.eraseFromParent();
   return true;
@@ -499,17 +490,7 @@ template <> bool I8085ExpandPseudo32::expand<I8085::SEXT32_INREG_16>(Block &MBB,
   MachineInstr &MI = *MBBI;
 
   unsigned srcReg = MI.getOperand(0).getReg();
-  
-  int address[]={0x0040,0x0041,0x0042,0x0043,0x0044,0x0045,0x0046,0x0047};
-  int index = 0;
-
-  if(srcReg==I8085::IBX){
-      index=4; 
-  }
-
-  buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[index+1]);
-
-  buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::A,RegState::Define);
+  emitScratchLoad(MBB, MBBI, srcReg, 1, I8085::A);
 
   buildMI(MBB, MBBI, I8085::ADI)
     .addImm(128); // 80h in hex .. [Adding 80h will set carry flag if HSB is high]
@@ -517,10 +498,8 @@ template <> bool I8085ExpandPseudo32::expand<I8085::SEXT32_INREG_16>(Block &MBB,
   buildMI(MBB, MBBI, I8085::SBB)
     .addReg(I8085::A);  // will result in FFh if CF set, 0 else
 
-  buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[index+3]);
-  buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::A);
-  buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[index+2]);
-  buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::A); 
+  emitScratchStore(MBB, MBBI, srcReg, 3, I8085::A);
+  emitScratchStore(MBB, MBBI, srcReg, 2, I8085::A);
 
   MI.eraseFromParent();
   return true;
@@ -540,18 +519,8 @@ template <> bool I8085ExpandPseudo32::expand<I8085::TRUNC32TO16>(Block &MBB, Blo
   if(destReg==I8085::DE){  destLow=I8085::E;  destHigh=I8085::D; }
   if(destReg==I8085::HL){  destLow=I8085::L;  destHigh=I8085::H; }
 
-  
-  int address[]={0x0040,0x0041,0x0042,0x0043,0x0044,0x0045,0x0046,0x0047};
-  int index = 0;
-
-  if(srcReg==I8085::IBX){
-      index=4; 
-  }
-
-  buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[index]);
-  buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(destLow,RegState::Define);
-  buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[index+1]);
-  buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(destHigh,RegState::Define);
+  emitScratchLoad(MBB, MBBI, srcReg, 0, destLow);
+  emitScratchLoad(MBB, MBBI, srcReg, 1, destHigh);
 
   MI.eraseFromParent();
   return true;
@@ -582,18 +551,8 @@ template <> bool I8085ExpandPseudo32::expand<I8085::SEXT16TO32>(Block &MBB, Bloc
     }
   }
 
-  
-  int address[]={0x0040,0x0041,0x0042,0x0043,0x0044,0x0045,0x0046,0x0047};
-  int index = 0;
-
-  if(destReg==I8085::IBX){  
-      index=4; 
-  }
-
-  buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[index]);
-  buildMI(MBB, MBBI, I8085::MOV_M).addReg(opOneLow);
-  buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[index+1]);
-  buildMI(MBB, MBBI, I8085::MOV_M).addReg(opOneHigh);
+  emitScratchStore(MBB, MBBI, destReg, 0, opOneLow);
+  emitScratchStore(MBB, MBBI, destReg, 1, opOneHigh);
 
   buildMI(MBB, MBBI, I8085::MOV).addReg(I8085::A,RegState::Define).addReg(opOneHigh);
 
@@ -603,11 +562,8 @@ template <> bool I8085ExpandPseudo32::expand<I8085::SEXT16TO32>(Block &MBB, Bloc
   buildMI(MBB, MBBI, I8085::SBB)
     .addReg(I8085::A);  // will result in FFh if CF set, 0 else
 
-
-  buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[index+3]);
-  buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::A);
-  buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[index+2]);
-  buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::A); 
+  emitScratchStore(MBB, MBBI, destReg, 3, I8085::A);
+  emitScratchStore(MBB, MBBI, destReg, 2, I8085::A);
 
   MI.eraseFromParent();
   return true;
@@ -627,22 +583,12 @@ template <> bool I8085ExpandPseudo32::expand<I8085::ZEXT16TO32>(Block &MBB, Bloc
   if(srcReg==I8085::DE){  opOneLow=I8085::E;  opOneHigh=I8085::D; }
   if(srcReg==I8085::HL){  opOneLow=I8085::L;  opOneHigh=I8085::H; }
 
-  
-  int address[]={0x0040,0x0041,0x0042,0x0043,0x0044,0x0045,0x0046,0x0047};
-  int index = 0;
-
-  if(destReg==I8085::IBX){  
-      index=4; 
-  }
-
-  buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[index+3]);
+  emitScratchAddr(MBB, MBBI, destReg, 3);
   buildMI(MBB, MBBI, I8085::MVI_M).addImm(0);
-  buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[index+2]);
+  emitScratchAddr(MBB, MBBI, destReg, 2);
   buildMI(MBB, MBBI, I8085::MVI_M).addImm(0);
-  buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[index+1]);
-  buildMI(MBB, MBBI, I8085::MOV_M).addReg(opOneHigh);
-  buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[index]);
-  buildMI(MBB, MBBI, I8085::MOV_M).addReg(opOneLow);       
+  emitScratchStore(MBB, MBBI, destReg, 1, opOneHigh);
+  emitScratchStore(MBB, MBBI, destReg, 0, opOneLow);
 
   MI.eraseFromParent();
   return true;
@@ -660,16 +606,7 @@ template <> bool I8085ExpandPseudo32::expand<I8085::TRUNC32TO8>(Block &MBB, Bloc
 
   unsigned destReg = MI.getOperand(0).getReg();
   unsigned srcReg = MI.getOperand(1).getReg();
-  
-  int address[]={0x0040,0x0041,0x0042,0x0043,0x0044,0x0045,0x0046,0x0047};
-  int index = 0;
-
-  if(srcReg==I8085::IBX){
-      index=4; 
-  }
-
-  buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[index]);
-  buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(destReg,RegState::Define);
+  emitScratchLoad(MBB, MBBI, srcReg, 0, destReg);
 
   MI.eraseFromParent();
   return true;
@@ -682,16 +619,7 @@ template <> bool I8085ExpandPseudo32::expand<I8085::SEXT8TO32>(Block &MBB, Block
 
   unsigned destReg = MI.getOperand(0).getReg();
   unsigned srcReg = MI.getOperand(1).getReg();
-  
-  int address[]={0x0040,0x0041,0x0042,0x0043,0x0044,0x0045,0x0046,0x0047};
-  int index = 0;
-
-  if(destReg==I8085::IBX){  
-      index=4; 
-  }
-
-  buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[index]);
-  buildMI(MBB, MBBI, I8085::MOV_M).addReg(srcReg);
+  emitScratchStore(MBB, MBBI, destReg, 0, srcReg);
 
   buildMI(MBB, MBBI, I8085::MOV).addReg(I8085::A,RegState::Define).addReg(srcReg);
 
@@ -702,12 +630,9 @@ template <> bool I8085ExpandPseudo32::expand<I8085::SEXT8TO32>(Block &MBB, Block
     .addReg(I8085::A);  // will result in FFh if CF set, 0 else
 
 
-  buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[index+3]);
-  buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::A);
-  buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[index+2]);
-  buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::A);
-  buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[index+1]);
-  buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::A);
+  emitScratchStore(MBB, MBBI, destReg, 3, I8085::A);
+  emitScratchStore(MBB, MBBI, destReg, 2, I8085::A);
+  emitScratchStore(MBB, MBBI, destReg, 1, I8085::A);
 
   MI.eraseFromParent();
   return true;
@@ -720,23 +645,13 @@ template <> bool I8085ExpandPseudo32::expand<I8085::ZEXT8TO32>(Block &MBB, Block
 
   unsigned destReg = MI.getOperand(0).getReg();
   unsigned srcReg = MI.getOperand(1).getReg();
-
-  
-  int address[]={0x0040,0x0041,0x0042,0x0043,0x0044,0x0045,0x0046,0x0047};
-  int index = 0;
-
-  if(destReg==I8085::IBX){  
-      index=4; 
-  }
-
-  buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[index+3]);
+  emitScratchAddr(MBB, MBBI, destReg, 3);
   buildMI(MBB, MBBI, I8085::MVI_M).addImm(0);
-  buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[index+2]);
+  emitScratchAddr(MBB, MBBI, destReg, 2);
   buildMI(MBB, MBBI, I8085::MVI_M).addImm(0);
-  buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[index+1]);
+  emitScratchAddr(MBB, MBBI, destReg, 1);
   buildMI(MBB, MBBI, I8085::MVI_M).addImm(0);
-  buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[index]);
-  buildMI(MBB, MBBI, I8085::MOV_M).addReg(srcReg);       
+  emitScratchStore(MBB, MBBI, destReg, 0, srcReg);
 
   MI.eraseFromParent();
   return true;
@@ -753,27 +668,10 @@ template <> bool I8085ExpandPseudo32::expand<I8085::MOV_32>(Block &MBB, BlockIt 
 
   unsigned destReg = MI.getOperand(0).getReg();
   unsigned srcReg = MI.getOperand(1).getReg();
-  
-  int address[]={0x0040,0x0041,0x0042,0x0043,0x0044,0x0045,0x0046,0x0047};
-
-  if(srcReg==I8085::IBX){ 
-          for(int i=0;i<4;i++){
-              buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[i+4]);
-              buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::A,RegState::Define);
-
-              buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[i]);
-              buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::A);
-          }  
+  for(int i=0;i<4;i++){
+      emitScratchLoad(MBB, MBBI, srcReg, i, I8085::A);
+      emitScratchStore(MBB, MBBI, destReg, i, I8085::A);
   }
-  else{
-          for(int i=0;i<4;i++){
-              buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[i]);
-              buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::A,RegState::Define);
-
-              buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[i+4]);
-              buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::A);
-          }   
-  }         
 
   MI.eraseFromParent();
   return true;
@@ -783,27 +681,16 @@ template <> bool I8085ExpandPseudo32::expand<I8085::STORE_32>(Block &MBB, BlockI
   const I8085Subtarget &STI = MBB.getParent()->getSubtarget<I8085Subtarget>();
   MachineInstr &MI = *MBBI;
 
-  unsigned baseReg = MI.getOperand(0).getReg();
   unsigned offsetToStore = MI.getOperand(1).getImm();
 
   unsigned srcReg = MI.getOperand(2).getReg();
   
-  int address[]={0x0040,0x0041,0x0042,0x0043,0x0044,0x0045,0x0046,0x0047};
-  int index = 0;
-
-  if(srcReg==I8085::IBX){  
-    index=4; 
-  }
-
-  
   for(int i=0;i<4;i++){
-      buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[i+index]);
-      buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::A,RegState::Define);
-
+      emitScratchLoad(MBB, MBBI, srcReg, i, I8085::A);
       buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(offsetToStore+i);
       buildMI(MBB, MBBI, I8085::DAD).addReg(I8085::SP);
       buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::A);
-  }            
+  }
 
   MI.eraseFromParent();
   return true;
@@ -818,25 +705,13 @@ template <> bool I8085ExpandPseudo32::expand<I8085::ADD_32>(Block &MBB, BlockIt 
   unsigned destReg = operandOne; 
   unsigned operandTwo = MI.getOperand(2).getReg();
   
-  int address[]={0x0040,0x0041,0x0042,0x0043,0x0044,0x0045,0x0046,0x0047};
-  int index = 0;
-
-  if(destReg==I8085::IBX){  
-    index=4; 
-  }
-  
   for(int i=0;i<4;i++){
-      buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[i]);
-      buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::A,RegState::Define);
-
-      buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[i+4]);
-
+      emitScratchLoad(MBB, MBBI, operandOne, i, I8085::A);
+      emitScratchAddr(MBB, MBBI, operandTwo, i);
       if(i>0) buildMI(MBB, MBBI, I8085::ADC_M);
       else buildMI(MBB, MBBI, I8085::ADD_M);
-
-      buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[i+index]);
-      buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::A);
-  }            
+      emitScratchStore(MBB, MBBI, destReg, i, I8085::A);
+  }
 
   MI.eraseFromParent();
   return true;
@@ -849,9 +724,6 @@ template <> bool I8085ExpandPseudo32::expand<I8085::SUBI_32>(Block &MBB, BlockIt
   unsigned operandOne = MI.getOperand(1).getReg();
   unsigned destReg = operandOne; 
   uint64_t immToAdd = MI.getOperand(2).getImm();
-  
-  int address[]={0x0040,0x0041,0x0042,0x0043,0x0044,0x0045,0x0046,0x0047};
-  int index = 0;
 
   uint8_t nibbleOne = immToAdd & 0x000000FF  ;
   uint8_t nibbleTwo = (immToAdd >> 8) & 0x000000FF  ;
@@ -859,26 +731,17 @@ template <> bool I8085ExpandPseudo32::expand<I8085::SUBI_32>(Block &MBB, BlockIt
   uint8_t nibbleFour = (immToAdd >> 24) & 0x000000FF  ;
 
   uint8_t values[]={nibbleOne,nibbleTwo,nibbleThree,nibbleFour};
-
-  if(destReg==I8085::IBX){  
-    index=4; 
-  }
-
   
   for(int i=0;i<4;i++){
-      buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[i]);
-      buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::A,RegState::Define);
-
+      emitScratchLoad(MBB, MBBI, operandOne, i, I8085::A);
       if(i>0){ 
         buildMI(MBB, MBBI, I8085::SBI).addImm(values[i]);
       }
       else {
         buildMI(MBB, MBBI, I8085::SUI).addImm(values[i]);
       }
-
-      buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[i+index]);
-      buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::A);
-  }            
+      emitScratchStore(MBB, MBBI, destReg, i, I8085::A);
+  }
 
   MI.eraseFromParent();
   return true;
@@ -892,26 +755,13 @@ template <> bool I8085ExpandPseudo32::expand<I8085::SUB_32>(Block &MBB, BlockIt 
   unsigned destReg = operandOne; 
   unsigned operandTwo = MI.getOperand(2).getReg();
   
-  int address[]={0x0040,0x0041,0x0042,0x0043,0x0044,0x0045,0x0046,0x0047};
-  int indexOne = 0,indexTwo=4;
-
-  if(destReg==I8085::IBX){  
-    indexOne=4;
-    indexTwo=0;
-  }
-  
   for(int i=0;i<4;i++){
-      buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[i+indexOne]);
-      buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::A,RegState::Define);
-
-      buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[i+indexTwo]);
-
+      emitScratchLoad(MBB, MBBI, operandOne, i, I8085::A);
+      emitScratchAddr(MBB, MBBI, operandTwo, i);
       if(i>0) buildMI(MBB, MBBI, I8085::SBB_M);
       else buildMI(MBB, MBBI, I8085::SUB_M);
-
-      buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[i+indexOne]);
-      buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::A);
-  }            
+      emitScratchStore(MBB, MBBI, destReg, i, I8085::A);
+  }
 
   MI.eraseFromParent();
   return true;
@@ -925,9 +775,6 @@ template <> bool I8085ExpandPseudo32::expand<I8085::ADDI_32>(Block &MBB, BlockIt
   unsigned operandOne = MI.getOperand(1).getReg();
   unsigned destReg = operandOne; 
   uint64_t immToAdd = MI.getOperand(2).getImm();
-  
-  int address[]={0x0040,0x0041,0x0042,0x0043,0x0044,0x0045,0x0046,0x0047};
-  int index = 0;
 
   uint8_t nibbleOne = immToAdd & 0x000000FF  ;
   uint8_t nibbleTwo = (immToAdd >> 8) & 0x000000FF  ;
@@ -935,26 +782,17 @@ template <> bool I8085ExpandPseudo32::expand<I8085::ADDI_32>(Block &MBB, BlockIt
   uint8_t nibbleFour = (immToAdd >> 24) & 0x000000FF  ;
 
   uint8_t values[]={nibbleOne,nibbleTwo,nibbleThree,nibbleFour};
-
-  if(destReg==I8085::IBX){  
-    index=4; 
-  }
-
   
   for(int i=0;i<4;i++){
-      buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[i]);
-      buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::A,RegState::Define);
-
+      emitScratchLoad(MBB, MBBI, operandOne, i, I8085::A);
       if(i>0){ 
         buildMI(MBB, MBBI, I8085::ACI).addImm(values[i]);
       }
       else {
         buildMI(MBB, MBBI, I8085::ADI).addImm(values[i]);
       }
-
-      buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[i+index]);
-      buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::A);
-  }            
+      emitScratchStore(MBB, MBBI, destReg, i, I8085::A);
+  }
 
   MI.eraseFromParent();
   return true;
@@ -965,22 +803,14 @@ template <> bool I8085ExpandPseudo32::expand<I8085::LOAD_32_WITH_ADDR>(Block &MB
   MachineInstr &MI = *MBBI;
 
   unsigned destReg = MI.getOperand(0).getReg();
-  unsigned baseReg = MI.getOperand(1).getReg();
   uint16_t offsetToLoad = MI.getOperand(2).getImm();
-  
-  int address[]={0x0040,0x0041,0x0042,0x0043,0x0044,0x0045,0x0046,0x0047};
-  int index = 0;
-
-  if(destReg==I8085::IBX){  index=4; }
-
   
   for(int i=0;i<4;i++){
       buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(offsetToLoad+i);
       buildMI(MBB, MBBI, I8085::DAD).addReg(I8085::SP);
       buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::A,RegState::Define);
-      buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[i+index]);
-      buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::A);
-  }            
+      emitScratchStore(MBB, MBBI, destReg, i, I8085::A);
+  }
 
   MI.eraseFromParent();
   return true;
@@ -992,9 +822,6 @@ template <> bool I8085ExpandPseudo32::expand<I8085::LOAD_32>(Block &MBB, BlockIt
 
   unsigned destReg = MI.getOperand(0).getReg();
   uint64_t immToLoad = MI.getOperand(1).getImm();
-  
-  int address[]={0x0040,0x0041,0x0042,0x0043,0x0044,0x0045,0x0046,0x0047};
-  int index = 0;
 
   uint8_t nibbleOne = immToLoad & 0x000000FF  ;
   uint8_t nibbleTwo = (immToLoad >> 8) & 0x000000FF  ;
@@ -1002,14 +829,11 @@ template <> bool I8085ExpandPseudo32::expand<I8085::LOAD_32>(Block &MBB, BlockIt
   uint8_t nibbleFour = (immToLoad >> 24) & 0x000000FF  ;
 
   uint8_t values[]={nibbleOne,nibbleTwo,nibbleThree,nibbleFour};
-
-  if(destReg==I8085::IBX){  index=4; }
-  
   
   for(int i=0;i<4;i++){
-      buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[i+index]);
+      emitScratchAddr(MBB, MBBI, destReg, i);
       buildMI(MBB, MBBI, I8085::MVI_M).addImm(values[i]);
-  }            
+  }
 
   MI.eraseFromParent();
   return true;
@@ -1026,13 +850,10 @@ template <> bool I8085ExpandPseudo32::expand<I8085::JMP_32_IF_NOT_EQUAL>(Block &
 
   unsigned operandOne = MI.getOperand(0).getReg();
   unsigned operandTwo = MI.getOperand(1).getReg();
-  
-  int address[]={0x0040,0x0041,0x0042,0x0043,0x0044,0x0045,0x0046,0x0047};
 
   for(int i=0;i<4;i++){
-      buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[i+4]);
-      buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::A, RegState::Define);
-      buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[i]);
+      emitScratchLoad(MBB, MBBI, operandTwo, i, I8085::A);
+      emitScratchAddr(MBB, MBBI, operandOne, i);
       buildMI(MBB, MBBI, I8085::CMP_M);
       buildMI(MBB, MBBI, I8085::JNZ).addMBB(MI.getOperand(2).getMBB());
   }            
@@ -1049,15 +870,8 @@ template <> bool I8085ExpandPseudo32::expand<I8085::JMP_32_IF_SAME_SIGN>(Block &
   unsigned operandOne = MI.getOperand(0).getReg();
   unsigned operandTwo = MI.getOperand(1).getReg();
   
-  int address[]={0x0040,0x0041,0x0042,0x0043,0x0044,0x0045,0x0046,0x0047};
-  int index = 0;
-
-
-  buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[4]);
-  buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::A, RegState::Define);
-
-  buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[0]);
-
+  emitScratchLoad(MBB, MBBI, operandTwo, 3, I8085::A);
+  emitScratchAddr(MBB, MBBI, operandOne, 3);
   buildMI(MBB, MBBI, I8085::XRA_M);
   buildMI(MBB, MBBI, I8085::ANI).addImm(128);  
   buildMI(MBB, MBBI, I8085::JZ).addMBB(MI.getOperand(2).getMBB());
@@ -1072,14 +886,7 @@ template <> bool I8085ExpandPseudo32::expand<I8085::JMP_32_IF_POSITIVE>(Block &M
 
   unsigned operandOne = MI.getOperand(0).getReg();
   
-  int address[]={0x0040,0x0041,0x0042,0x0043,0x0044,0x0045,0x0046,0x0047};
-  int higherByteIndex = 3;
-
-  if(operandOne==I8085::IBX){  higherByteIndex=7; }
-
-
-  buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[higherByteIndex]);
-  buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::A, RegState::Define);
+  emitScratchLoad(MBB, MBBI, operandOne, 3, I8085::A);
   buildMI(MBB, MBBI, I8085::ANI).addImm(128);  
   buildMI(MBB, MBBI, I8085::JZ).addMBB(MI.getOperand(1).getMBB());
         
@@ -1095,22 +902,12 @@ template <> bool I8085ExpandPseudo32::expand<I8085::STORE_32_AT_OFFSET_WITH_SP>(
   unsigned srcReg = MI.getOperand(0).getReg();
   unsigned offsetToStore = MI.getOperand(1).getImm();
   
-  int address[]={0x0040,0x0041,0x0042,0x0043,0x0044,0x0045,0x0046,0x0047};
-  int index = 0;
-
-  if(srcReg==I8085::IBX){  
-    index=4; 
-  }
-
-  
   for(int i=0;i<4;i++){
-      buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[i+index]);
-      buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::A,RegState::Define);
-
+      emitScratchLoad(MBB, MBBI, srcReg, i, I8085::A);
       buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(offsetToStore+i);
       buildMI(MBB, MBBI, I8085::DAD).addReg(I8085::SP);
       buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::A);
-  }            
+  }
 
   MI.eraseFromParent();
   return true;
@@ -1124,19 +921,12 @@ template <> bool I8085ExpandPseudo32::expand<I8085::LOAD_32_OFFSET_WITH_SP>(Bloc
   unsigned destReg = MI.getOperand(0).getReg();
   uint16_t offsetToLoad = MI.getOperand(1).getImm();
   
-  int address[]={0x0040,0x0041,0x0042,0x0043,0x0044,0x0045,0x0046,0x0047};
-  int index = 0;
-
-  if(destReg==I8085::IBX){  index=4; }
-
-  
   for(int i=0;i<4;i++){
       buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(offsetToLoad+i);
       buildMI(MBB, MBBI, I8085::DAD).addReg(I8085::SP);
       buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::A,RegState::Define);
-      buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[i+index]);
-      buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::A);
-  }            
+      emitScratchStore(MBB, MBBI, destReg, i, I8085::A);
+  }
 
   MI.eraseFromParent();
   return true;
@@ -1150,21 +940,14 @@ template <> bool I8085ExpandPseudo32::expand<I8085::LOAD_32_WITH_IMM_ADDR>(Block
 
   const MachineOperand &AddrMO = MI.getOperand(1);
   
-  int address[]={0x0040,0x0041,0x0042,0x0043,0x0044,0x0045,0x0046,0x0047};
-  int index = 0;
-
-  if(destReg==I8085::IBX){  index=4; }
-
-  
   for(int i=0;i<4;i++){
       MachineInstrBuilder Addr =
           buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL, RegState::Define);
       addAddrOperand(Addr, AddrMO, i);
       buildMI(MBB, MBBI, I8085::DAD).addReg(I8085::SP);
       buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::A,RegState::Define);
-      buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[i+index]);
-      buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::A);
-  }            
+      emitScratchStore(MBB, MBBI, destReg, i, I8085::A);
+  }
 
   MI.eraseFromParent();
   return true;
@@ -1194,11 +977,6 @@ template <> bool I8085ExpandPseudo32::expand<I8085::LOAD_32_ADDR_CONTENT>(Block 
     }
   }
 
-  int address[]={0x0040,0x0041,0x0042,0x0043,0x0044,0x0045,0x0046,0x0047};
-  int index = 0;
-
-  if(destReg==I8085::IBX){  index=4; }
-
   if (!haveAddr)
     return false;
 
@@ -1216,8 +994,7 @@ template <> bool I8085ExpandPseudo32::expand<I8085::LOAD_32_ADDR_CONTENT>(Block 
 
       buildMI(MBB, MBBI,  I8085::MOV_FROM_M).addReg(I8085::A,RegState::Define);
 
-      buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[i+index]);
-      buildMI(MBB, MBBI,  I8085::MOV_M).addReg(I8085::A);
+      emitScratchStore(MBB, MBBI, destReg, i, I8085::A);
   }            
 
   MI.eraseFromParent();

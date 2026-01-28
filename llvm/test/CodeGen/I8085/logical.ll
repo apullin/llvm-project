@@ -4,10 +4,16 @@ define i8 @functionone(i8,i8) {
 ; CHECK-LABEL:   functionone: 
 ; CHECK: LXI H, 3
 ; CHECK: DAD	SP
-; CHECK: MOV B, M
+; CHECK: MOV B, H
+; CHECK: MOV C, L
+; CHECK: LDAX B
+; CHECK: MOV B, A
 ; CHECK: LXI H, 2
 ; CHECK: DAD	SP
-; CHECK: MOV C, M
+; CHECK: MOV D, H
+; CHECK: MOV E, L
+; CHECK: LDAX D
+; CHECK: MOV C, A
 ; CHECK: MOV	D, C
 ; CHECK: MOV	A, D
 ; CHECK: XRA B
@@ -28,38 +34,63 @@ define i8 @functionone(i8,i8) {
 
 define i16 @functiontwo(i16,i16) {
 ; CHECK-LABEL:   functiontwo:
-; CHECK: LXI H, 5
+; CHECK: LXI H, 65534
 ; CHECK: DAD SP
-; CHECK: MOV D, M
-; CHECK: LXI H, 4
+; CHECK: SPHL
+; CHECK: LXI H, 6
 ; CHECK: DAD SP
-; CHECK: MOV E, M
-; CHECK: LXI H, 3
-; CHECK: DAD SP
-; CHECK: MOV H, M
-; CHECK: LXI H, 2
-; CHECK: DAD SP
-; CHECK: MOV L, M
 ; CHECK: MOV B, H
 ; CHECK: MOV C, L
+; CHECK: MOV H, B
+; CHECK: MOV L, C
+; CHECK: MOV C, M
+; CHECK: INX H
+; CHECK: MOV B, M
+; CHECK: LXI H, 1
+; CHECK: DAD SP
+; CHECK: MOV M, B
+; CHECK: LXI H, 0
+; CHECK: DAD SP
+; CHECK: MOV M, C
+; CHECK: LXI H, 4
+; CHECK: DAD SP
+; CHECK: MOV B, H
+; CHECK: MOV C, L
+; CHECK: LDAX B
+; CHECK: MOV E, A
+; CHECK: INX B
+; CHECK: LDAX B
+; CHECK: MOV D, A
+; CHECK: DCX B
+; CHECK: MOV B, D
+; CHECK: MOV C, E
+; CHECK: LXI H, 0
+; CHECK: DAD SP
+; CHECK: MOV A, M
+; CHECK: INX H
+; CHECK: MOV H, M
+; CHECK: MOV L, A
 ; CHECK: MOV A, C
-; CHECK: XRA E
+; CHECK: XRA L
 ; CHECK: MOV C, A
 ; CHECK: MOV A, B
-; CHECK: XRA D
+; CHECK: XRA H
 ; CHECK: MOV B, A
 ; CHECK: MOV A, C
-; CHECK: ANA E
+; CHECK: ANA L
 ; CHECK: MOV C, A
 ; CHECK: MOV A, B
-; CHECK: ANA D
+; CHECK: ANA H
 ; CHECK: MOV B, A
 ; CHECK: MOV A, C
-; CHECK: ORA L
+; CHECK: ORA E
 ; CHECK: MOV C, A
 ; CHECK: MOV A, B
-; CHECK: ORA H
+; CHECK: ORA D
 ; CHECK: MOV B, A
+; CHECK: LXI H, 2
+; CHECK: DAD SP
+; CHECK: SPHL
 ; CHECK: RET
 
   %3 = xor i16 %0, %1 
@@ -72,10 +103,16 @@ define i8 @functionthree(i8,i8) {
 ; CHECK-LABEL:   functionthree: 
 ; CHECK: LXI H, 3
 ; CHECK: DAD	SP
-; CHECK: MOV C, M
+; CHECK: MOV B, H
+; CHECK: MOV C, L
+; CHECK: LDAX B
+; CHECK: MOV C, A
 ; CHECK: LXI H, 2
 ; CHECK: DAD	SP
-; CHECK: MOV B, M
+; CHECK: MOV D, H
+; CHECK: MOV E, L
+; CHECK: LDAX D
+; CHECK: MOV B, A
 ; CHECK: MOV	A, B
 ; CHECK: XRA C
 ; CHECK: MOV	B, A
@@ -99,18 +136,25 @@ define i8 @functionthree(i8,i8) {
 
 define i16 @functionfour(i16,i16) {
 ; CHECK-LABEL:   functionfour:     
-; CHECK: LXI H, 5
-; CHECK: DAD	SP
-; CHECK: MOV D, M
 ; CHECK: LXI H, 4
 ; CHECK: DAD	SP
-; CHECK: MOV E, M
-; CHECK: LXI H, 3
-; CHECK: DAD	SP
-; CHECK: MOV B, M
+; CHECK: MOV B, H
+; CHECK: MOV C, L
+; CHECK: LDAX B
+; CHECK: MOV E, A
+; CHECK: INX B
+; CHECK: LDAX B
+; CHECK: MOV D, A
+; CHECK: DCX B
 ; CHECK: LXI H, 2
 ; CHECK: DAD	SP
+; CHECK: MOV B, H
+; CHECK: MOV C, L
+; CHECK: MOV H, B
+; CHECK: MOV L, C
 ; CHECK: MOV C, M
+; CHECK: INX H
+; CHECK: MOV B, M
 ; CHECK: MOV	A, C
 ; CHECK: XRA E
 ; CHECK: MOV	C, A

@@ -1143,20 +1143,28 @@ template <> bool I8085ExpandPseudo::expand<I8085::SUB_16>(Block &MBB, BlockIt MB
   unsigned operandOne = MI.getOperand(1).getReg();
   unsigned operandTwo = MI.getOperand(2).getReg();  
   bool DstIsDead=MI.getOperand(0).isDead();
+  unsigned workReg = destReg;
+  bool copyBack = false;
   unsigned opLow,opHigh;
   unsigned destLow,destHigh;
 
-  if (!getPairRegs(destReg, destLow, destHigh))
+  if (destReg == operandTwo && destReg != operandOne) {
+    workReg = operandOne;
+    copyBack = true;
+  }
+
+  if (!getPairRegs(workReg, destLow, destHigh))
     return false;
-  if (destReg != operandOne) {
-    buildMI(MBB, MBBI, TargetOpcode::COPY, destReg)
+  if (workReg != operandOne) {
+    buildMI(MBB, MBBI, TargetOpcode::COPY, workReg)
         .addReg(operandOne);
   }
   if (!getPairRegs(operandTwo, opLow, opHigh))
     return false;
+  bool WorkIsDead = DstIsDead && !copyBack;
   
   buildMI(MBB, MBBI, I8085::SUB_8)
-      .addReg(destLow, RegState::Define | getDeadRegState(DstIsDead))
+      .addReg(destLow, RegState::Define | getDeadRegState(WorkIsDead))
       .addReg(destLow)
       .addReg(opLow);
   
@@ -1168,8 +1176,13 @@ template <> bool I8085ExpandPseudo::expand<I8085::SUB_16>(Block &MBB, BlockIt MB
       .addReg(opHigh);
 
   buildMI(MBB, MBBI, I8085::MOV)
-      .addReg(destHigh, RegState::Define | getDeadRegState(DstIsDead))
+      .addReg(destHigh, RegState::Define | getDeadRegState(WorkIsDead))
       .addReg(I8085::A);
+
+  if (copyBack) {
+    buildMI(MBB, MBBI, TargetOpcode::COPY, destReg)
+        .addReg(workReg);
+  }
 
   MI.eraseFromParent();
   return true;

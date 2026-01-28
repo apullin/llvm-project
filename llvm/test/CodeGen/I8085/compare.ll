@@ -54,7 +54,10 @@ define i8 @cmp_ult_i16(i16 %a, i16 %b) {
 ; CHECK-LABEL: cmp_ult_i16:
 ; CHECK: MOV A, E
 ; CHECK: SUB C
+; CHECK: MOV E, A
+; CHECK: MOV A, D
 ; CHECK: SBB B
+; CHECK: MOV D, A
 ; CHECK: JC
 ; CHECK: MVI B, 0
 ; CHECK: MVI B, 1

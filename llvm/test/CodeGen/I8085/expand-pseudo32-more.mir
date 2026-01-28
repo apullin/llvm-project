@@ -26,8 +26,7 @@ body:             |
     ; CHECK: $hl = LXI 0
     ; CHECK-NEXT: DAD $sp
     ; CHECK-NEXT: $c = MOV_FROM_M
-    ; CHECK: $hl = LXI 1
-    ; CHECK-NEXT: DAD $sp
+    ; CHECK-NEXT: $hl = INX
     ; CHECK-NEXT: $b = MOV_FROM_M
     $bc = TRUNC32TO16 $iax
     RET
@@ -52,18 +51,15 @@ body:             |
   bb.0:
     liveins: $bc
     ; CHECK-LABEL: name:            zext16to32_iax
-    ; CHECK: $hl = LXI 3
-    ; CHECK-NEXT: DAD $sp
-    ; CHECK-NEXT: MVI_M 0
-    ; CHECK: $hl = LXI 2
-    ; CHECK-NEXT: DAD $sp
-    ; CHECK-NEXT: MVI_M 0
-    ; CHECK: $hl = LXI 1
-    ; CHECK-NEXT: DAD $sp
-    ; CHECK-NEXT: MOV_M $b
     ; CHECK: $hl = LXI 0
     ; CHECK-NEXT: DAD $sp
     ; CHECK-NEXT: MOV_M $c
+    ; CHECK-NEXT: $hl = INX
+    ; CHECK-NEXT: MOV_M $b
+    ; CHECK-NEXT: $hl = INX
+    ; CHECK-NEXT: MVI_M 0
+    ; CHECK-NEXT: $hl = INX
+    ; CHECK-NEXT: MVI_M 0
     $iax = ZEXT16TO32 $bc
     RET
 ...
@@ -77,16 +73,14 @@ body:             |
     ; CHECK: $hl = LXI 0
     ; CHECK-NEXT: DAD $sp
     ; CHECK-NEXT: MOV_M $c
-    ; CHECK: $hl = LXI 1
-    ; CHECK-NEXT: DAD $sp
+    ; CHECK-NEXT: $hl = INX
     ; CHECK-NEXT: MOV_M $b
     ; CHECK: ADI 128
     ; CHECK: SBB $a
-    ; CHECK: $hl = LXI 3
-    ; CHECK-NEXT: DAD $sp
-    ; CHECK-NEXT: MOV_M $a
     ; CHECK: $hl = LXI 2
     ; CHECK-NEXT: DAD $sp
+    ; CHECK-NEXT: MOV_M $a
+    ; CHECK-NEXT: $hl = INX
     ; CHECK-NEXT: MOV_M $a
     $iax = SEXT16TO32 $bc
     RET
@@ -98,18 +92,15 @@ body:             |
   bb.0:
     liveins: $c
     ; CHECK-LABEL: name:            zext8to32_iax
-    ; CHECK: $hl = LXI 3
-    ; CHECK-NEXT: DAD $sp
-    ; CHECK-NEXT: MVI_M 0
-    ; CHECK: $hl = LXI 2
-    ; CHECK-NEXT: DAD $sp
-    ; CHECK-NEXT: MVI_M 0
-    ; CHECK: $hl = LXI 1
-    ; CHECK-NEXT: DAD $sp
-    ; CHECK-NEXT: MVI_M 0
     ; CHECK: $hl = LXI 0
     ; CHECK-NEXT: DAD $sp
     ; CHECK-NEXT: MOV_M $c
+    ; CHECK-NEXT: $hl = INX
+    ; CHECK-NEXT: MVI_M 0
+    ; CHECK-NEXT: $hl = INX
+    ; CHECK-NEXT: MVI_M 0
+    ; CHECK-NEXT: $hl = INX
+    ; CHECK-NEXT: MVI_M 0
     $iax = ZEXT8TO32 $c
     RET
 ...
@@ -125,14 +116,12 @@ body:             |
     ; CHECK-NEXT: MOV_M $c
     ; CHECK: ADI 128
     ; CHECK: SBB $a
-    ; CHECK: $hl = LXI 3
-    ; CHECK-NEXT: DAD $sp
-    ; CHECK-NEXT: MOV_M $a
-    ; CHECK: $hl = LXI 2
-    ; CHECK-NEXT: DAD $sp
-    ; CHECK-NEXT: MOV_M $a
     ; CHECK: $hl = LXI 1
     ; CHECK-NEXT: DAD $sp
+    ; CHECK-NEXT: MOV_M $a
+    ; CHECK-NEXT: $hl = INX
+    ; CHECK-NEXT: MOV_M $a
+    ; CHECK-NEXT: $hl = INX
     ; CHECK-NEXT: MOV_M $a
     $iax = SEXT8TO32 $c
     RET

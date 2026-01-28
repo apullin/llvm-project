@@ -23,9 +23,9 @@ body:             |
   bb.0:
     liveins: $iax
     ; CHECK-LABEL: name:            trunc32to16_bc
-    ; CHECK: $hl = LXI 11
+    ; CHECK: $hl = LXI 64
     ; CHECK-NEXT: $c = MOV_FROM_M
-    ; CHECK: $hl = LXI 12
+    ; CHECK: $hl = LXI 65
     ; CHECK-NEXT: $b = MOV_FROM_M
     $bc = TRUNC32TO16 $iax
     RET
@@ -37,7 +37,7 @@ body:             |
   bb.0:
     liveins: $iax
     ; CHECK-LABEL: name:            trunc32to8_c
-    ; CHECK: $hl = LXI 11
+    ; CHECK: $hl = LXI 64
     ; CHECK-NEXT: $c = MOV_FROM_M
     $c = TRUNC32TO8 $iax
     RET
@@ -49,13 +49,13 @@ body:             |
   bb.0:
     liveins: $bc
     ; CHECK-LABEL: name:            zext16to32_iax
-    ; CHECK: $hl = LXI 14
+    ; CHECK: $hl = LXI 67
     ; CHECK-NEXT: MVI_M 0
-    ; CHECK: $hl = LXI 13
+    ; CHECK: $hl = LXI 66
     ; CHECK-NEXT: MVI_M 0
-    ; CHECK: $hl = LXI 12
+    ; CHECK: $hl = LXI 65
     ; CHECK-NEXT: MOV_M $b
-    ; CHECK: $hl = LXI 11
+    ; CHECK: $hl = LXI 64
     ; CHECK-NEXT: MOV_M $c
     $iax = ZEXT16TO32 $bc
     RET
@@ -67,15 +67,15 @@ body:             |
   bb.0:
     liveins: $bc
     ; CHECK-LABEL: name:            sext16to32_iax
-    ; CHECK: $hl = LXI 11
+    ; CHECK: $hl = LXI 64
     ; CHECK-NEXT: MOV_M $c
-    ; CHECK: $hl = LXI 12
+    ; CHECK: $hl = LXI 65
     ; CHECK-NEXT: MOV_M $b
     ; CHECK: ADI 128
     ; CHECK: SBB $a
-    ; CHECK: $hl = LXI 14
+    ; CHECK: $hl = LXI 67
     ; CHECK-NEXT: MOV_M $a
-    ; CHECK: $hl = LXI 13
+    ; CHECK: $hl = LXI 66
     ; CHECK-NEXT: MOV_M $a
     $iax = SEXT16TO32 $bc
     RET
@@ -87,13 +87,13 @@ body:             |
   bb.0:
     liveins: $c
     ; CHECK-LABEL: name:            zext8to32_iax
-    ; CHECK: $hl = LXI 14
+    ; CHECK: $hl = LXI 67
     ; CHECK-NEXT: MVI_M 0
-    ; CHECK: $hl = LXI 13
+    ; CHECK: $hl = LXI 66
     ; CHECK-NEXT: MVI_M 0
-    ; CHECK: $hl = LXI 12
+    ; CHECK: $hl = LXI 65
     ; CHECK-NEXT: MVI_M 0
-    ; CHECK: $hl = LXI 11
+    ; CHECK: $hl = LXI 64
     ; CHECK-NEXT: MOV_M $c
     $iax = ZEXT8TO32 $c
     RET
@@ -105,15 +105,15 @@ body:             |
   bb.0:
     liveins: $c
     ; CHECK-LABEL: name:            sext8to32_iax
-    ; CHECK: $hl = LXI 11
+    ; CHECK: $hl = LXI 64
     ; CHECK-NEXT: MOV_M $c
     ; CHECK: ADI 128
     ; CHECK: SBB $a
-    ; CHECK: $hl = LXI 14
+    ; CHECK: $hl = LXI 67
     ; CHECK-NEXT: MOV_M $a
-    ; CHECK: $hl = LXI 13
+    ; CHECK: $hl = LXI 66
     ; CHECK-NEXT: MOV_M $a
-    ; CHECK: $hl = LXI 12
+    ; CHECK: $hl = LXI 65
     ; CHECK-NEXT: MOV_M $a
     $iax = SEXT8TO32 $c
     RET
@@ -128,7 +128,7 @@ body:             |
     ; CHECK: $h = MOV $b
     ; CHECK-NEXT: $l = MOV $c
     ; CHECK-NEXT: $a = MOV_FROM_M
-    ; CHECK: $hl = LXI 11
+    ; CHECK: $hl = LXI 64
     ; CHECK-NEXT: MOV_M $a
     $iax = LOAD_32_ADDR_CONTENT $bc, implicit $sp
     RET
@@ -140,7 +140,7 @@ body:             |
   bb.0:
     liveins: $bc, $iax, $sp
     ; CHECK-LABEL: name:            store32_addr_content_bc
-    ; CHECK: $hl = LXI 11
+    ; CHECK: $hl = LXI 64
     ; CHECK-NEXT: $a = MOV_FROM_M
     ; CHECK: $h = MOV $b
     ; CHECK-NEXT: $l = MOV $c
@@ -196,7 +196,7 @@ body:             |
     ; CHECK: $hl = LXI 8
     ; CHECK-NEXT: DAD $sp
     ; CHECK-NEXT: $a = MOV_FROM_M
-    ; CHECK: $hl = LXI 11
+    ; CHECK: $hl = LXI 64
     ; CHECK-NEXT: MOV_M $a
     $iax = LOAD_32_OFFSET_WITH_SP 8, implicit $sp
     RET
@@ -208,20 +208,26 @@ body:             |
   bb.0:
     liveins: $sp, $iax
     ; CHECK-LABEL: name:            store32_offset_sp
-    ; CHECK: $hl = LXI 11
+    ; CHECK: $hl = LXI 64
     ; CHECK-NEXT: $a = MOV_FROM_M
     ; CHECK: $hl = LXI 12
-    ; CHECK: DAD $sp
-    ; CHECK: MOV_M $a
+    ; CHECK-NEXT: DAD $sp
+    ; CHECK-NEXT: MOV_M $a
+    ; CHECK: $hl = LXI 65
+    ; CHECK-NEXT: $a = MOV_FROM_M
     ; CHECK: $hl = LXI 13
-    ; CHECK: DAD $sp
-    ; CHECK: MOV_M $a
+    ; CHECK-NEXT: DAD $sp
+    ; CHECK-NEXT: MOV_M $a
+    ; CHECK: $hl = LXI 66
+    ; CHECK-NEXT: $a = MOV_FROM_M
     ; CHECK: $hl = LXI 14
-    ; CHECK: DAD $sp
-    ; CHECK: MOV_M $a
+    ; CHECK-NEXT: DAD $sp
+    ; CHECK-NEXT: MOV_M $a
+    ; CHECK: $hl = LXI 67
+    ; CHECK-NEXT: $a = MOV_FROM_M
     ; CHECK: $hl = LXI 15
-    ; CHECK: DAD $sp
-    ; CHECK: MOV_M $a
+    ; CHECK-NEXT: DAD $sp
+    ; CHECK-NEXT: MOV_M $a
     STORE_32_AT_OFFSET_WITH_SP $iax, 12, implicit $sp
     RET
 ...

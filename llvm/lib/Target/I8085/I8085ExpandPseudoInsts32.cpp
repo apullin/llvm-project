@@ -22,6 +22,7 @@
 #include "llvm/CodeGen/MachineRegisterInfo.h"
 #include "llvm/CodeGen/RegisterScavenging.h"
 #include "llvm/CodeGen/TargetRegisterInfo.h"
+#include "llvm/CodeGen/TargetOpcodes.h"
 #include <stdint.h>
 
 #include <iostream>
@@ -139,6 +140,30 @@ bool I8085ExpandPseudo32::runOnMachineFunction(MachineFunction &MF) {
   // We need to track liveness in order to use register scavenging.
   MF.getProperties().set(MachineFunctionProperties::Property::TracksLiveness);
 
+  auto UsesPhysReg = [&](unsigned Reg) {
+    for (auto &MBB : MF) {
+      for (auto &MI : MBB) {
+        for (auto &MO : MI.operands()) {
+          if (MO.isReg() && MO.getReg() == Reg)
+            return true;
+        }
+      }
+    }
+    return false;
+  };
+
+  bool UsesIAX = UsesPhysReg(I8085::IAX);
+  bool UsesIBX = UsesPhysReg(I8085::IBX);
+  if (UsesIAX || UsesIBX) {
+    MachineBasicBlock &Entry = MF.front();
+    auto InsertPt = Entry.begin();
+    DebugLoc DL = (InsertPt != Entry.end()) ? InsertPt->getDebugLoc() : DebugLoc();
+    if (UsesIAX)
+      BuildMI(Entry, InsertPt, DL, TII->get(TargetOpcode::IMPLICIT_DEF), I8085::IAX);
+    if (UsesIBX)
+      BuildMI(Entry, InsertPt, DL, TII->get(TargetOpcode::IMPLICIT_DEF), I8085::IBX);
+  }
+
   for (Block &MBB : MF) {
     bool ContinueExpanding = true;
     unsigned ExpandCount = 0;
@@ -155,6 +180,23 @@ bool I8085ExpandPseudo32::runOnMachineFunction(MachineFunction &MF) {
     } while (ContinueExpanding);
   }
 
+  for (Block &MBB : MF) {
+    for (auto MBBI = MBB.begin(), E = MBB.end(); MBBI != E; ) {
+      auto *MI = &*MBBI++;
+      if (!MI->getDesc().isReturn())
+        continue;
+
+      bool UsesIAX = (MI->findRegisterUseOperandIdx(I8085::IAX, TRI) != -1);
+      bool UsesIBX = (MI->findRegisterUseOperandIdx(I8085::IBX, TRI) != -1);
+      if (UsesIAX)
+        BuildMI(MBB, MI, MI->getDebugLoc(),
+                TII->get(TargetOpcode::IMPLICIT_DEF), I8085::IAX);
+      if (UsesIBX)
+        BuildMI(MBB, MI, MI->getDebugLoc(),
+                TII->get(TargetOpcode::IMPLICIT_DEF), I8085::IBX);
+    }
+  }
+
   return Modified;
 }
 
@@ -166,7 +208,7 @@ bool I8085ExpandPseudo32::binOperationWithImmediateOperand(unsigned opCode, Bloc
   unsigned destReg = operandOne; 
   uint64_t immToAdd = MI.getOperand(2).getImm();
   
-  int address[]={11,12,13,14,15,16,17,18};
+  int address[]={0x0040,0x0041,0x0042,0x0043,0x0044,0x0045,0x0046,0x0047};
   int index = 0;
 
   uint8_t nibbleOne = immToAdd & 0x000000FF  ;
@@ -203,7 +245,7 @@ bool I8085ExpandPseudo32::binOperation(unsigned opCode, Block &MBB, BlockIt MBBI
   unsigned destReg = operandOne; 
   unsigned operandTwo = MI.getOperand(2).getReg();
   
-  int address[]={11,12,13,14,15,16,17,18};
+  int address[]={0x0040,0x0041,0x0042,0x0043,0x0044,0x0045,0x0046,0x0047};
   int index = 0;
 
   if(destReg==I8085::IBX){  
@@ -253,7 +295,7 @@ template <> bool I8085ExpandPseudo32::expand<I8085::RR_32>(Block &MBB, BlockIt M
 
   unsigned srcReg = MI.getOperand(0).getReg();
   
-  int address[]={11,12,13,14,15,16,17,18};
+  int address[]={0x0040,0x0041,0x0042,0x0043,0x0044,0x0045,0x0046,0x0047};
   int index = 0;
 
   if(srcReg==I8085::IBX){
@@ -284,7 +326,7 @@ template <> bool I8085ExpandPseudo32::expand<I8085::ASR_32>(Block &MBB, BlockIt 
 
   unsigned srcReg = MI.getOperand(0).getReg();
   
-  int address[]={11,12,13,14,15,16,17,18};
+  int address[]={0x0040,0x0041,0x0042,0x0043,0x0044,0x0045,0x0046,0x0047};
   int index = 0;
 
   if(srcReg==I8085::IBX){
@@ -319,7 +361,7 @@ template <> bool I8085ExpandPseudo32::expand<I8085::STORE_32_ADDR_CONTENT>(Block
   unsigned addrReg = MI.getOperand(0).getReg();
   unsigned srcReg = MI.getOperand(1).getReg();
 
-  int address[]={11,12,13,14,15,16,17,18};
+  int address[]={0x0040,0x0041,0x0042,0x0043,0x0044,0x0045,0x0046,0x0047};
   int index = 0;
 
   if(srcReg==I8085::IBX){
@@ -390,7 +432,7 @@ template <> bool I8085ExpandPseudo32::expand<I8085::RL_32>(Block &MBB, BlockIt M
 
   unsigned srcReg = MI.getOperand(0).getReg();
   
-  int address[]={11,12,13,14,15,16,17,18};
+  int address[]={0x0040,0x0041,0x0042,0x0043,0x0044,0x0045,0x0046,0x0047};
   int index = 0;
 
   if(srcReg==I8085::IBX){
@@ -423,7 +465,7 @@ template <> bool I8085ExpandPseudo32::expand<I8085::SEXT32_INREG_8>(Block &MBB, 
 
   unsigned srcReg = MI.getOperand(0).getReg();
   
-  int address[]={11,12,13,14,15,16,17,18};
+  int address[]={0x0040,0x0041,0x0042,0x0043,0x0044,0x0045,0x0046,0x0047};
   int index = 0;
 
   if(srcReg==I8085::IBX){
@@ -458,7 +500,7 @@ template <> bool I8085ExpandPseudo32::expand<I8085::SEXT32_INREG_16>(Block &MBB,
 
   unsigned srcReg = MI.getOperand(0).getReg();
   
-  int address[]={11,12,13,14,15,16,17,18};
+  int address[]={0x0040,0x0041,0x0042,0x0043,0x0044,0x0045,0x0046,0x0047};
   int index = 0;
 
   if(srcReg==I8085::IBX){
@@ -499,7 +541,7 @@ template <> bool I8085ExpandPseudo32::expand<I8085::TRUNC32TO16>(Block &MBB, Blo
   if(destReg==I8085::HL){  destLow=I8085::L;  destHigh=I8085::H; }
 
   
-  int address[]={11,12,13,14,15,16,17,18};
+  int address[]={0x0040,0x0041,0x0042,0x0043,0x0044,0x0045,0x0046,0x0047};
   int index = 0;
 
   if(srcReg==I8085::IBX){
@@ -541,7 +583,7 @@ template <> bool I8085ExpandPseudo32::expand<I8085::SEXT16TO32>(Block &MBB, Bloc
   }
 
   
-  int address[]={11,12,13,14,15,16,17,18};
+  int address[]={0x0040,0x0041,0x0042,0x0043,0x0044,0x0045,0x0046,0x0047};
   int index = 0;
 
   if(destReg==I8085::IBX){  
@@ -586,7 +628,7 @@ template <> bool I8085ExpandPseudo32::expand<I8085::ZEXT16TO32>(Block &MBB, Bloc
   if(srcReg==I8085::HL){  opOneLow=I8085::L;  opOneHigh=I8085::H; }
 
   
-  int address[]={11,12,13,14,15,16,17,18};
+  int address[]={0x0040,0x0041,0x0042,0x0043,0x0044,0x0045,0x0046,0x0047};
   int index = 0;
 
   if(destReg==I8085::IBX){  
@@ -619,7 +661,7 @@ template <> bool I8085ExpandPseudo32::expand<I8085::TRUNC32TO8>(Block &MBB, Bloc
   unsigned destReg = MI.getOperand(0).getReg();
   unsigned srcReg = MI.getOperand(1).getReg();
   
-  int address[]={11,12,13,14,15,16,17,18};
+  int address[]={0x0040,0x0041,0x0042,0x0043,0x0044,0x0045,0x0046,0x0047};
   int index = 0;
 
   if(srcReg==I8085::IBX){
@@ -641,7 +683,7 @@ template <> bool I8085ExpandPseudo32::expand<I8085::SEXT8TO32>(Block &MBB, Block
   unsigned destReg = MI.getOperand(0).getReg();
   unsigned srcReg = MI.getOperand(1).getReg();
   
-  int address[]={11,12,13,14,15,16,17,18};
+  int address[]={0x0040,0x0041,0x0042,0x0043,0x0044,0x0045,0x0046,0x0047};
   int index = 0;
 
   if(destReg==I8085::IBX){  
@@ -680,7 +722,7 @@ template <> bool I8085ExpandPseudo32::expand<I8085::ZEXT8TO32>(Block &MBB, Block
   unsigned srcReg = MI.getOperand(1).getReg();
 
   
-  int address[]={11,12,13,14,15,16,17,18};
+  int address[]={0x0040,0x0041,0x0042,0x0043,0x0044,0x0045,0x0046,0x0047};
   int index = 0;
 
   if(destReg==I8085::IBX){  
@@ -712,7 +754,7 @@ template <> bool I8085ExpandPseudo32::expand<I8085::MOV_32>(Block &MBB, BlockIt 
   unsigned destReg = MI.getOperand(0).getReg();
   unsigned srcReg = MI.getOperand(1).getReg();
   
-  int address[]={11,12,13,14,15,16,17,18};
+  int address[]={0x0040,0x0041,0x0042,0x0043,0x0044,0x0045,0x0046,0x0047};
 
   if(srcReg==I8085::IBX){ 
           for(int i=0;i<4;i++){
@@ -746,7 +788,7 @@ template <> bool I8085ExpandPseudo32::expand<I8085::STORE_32>(Block &MBB, BlockI
 
   unsigned srcReg = MI.getOperand(2).getReg();
   
-  int address[]={11,12,13,14,15,16,17,18};
+  int address[]={0x0040,0x0041,0x0042,0x0043,0x0044,0x0045,0x0046,0x0047};
   int index = 0;
 
   if(srcReg==I8085::IBX){  
@@ -776,7 +818,7 @@ template <> bool I8085ExpandPseudo32::expand<I8085::ADD_32>(Block &MBB, BlockIt 
   unsigned destReg = operandOne; 
   unsigned operandTwo = MI.getOperand(2).getReg();
   
-  int address[]={11,12,13,14,15,16,17,18};
+  int address[]={0x0040,0x0041,0x0042,0x0043,0x0044,0x0045,0x0046,0x0047};
   int index = 0;
 
   if(destReg==I8085::IBX){  
@@ -808,7 +850,7 @@ template <> bool I8085ExpandPseudo32::expand<I8085::SUBI_32>(Block &MBB, BlockIt
   unsigned destReg = operandOne; 
   uint64_t immToAdd = MI.getOperand(2).getImm();
   
-  int address[]={11,12,13,14,15,16,17,18};
+  int address[]={0x0040,0x0041,0x0042,0x0043,0x0044,0x0045,0x0046,0x0047};
   int index = 0;
 
   uint8_t nibbleOne = immToAdd & 0x000000FF  ;
@@ -850,7 +892,7 @@ template <> bool I8085ExpandPseudo32::expand<I8085::SUB_32>(Block &MBB, BlockIt 
   unsigned destReg = operandOne; 
   unsigned operandTwo = MI.getOperand(2).getReg();
   
-  int address[]={11,12,13,14,15,16,17,18};
+  int address[]={0x0040,0x0041,0x0042,0x0043,0x0044,0x0045,0x0046,0x0047};
   int indexOne = 0,indexTwo=4;
 
   if(destReg==I8085::IBX){  
@@ -884,7 +926,7 @@ template <> bool I8085ExpandPseudo32::expand<I8085::ADDI_32>(Block &MBB, BlockIt
   unsigned destReg = operandOne; 
   uint64_t immToAdd = MI.getOperand(2).getImm();
   
-  int address[]={11,12,13,14,15,16,17,18};
+  int address[]={0x0040,0x0041,0x0042,0x0043,0x0044,0x0045,0x0046,0x0047};
   int index = 0;
 
   uint8_t nibbleOne = immToAdd & 0x000000FF  ;
@@ -926,7 +968,7 @@ template <> bool I8085ExpandPseudo32::expand<I8085::LOAD_32_WITH_ADDR>(Block &MB
   unsigned baseReg = MI.getOperand(1).getReg();
   uint16_t offsetToLoad = MI.getOperand(2).getImm();
   
-  int address[]={11,12,13,14,15,16,17,18};
+  int address[]={0x0040,0x0041,0x0042,0x0043,0x0044,0x0045,0x0046,0x0047};
   int index = 0;
 
   if(destReg==I8085::IBX){  index=4; }
@@ -951,7 +993,7 @@ template <> bool I8085ExpandPseudo32::expand<I8085::LOAD_32>(Block &MBB, BlockIt
   unsigned destReg = MI.getOperand(0).getReg();
   uint64_t immToLoad = MI.getOperand(1).getImm();
   
-  int address[]={11,12,13,14,15,16,17,18};
+  int address[]={0x0040,0x0041,0x0042,0x0043,0x0044,0x0045,0x0046,0x0047};
   int index = 0;
 
   uint8_t nibbleOne = immToLoad & 0x000000FF  ;
@@ -985,7 +1027,7 @@ template <> bool I8085ExpandPseudo32::expand<I8085::JMP_32_IF_NOT_EQUAL>(Block &
   unsigned operandOne = MI.getOperand(0).getReg();
   unsigned operandTwo = MI.getOperand(1).getReg();
   
-  int address[]={11,12,13,14,15,16,17,18};
+  int address[]={0x0040,0x0041,0x0042,0x0043,0x0044,0x0045,0x0046,0x0047};
 
   for(int i=0;i<4;i++){
       buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(address[i+4]);
@@ -1007,7 +1049,7 @@ template <> bool I8085ExpandPseudo32::expand<I8085::JMP_32_IF_SAME_SIGN>(Block &
   unsigned operandOne = MI.getOperand(0).getReg();
   unsigned operandTwo = MI.getOperand(1).getReg();
   
-  int address[]={11,12,13,14,15,16,17,18};
+  int address[]={0x0040,0x0041,0x0042,0x0043,0x0044,0x0045,0x0046,0x0047};
   int index = 0;
 
 
@@ -1030,7 +1072,7 @@ template <> bool I8085ExpandPseudo32::expand<I8085::JMP_32_IF_POSITIVE>(Block &M
 
   unsigned operandOne = MI.getOperand(0).getReg();
   
-  int address[]={11,12,13,14,15,16,17,18};
+  int address[]={0x0040,0x0041,0x0042,0x0043,0x0044,0x0045,0x0046,0x0047};
   int higherByteIndex = 3;
 
   if(operandOne==I8085::IBX){  higherByteIndex=7; }
@@ -1053,7 +1095,7 @@ template <> bool I8085ExpandPseudo32::expand<I8085::STORE_32_AT_OFFSET_WITH_SP>(
   unsigned srcReg = MI.getOperand(0).getReg();
   unsigned offsetToStore = MI.getOperand(1).getImm();
   
-  int address[]={11,12,13,14,15,16,17,18};
+  int address[]={0x0040,0x0041,0x0042,0x0043,0x0044,0x0045,0x0046,0x0047};
   int index = 0;
 
   if(srcReg==I8085::IBX){  
@@ -1082,7 +1124,7 @@ template <> bool I8085ExpandPseudo32::expand<I8085::LOAD_32_OFFSET_WITH_SP>(Bloc
   unsigned destReg = MI.getOperand(0).getReg();
   uint16_t offsetToLoad = MI.getOperand(1).getImm();
   
-  int address[]={11,12,13,14,15,16,17,18};
+  int address[]={0x0040,0x0041,0x0042,0x0043,0x0044,0x0045,0x0046,0x0047};
   int index = 0;
 
   if(destReg==I8085::IBX){  index=4; }
@@ -1108,7 +1150,7 @@ template <> bool I8085ExpandPseudo32::expand<I8085::LOAD_32_WITH_IMM_ADDR>(Block
 
   const MachineOperand &AddrMO = MI.getOperand(1);
   
-  int address[]={11,12,13,14,15,16,17,18};
+  int address[]={0x0040,0x0041,0x0042,0x0043,0x0044,0x0045,0x0046,0x0047};
   int index = 0;
 
   if(destReg==I8085::IBX){  index=4; }
@@ -1152,7 +1194,7 @@ template <> bool I8085ExpandPseudo32::expand<I8085::LOAD_32_ADDR_CONTENT>(Block 
     }
   }
 
-  int address[]={11,12,13,14,15,16,17,18};
+  int address[]={0x0040,0x0041,0x0042,0x0043,0x0044,0x0045,0x0046,0x0047};
   int index = 0;
 
   if(destReg==I8085::IBX){  index=4; }

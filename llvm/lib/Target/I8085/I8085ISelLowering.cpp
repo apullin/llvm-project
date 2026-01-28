@@ -1089,6 +1089,26 @@ SDValue I8085TargetLowering::LowerCallResult(
     const SmallVectorImpl<ISD::InputArg> &Ins, const SDLoc &dl,
     SelectionDAG &DAG, SmallVectorImpl<SDValue> &InVals) const {
 
+  bool IsI64 =
+      (!Ins.empty() && Ins[0].VT == MVT::i64) ||
+      (Ins.size() == 2 && Ins[0].VT == MVT::i32 && Ins[1].VT == MVT::i32 &&
+       (Ins[0].Flags.isSplit() || Ins[1].Flags.isSplit())) ||
+      (Ins.size() == 2 &&
+       Ins[0].VT == MVT::i32 && Ins[1].VT == MVT::i32);
+
+  if (IsI64) {
+    SDValue Lo = DAG.getCopyFromReg(Chain, dl, I8085::IAX, MVT::i32, InFlag);
+    Chain = Lo.getValue(1);
+    InFlag = Lo.getValue(2);
+    SDValue Hi = DAG.getCopyFromReg(Chain, dl, I8085::IBX, MVT::i32, InFlag);
+    Chain = Hi.getValue(1);
+    InFlag = Hi.getValue(2);
+
+    InVals.push_back(Lo.getValue(0));
+    InVals.push_back(Hi.getValue(0));
+    return Chain;
+  }
+
   // Assign locations to each value returned by this call.
   SmallVector<CCValAssign, 16> RVLocs;
   CCState CCInfo(CallConv, isVarArg, DAG.getMachineFunction(), RVLocs,
@@ -1146,6 +1166,14 @@ bool I8085TargetLowering::CanLowerReturn(
     CallingConv::ID CallConv, MachineFunction &MF, bool isVarArg,
     const SmallVectorImpl<ISD::OutputArg> &Outs, LLVMContext &Context) const {
   if (CallConv == CallingConv::I8085_BUILTIN) {
+    for (const auto &Out : Outs) {
+      if (Out.VT == MVT::i64 || Out.Flags.isSplit())
+        return true;
+    }
+    if (Outs.size() == 2 && Outs[0].VT == MVT::i32 &&
+        Outs[1].VT == MVT::i32) {
+      return true;
+    }
     SmallVector<CCValAssign, 16> RVLocs;
     CCState CCInfo(CallConv, isVarArg, MF, RVLocs, Context);
     return CCInfo.CheckReturn(Outs, RetCC_I8085_BUILTIN);
@@ -1170,6 +1198,49 @@ I8085TargetLowering::LowerReturn(SDValue Chain, CallingConv::ID CallConv,
                  *DAG.getContext());
 
   MachineFunction &MF = DAG.getMachineFunction();
+
+  if (MF.getFunction().getAttributes().hasFnAttr(Attribute::Naked)) {
+    return Chain;
+  }
+
+  bool IsI64 =
+      (!Outs.empty() && Outs[0].VT == MVT::i64) ||
+      (Outs.size() == 2 && Outs[0].VT == MVT::i32 && Outs[1].VT == MVT::i32 &&
+       (Outs[0].Flags.isSplit() || Outs[1].Flags.isSplit())) ||
+      (Outs.size() == 2 && OutVals.size() == 2 &&
+       OutVals[0].getValueType() == MVT::i32 &&
+       OutVals[1].getValueType() == MVT::i32);
+
+  if (IsI64) {
+    SDValue Lo;
+    SDValue Hi;
+    if (Outs.size() == 2) {
+      Lo = OutVals[0];
+      Hi = OutVals[1];
+    } else {
+      SDValue Val = OutVals[0];
+      Lo = DAG.getNode(ISD::TRUNCATE, dl, MVT::i32, Val);
+      Hi = DAG.getNode(
+          ISD::TRUNCATE, dl, MVT::i32,
+          DAG.getNode(ISD::SRL, dl, MVT::i64, Val,
+                      DAG.getConstant(32, dl, MVT::i64)));
+    }
+
+    SDValue Flag;
+    Chain = DAG.getCopyToReg(Chain, dl, I8085::IAX, Lo, Flag);
+    Flag = Chain.getValue(1);
+    Chain = DAG.getCopyToReg(Chain, dl, I8085::IBX, Hi, Flag);
+    Flag = Chain.getValue(1);
+
+    SmallVector<SDValue, 4> RetOps;
+    RetOps.push_back(Chain);
+    RetOps.push_back(DAG.getRegister(I8085::IAX, MVT::i32));
+    RetOps.push_back(DAG.getRegister(I8085::IBX, MVT::i32));
+    if (Flag.getNode())
+      RetOps.push_back(Flag);
+
+    return DAG.getNode(I8085ISD::RET_FLAG, dl, MVT::Other, RetOps);
+  }
 
   CCInfo.AnalyzeReturn(Outs, RetCC_I8085_BUILTIN);
 
@@ -1212,12 +1283,6 @@ I8085TargetLowering::LowerReturn(SDValue Chain, CallingConv::ID CallConv,
 
     return DAG.getNode(RetOpc, dl, MVT::Other, RetOps); 
     }
-  }
-
-  // Don't emit the ret/reti instruction when the naked attribute is present in
-  // the function being compiled.
-  if (MF.getFunction().getAttributes().hasFnAttr(Attribute::Naked)) {
-    return Chain;
   }
 
   const I8085MachineFunctionInfo *AFI = MF.getInfo<I8085MachineFunctionInfo>();

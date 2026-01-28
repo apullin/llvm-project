@@ -35,6 +35,15 @@
 
 namespace llvm {
 
+static void addBranchToSingleSuccessor(MachineBasicBlock *MBB, const DebugLoc &DL,
+                                       const I8085InstrInfo &TII) {
+  if (MBB->succ_size() != 1)
+    return;
+  auto Last = MBB->getLastNonDebugInstr();
+  if (Last != MBB->end() && Last->isTerminator())
+    return;
+  BuildMI(MBB, DL, TII.get(I8085::JMP)).addMBB(*MBB->succ_begin());
+}
 
 MachineBasicBlock *I8085TargetLowering::insertCond8Set(MachineInstr &MI,
                                                   MachineBasicBlock *MBB) const {
@@ -212,6 +221,7 @@ MachineBasicBlock *I8085TargetLowering::insertSigned8Cond(MachineInstr &MI,
                   std::next(MachineBasicBlock::iterator(MI)), MBB->end());
 
   continMBB->transferSuccessorsAndUpdatePHIs(MBB);
+  addBranchToSingleSuccessor(continMBB, dl, TII);
 
   unsigned operandOne = MI.getOperand(1).getReg();
   unsigned operandTwo = MI.getOperand(2).getReg();
@@ -330,6 +340,7 @@ MachineBasicBlock *I8085TargetLowering::insertDifferentSigned8Cond(MachineInstr 
                   std::next(MachineBasicBlock::iterator(MI)), MBB->end());
 
   continMBB->transferSuccessorsAndUpdatePHIs(MBB);
+  addBranchToSingleSuccessor(continMBB, dl, TII);
 
   unsigned operandOne = MI.getOperand(1).getReg();
   
@@ -793,6 +804,7 @@ MachineBasicBlock *I8085TargetLowering::insertDifferentSignedCond16Set(MachineIn
   MF->insert(I, continMBB);
   MF->insert(I, firstOperandPos);
   MF->insert(I, firstOperandNeg);
+  MF->RenumberBlocks(MBB);
 
   // Transfer remaining instructions and all successors of the current
   // block to the block which will contain the Phi node for the
@@ -801,6 +813,7 @@ MachineBasicBlock *I8085TargetLowering::insertDifferentSignedCond16Set(MachineIn
                   std::next(MachineBasicBlock::iterator(MI)), MBB->end());
 
   continMBB->transferSuccessorsAndUpdatePHIs(MBB);
+  addBranchToSingleSuccessor(continMBB, dl, TII);
 
   unsigned operandOne = MI.getOperand(1).getReg();
   

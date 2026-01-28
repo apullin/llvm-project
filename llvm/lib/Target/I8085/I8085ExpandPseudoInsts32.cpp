@@ -22,6 +22,7 @@
 #include "llvm/CodeGen/MachineFunctionPass.h"
 #include "llvm/CodeGen/MachineInstrBuilder.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
+#include "llvm/CodeGen/LivePhysRegs.h"
 #include "llvm/CodeGen/RegisterScavenging.h"
 #include "llvm/CodeGen/TargetRegisterInfo.h"
 #include "llvm/CodeGen/TargetFrameLowering.h"
@@ -73,8 +74,12 @@ private:
   bool binOperation(unsigned opCode, Block &MBB, BlockIt MBBI);
   int64_t getScratchOffset(unsigned Reg, int ByteIndex) const;
   void emitScratchAddr(Block &MBB, BlockIt MBBI, unsigned Reg, int ByteIndex);
+  void emitScratchAddr(Block &MBB, const DebugLoc &DL, unsigned Reg,
+                       int ByteIndex);
   void emitScratchLoad(Block &MBB, BlockIt MBBI, unsigned Reg, int ByteIndex,
                        unsigned DestReg);
+  void emitScratchLoad(Block &MBB, const DebugLoc &DL, unsigned Reg,
+                       int ByteIndex, unsigned DestReg);
   void emitScratchStore(Block &MBB, BlockIt MBBI, unsigned Reg, int ByteIndex,
                         unsigned SrcReg);
   void emitScratchAdvance(Block &MBB, BlockIt MBBI, int Delta);
@@ -148,11 +153,28 @@ void I8085ExpandPseudo32::emitScratchAddr(Block &MBB, BlockIt MBBI,
   buildMI(MBB, MBBI, I8085::DAD).addReg(I8085::SP);
 }
 
+void I8085ExpandPseudo32::emitScratchAddr(Block &MBB, const DebugLoc &DL,
+                                          unsigned Reg, int ByteIndex) {
+  int64_t Offset = getScratchOffset(Reg, ByteIndex);
+  BuildMI(&MBB, DL, TII->get(I8085::LXI))
+      .addReg(I8085::HL, RegState::Define)
+      .addImm(Offset);
+  BuildMI(&MBB, DL, TII->get(I8085::DAD)).addReg(I8085::SP);
+}
+
 void I8085ExpandPseudo32::emitScratchLoad(Block &MBB, BlockIt MBBI,
                                           unsigned Reg, int ByteIndex,
                                           unsigned DestReg) {
   emitScratchAddr(MBB, MBBI, Reg, ByteIndex);
   buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(DestReg, RegState::Define);
+}
+
+void I8085ExpandPseudo32::emitScratchLoad(Block &MBB, const DebugLoc &DL,
+                                          unsigned Reg, int ByteIndex,
+                                          unsigned DestReg) {
+  emitScratchAddr(MBB, DL, Reg, ByteIndex);
+  BuildMI(&MBB, DL, TII->get(I8085::MOV_FROM_M))
+      .addReg(DestReg, RegState::Define);
 }
 
 void I8085ExpandPseudo32::emitScratchStore(Block &MBB, BlockIt MBBI,
@@ -173,16 +195,15 @@ void I8085ExpandPseudo32::emitScratchAdvance(Block &MBB, BlockIt MBBI,
 }
 
 bool I8085ExpandPseudo32::expandMBB(MachineBasicBlock &MBB) {
-  bool Modified = false;
-
-  BlockIt MBBI = MBB.begin(), E = MBB.end();
-  while (MBBI != E) {
-    BlockIt NMBBI = std::next(MBBI);
-    Modified |= expandMI(MBB, MBBI);
-    MBBI = NMBBI;
+  for (BlockIt MBBI = MBB.begin(), E = MBB.end(); MBBI != E; ) {
+    // Some expansions splice instructions into new blocks, which can invalidate
+    // iterators. Restart the scan after any successful expansion.
+    if (expandMI(MBB, MBBI))
+      return true;
+    MBBI = std::next(MBBI);
   }
 
-  return Modified;
+  return false;
 }
 
 bool I8085ExpandPseudo32::runOnMachineFunction(MachineFunction &MF) {
@@ -250,15 +271,15 @@ bool I8085ExpandPseudo32::runOnMachineFunction(MachineFunction &MF) {
   for (Block &MBB : MF) {
     bool ContinueExpanding = true;
     unsigned ExpandCount = 0;
+    unsigned MaxExpansions = static_cast<unsigned>(MBB.size()) + 16;
 
     // Continue expanding the block until all pseudos are expanded.
     do {
-      assert(ExpandCount < 10 && "pseudo expand limit reached");
+      if (ExpandCount++ >= MaxExpansions)
+        report_fatal_error("I8085 pseudo expand limit reached");
 
       bool BlockModified = expandMBB(MBB);
       Modified |= BlockModified;
-      ExpandCount++;
-
       ContinueExpanding = BlockModified;
     } while (ContinueExpanding);
   }
@@ -284,7 +305,6 @@ bool I8085ExpandPseudo32::runOnMachineFunction(MachineFunction &MF) {
 }
 
 bool I8085ExpandPseudo32::binOperationWithImmediateOperand(unsigned opCode, Block &MBB, BlockIt MBBI) {
-  const I8085Subtarget &STI = MBB.getParent()->getSubtarget<I8085Subtarget>();
   MachineInstr &MI = *MBBI;
 
   unsigned operandOne = MI.getOperand(1).getReg();
@@ -306,7 +326,6 @@ bool I8085ExpandPseudo32::binOperationWithImmediateOperand(unsigned opCode, Bloc
 }
 
 bool I8085ExpandPseudo32::binOperation(unsigned opCode, Block &MBB, BlockIt MBBI) {
-  const I8085Subtarget &STI = MBB.getParent()->getSubtarget<I8085Subtarget>();
   MachineInstr &MI = *MBBI;
 
   unsigned operandOne = MI.getOperand(1).getReg();
@@ -346,7 +365,6 @@ template <> bool I8085ExpandPseudo32::expand<I8085::ANDI_32>(Block &MBB, BlockIt
 
 
 template <> bool I8085ExpandPseudo32::expand<I8085::RR_32>(Block &MBB, BlockIt MBBI) {
-  const I8085Subtarget &STI = MBB.getParent()->getSubtarget<I8085Subtarget>();
   MachineInstr &MI = *MBBI;
 
   unsigned srcReg = MI.getOperand(0).getReg();
@@ -465,7 +483,6 @@ template <> bool I8085ExpandPseudo32::expand<I8085::STORE_32_ADDR_CONTENT>(Block
 
 
 template <> bool I8085ExpandPseudo32::expand<I8085::RL_32>(Block &MBB, BlockIt MBBI) {
-  const I8085Subtarget &STI = MBB.getParent()->getSubtarget<I8085Subtarget>();
   MachineInstr &MI = *MBBI;
 
   unsigned srcReg = MI.getOperand(0).getReg();
@@ -493,7 +510,6 @@ template <> bool I8085ExpandPseudo32::expand<I8085::RL_32>(Block &MBB, BlockIt M
 
 
 template <> bool I8085ExpandPseudo32::expand<I8085::SEXT32_INREG_8>(Block &MBB, BlockIt MBBI) {
-  const I8085Subtarget &STI = MBB.getParent()->getSubtarget<I8085Subtarget>();
   MachineInstr &MI = *MBBI;
 
   unsigned srcReg = MI.getOperand(0).getReg();
@@ -518,7 +534,6 @@ template <> bool I8085ExpandPseudo32::expand<I8085::SEXT32_INREG_8>(Block &MBB, 
 
 
 template <> bool I8085ExpandPseudo32::expand<I8085::SEXT32_INREG_16>(Block &MBB, BlockIt MBBI) {
-  const I8085Subtarget &STI = MBB.getParent()->getSubtarget<I8085Subtarget>();
   MachineInstr &MI = *MBBI;
 
   unsigned srcReg = MI.getOperand(0).getReg();
@@ -543,7 +558,6 @@ template <> bool I8085ExpandPseudo32::expand<I8085::SEXT32_INREG_16>(Block &MBB,
 
 
 template <> bool I8085ExpandPseudo32::expand<I8085::TRUNC32TO16>(Block &MBB, BlockIt MBBI) {
-  const I8085Subtarget &STI = MBB.getParent()->getSubtarget<I8085Subtarget>();
   MachineInstr &MI = *MBBI;
 
   unsigned destReg = MI.getOperand(0).getReg();
@@ -570,28 +584,21 @@ template <> bool I8085ExpandPseudo32::expand<I8085::TRUNC32TO16>(Block &MBB, Blo
 }
 
 template <> bool I8085ExpandPseudo32::expand<I8085::SEXT16TO32>(Block &MBB, BlockIt MBBI) {
-  const I8085Subtarget &STI = MBB.getParent()->getSubtarget<I8085Subtarget>();
   MachineInstr &MI = *MBBI;
 
   unsigned destReg = MI.getOperand(0).getReg();
   unsigned srcReg = MI.getOperand(1).getReg();
 
-  bool addrIsSP = (srcReg == I8085::SP);
   unsigned opOneLow = 0, opOneHigh = 0;
-  bool haveAddr = true;
-  if (!addrIsSP) {
-    if (srcReg == I8085::BC) {
-      opOneLow = I8085::C;
-      opOneHigh = I8085::B;
-    } else if (srcReg == I8085::DE) {
-      opOneLow = I8085::E;
-      opOneHigh = I8085::D;
-    } else if (srcReg == I8085::HL) {
-      opOneLow = I8085::L;
-      opOneHigh = I8085::H;
-    } else {
-      haveAddr = false;
-    }
+  if (srcReg == I8085::BC) {
+    opOneLow = I8085::C;
+    opOneHigh = I8085::B;
+  } else if (srcReg == I8085::DE) {
+    opOneLow = I8085::E;
+    opOneHigh = I8085::D;
+  } else if (srcReg == I8085::HL) {
+    opOneLow = I8085::L;
+    opOneHigh = I8085::H;
   }
 
   emitScratchAddr(MBB, MBBI, destReg, 0);
@@ -618,7 +625,6 @@ template <> bool I8085ExpandPseudo32::expand<I8085::SEXT16TO32>(Block &MBB, Bloc
 
 
 template <> bool I8085ExpandPseudo32::expand<I8085::ZEXT16TO32>(Block &MBB, BlockIt MBBI) {
-  const I8085Subtarget &STI = MBB.getParent()->getSubtarget<I8085Subtarget>();
   MachineInstr &MI = *MBBI;
 
   unsigned destReg = MI.getOperand(0).getReg();
@@ -650,7 +656,6 @@ template <> bool I8085ExpandPseudo32::expand<I8085::AEXT16TO32>(Block &MBB, Bloc
 
 
 template <> bool I8085ExpandPseudo32::expand<I8085::TRUNC32TO8>(Block &MBB, BlockIt MBBI) {
-  const I8085Subtarget &STI = MBB.getParent()->getSubtarget<I8085Subtarget>();
   MachineInstr &MI = *MBBI;
 
   unsigned destReg = MI.getOperand(0).getReg();
@@ -663,7 +668,6 @@ template <> bool I8085ExpandPseudo32::expand<I8085::TRUNC32TO8>(Block &MBB, Bloc
 
 
 template <> bool I8085ExpandPseudo32::expand<I8085::SEXT8TO32>(Block &MBB, BlockIt MBBI) {
-  const I8085Subtarget &STI = MBB.getParent()->getSubtarget<I8085Subtarget>();
   MachineInstr &MI = *MBBI;
 
   unsigned destReg = MI.getOperand(0).getReg();
@@ -693,7 +697,6 @@ template <> bool I8085ExpandPseudo32::expand<I8085::SEXT8TO32>(Block &MBB, Block
 
 
 template <> bool I8085ExpandPseudo32::expand<I8085::ZEXT8TO32>(Block &MBB, BlockIt MBBI) {
-  const I8085Subtarget &STI = MBB.getParent()->getSubtarget<I8085Subtarget>();
   MachineInstr &MI = *MBBI;
 
   unsigned destReg = MI.getOperand(0).getReg();
@@ -717,7 +720,6 @@ template <> bool I8085ExpandPseudo32::expand<I8085::AEXT8TO32>(Block &MBB, Block
 }
 
 template <> bool I8085ExpandPseudo32::expand<I8085::MOV_32>(Block &MBB, BlockIt MBBI) {
-  const I8085Subtarget &STI = MBB.getParent()->getSubtarget<I8085Subtarget>();
   MachineInstr &MI = *MBBI;
 
   unsigned destReg = MI.getOperand(0).getReg();
@@ -732,7 +734,6 @@ template <> bool I8085ExpandPseudo32::expand<I8085::MOV_32>(Block &MBB, BlockIt 
 }
 
 template <> bool I8085ExpandPseudo32::expand<I8085::STORE_32>(Block &MBB, BlockIt MBBI) {
-  const I8085Subtarget &STI = MBB.getParent()->getSubtarget<I8085Subtarget>();
   MachineInstr &MI = *MBBI;
 
   unsigned offsetToStore = MI.getOperand(1).getImm();
@@ -752,7 +753,6 @@ template <> bool I8085ExpandPseudo32::expand<I8085::STORE_32>(Block &MBB, BlockI
 
 
 template <> bool I8085ExpandPseudo32::expand<I8085::ADD_32>(Block &MBB, BlockIt MBBI) {
-  const I8085Subtarget &STI = MBB.getParent()->getSubtarget<I8085Subtarget>();
   MachineInstr &MI = *MBBI;
 
   unsigned operandOne = MI.getOperand(1).getReg();
@@ -772,11 +772,9 @@ template <> bool I8085ExpandPseudo32::expand<I8085::ADD_32>(Block &MBB, BlockIt 
 }
 
 template <> bool I8085ExpandPseudo32::expand<I8085::SUBI_32>(Block &MBB, BlockIt MBBI) {
-  const I8085Subtarget &STI = MBB.getParent()->getSubtarget<I8085Subtarget>();
   MachineInstr &MI = *MBBI;
 
   unsigned operandOne = MI.getOperand(1).getReg();
-  unsigned destReg = operandOne; 
   uint64_t immToAdd = MI.getOperand(2).getImm();
 
   auto values = splitImm32(immToAdd);
@@ -798,7 +796,6 @@ template <> bool I8085ExpandPseudo32::expand<I8085::SUBI_32>(Block &MBB, BlockIt
 }
 
 template <> bool I8085ExpandPseudo32::expand<I8085::SUB_32>(Block &MBB, BlockIt MBBI) {
-  const I8085Subtarget &STI = MBB.getParent()->getSubtarget<I8085Subtarget>();
   MachineInstr &MI = *MBBI;
 
   unsigned operandOne = MI.getOperand(1).getReg();
@@ -819,11 +816,9 @@ template <> bool I8085ExpandPseudo32::expand<I8085::SUB_32>(Block &MBB, BlockIt 
 
 
 template <> bool I8085ExpandPseudo32::expand<I8085::ADDI_32>(Block &MBB, BlockIt MBBI) {
-  const I8085Subtarget &STI = MBB.getParent()->getSubtarget<I8085Subtarget>();
   MachineInstr &MI = *MBBI;
 
   unsigned operandOne = MI.getOperand(1).getReg();
-  unsigned destReg = operandOne; 
   uint64_t immToAdd = MI.getOperand(2).getImm();
 
   auto values = splitImm32(immToAdd);
@@ -845,7 +840,6 @@ template <> bool I8085ExpandPseudo32::expand<I8085::ADDI_32>(Block &MBB, BlockIt
 }
 
 template <> bool I8085ExpandPseudo32::expand<I8085::LOAD_32_WITH_ADDR>(Block &MBB, BlockIt MBBI) {
-  const I8085Subtarget &STI = MBB.getParent()->getSubtarget<I8085Subtarget>();
   MachineInstr &MI = *MBBI;
 
   unsigned destReg = MI.getOperand(0).getReg();
@@ -863,7 +857,6 @@ template <> bool I8085ExpandPseudo32::expand<I8085::LOAD_32_WITH_ADDR>(Block &MB
 }
 
 template <> bool I8085ExpandPseudo32::expand<I8085::LOAD_32>(Block &MBB, BlockIt MBBI) {
-  const I8085Subtarget &STI = MBB.getParent()->getSubtarget<I8085Subtarget>();
   MachineInstr &MI = *MBBI;
 
   unsigned destReg = MI.getOperand(0).getReg();
@@ -888,18 +881,87 @@ template <> bool I8085ExpandPseudo32::expand<I8085::MVI_32>(Block &MBB, BlockIt 
 
 
 template <> bool I8085ExpandPseudo32::expand<I8085::JMP_32_IF_NOT_EQUAL>(Block &MBB, BlockIt MBBI) {
-  const I8085Subtarget &STI = MBB.getParent()->getSubtarget<I8085Subtarget>();
   MachineInstr &MI = *MBBI;
+  MachineFunction *MF = MBB.getParent();
+  const DebugLoc &DL = MI.getDebugLoc();
 
   unsigned operandOne = MI.getOperand(0).getReg();
   unsigned operandTwo = MI.getOperand(1).getReg();
+  MachineBasicBlock *TargetMBB = MI.getOperand(2).getMBB();
 
-  for(int i=0;i<4;i++){
-      emitScratchLoad(MBB, MBBI, operandTwo, i, I8085::A);
-      emitScratchAddr(MBB, MBBI, operandOne, i);
-      buildMI(MBB, MBBI, I8085::CMP_M);
-      buildMI(MBB, MBBI, I8085::JNZ).addMBB(MI.getOperand(2).getMBB());
-  }            
+  LivePhysRegs LiveRegs(*TRI);
+  LiveRegs.addLiveOuts(MBB);
+  for (auto I = MBB.rbegin(), E = MBBI.getReverse(); I != E; ++I)
+    LiveRegs.stepBackward(*I);
+  for (const MachineOperand &MO : MI.operands()) {
+    if (!MO.isReg() || MO.isDef())
+      continue;
+    Register Reg = MO.getReg();
+    if (Reg.isPhysical())
+      LiveRegs.addReg(Reg);
+  }
+
+  const BasicBlock *LLVMBB = MBB.getBasicBlock();
+  SmallVector<MachineBasicBlock *, 3> CmpMBBs;
+  for (int i = 0; i < 3; ++i)
+    CmpMBBs.push_back(MF->CreateMachineBasicBlock(LLVMBB));
+  MachineBasicBlock *TailMBB = MF->CreateMachineBasicBlock(LLVMBB);
+  MachineBasicBlock *DiffMBB = MF->CreateMachineBasicBlock(LLVMBB);
+
+  auto InsertPos = std::next(MBB.getIterator());
+  for (MachineBasicBlock *CmpMBB : CmpMBBs)
+    MF->insert(InsertPos, CmpMBB);
+  MF->insert(InsertPos, TailMBB);
+  MF->insert(InsertPos, DiffMBB);
+  MF->RenumberBlocks(&MBB);
+
+  TailMBB->splice(TailMBB->begin(), &MBB, std::next(MBBI), MBB.end());
+  TailMBB->transferSuccessorsAndUpdatePHIs(&MBB);
+  if (TailMBB->isSuccessor(TargetMBB)) {
+    TailMBB->removeSuccessor(TargetMBB);
+    TargetMBB->replacePhiUsesWith(TailMBB, DiffMBB);
+  }
+
+  MBB.addSuccessor(CmpMBBs[0]);
+  MBB.addSuccessor(DiffMBB);
+  CmpMBBs[0]->addSuccessor(CmpMBBs[1]);
+  CmpMBBs[0]->addSuccessor(DiffMBB);
+  CmpMBBs[1]->addSuccessor(CmpMBBs[2]);
+  CmpMBBs[1]->addSuccessor(DiffMBB);
+  CmpMBBs[2]->addSuccessor(TailMBB);
+  CmpMBBs[2]->addSuccessor(DiffMBB);
+  DiffMBB->addSuccessor(TargetMBB);
+
+  addLiveIns(*CmpMBBs[0], LiveRegs);
+  addLiveIns(*CmpMBBs[1], LiveRegs);
+  addLiveIns(*CmpMBBs[2], LiveRegs);
+  addLiveIns(*TailMBB, LiveRegs);
+  addLiveIns(*DiffMBB, LiveRegs);
+
+  emitScratchLoad(MBB, MBBI, operandTwo, 0, I8085::A);
+  emitScratchAddr(MBB, MBBI, operandOne, 0);
+  buildMI(MBB, MBBI, I8085::CMP_M);
+  buildMI(MBB, MBBI, I8085::JNZ).addMBB(DiffMBB);
+  buildMI(MBB, MBBI, I8085::JMP).addMBB(CmpMBBs[0]);
+
+  for (int i = 1; i < 4; ++i) {
+    MachineBasicBlock *CurMBB = CmpMBBs[i - 1];
+    emitScratchLoad(*CurMBB, DL, operandTwo, i, I8085::A);
+    emitScratchAddr(*CurMBB, DL, operandOne, i);
+    BuildMI(CurMBB, DL, TII->get(I8085::CMP_M));
+    BuildMI(CurMBB, DL, TII->get(I8085::JNZ)).addMBB(DiffMBB);
+    MachineBasicBlock *NextMBB = (i == 3) ? TailMBB : CmpMBBs[i];
+    BuildMI(CurMBB, DL, TII->get(I8085::JMP)).addMBB(NextMBB);
+  }
+
+  BuildMI(DiffMBB, DL, TII->get(I8085::JMP)).addMBB(TargetMBB);
+
+  if (TailMBB->succ_size() == 1) {
+    auto Last = TailMBB->getLastNonDebugInstr();
+    if (Last == TailMBB->end() || !Last->isTerminator())
+      BuildMI(TailMBB, DL, TII->get(I8085::JMP))
+          .addMBB(*TailMBB->succ_begin());
+  }
 
   MI.eraseFromParent();
   return true;
@@ -907,7 +969,6 @@ template <> bool I8085ExpandPseudo32::expand<I8085::JMP_32_IF_NOT_EQUAL>(Block &
 
 
 template <> bool I8085ExpandPseudo32::expand<I8085::JMP_32_IF_SAME_SIGN>(Block &MBB, BlockIt MBBI) {
-  const I8085Subtarget &STI = MBB.getParent()->getSubtarget<I8085Subtarget>();
   MachineInstr &MI = *MBBI;
 
   unsigned operandOne = MI.getOperand(0).getReg();
@@ -924,7 +985,6 @@ template <> bool I8085ExpandPseudo32::expand<I8085::JMP_32_IF_SAME_SIGN>(Block &
 }
 
 template <> bool I8085ExpandPseudo32::expand<I8085::JMP_32_IF_POSITIVE>(Block &MBB, BlockIt MBBI) {
-  const I8085Subtarget &STI = MBB.getParent()->getSubtarget<I8085Subtarget>();
   MachineInstr &MI = *MBBI;
 
   unsigned operandOne = MI.getOperand(0).getReg();
@@ -939,7 +999,6 @@ template <> bool I8085ExpandPseudo32::expand<I8085::JMP_32_IF_POSITIVE>(Block &M
 
 
 template <> bool I8085ExpandPseudo32::expand<I8085::STORE_32_AT_OFFSET_WITH_SP>(Block &MBB, BlockIt MBBI) {
-  const I8085Subtarget &STI = MBB.getParent()->getSubtarget<I8085Subtarget>();
   MachineInstr &MI = *MBBI;
 
   unsigned srcReg = MI.getOperand(0).getReg();
@@ -958,7 +1017,6 @@ template <> bool I8085ExpandPseudo32::expand<I8085::STORE_32_AT_OFFSET_WITH_SP>(
 
 
 template <> bool I8085ExpandPseudo32::expand<I8085::LOAD_32_OFFSET_WITH_SP>(Block &MBB, BlockIt MBBI) {
-  const I8085Subtarget &STI = MBB.getParent()->getSubtarget<I8085Subtarget>();
   MachineInstr &MI = *MBBI;
 
   unsigned destReg = MI.getOperand(0).getReg();
@@ -976,7 +1034,6 @@ template <> bool I8085ExpandPseudo32::expand<I8085::LOAD_32_OFFSET_WITH_SP>(Bloc
 }
 
 template <> bool I8085ExpandPseudo32::expand<I8085::LOAD_32_WITH_IMM_ADDR>(Block &MBB, BlockIt MBBI) {
-  const I8085Subtarget &STI = MBB.getParent()->getSubtarget<I8085Subtarget>();
   MachineInstr &MI = *MBBI;
 
   unsigned destReg = MI.getOperand(0).getReg();

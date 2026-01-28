@@ -20,6 +20,7 @@
 #include "llvm/CodeGen/MachineFunctionPass.h"
 #include "llvm/CodeGen/MachineInstrBuilder.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
+#include "llvm/CodeGen/LivePhysRegs.h"
 #include "llvm/CodeGen/RegisterScavenging.h"
 #include "llvm/CodeGen/TargetRegisterInfo.h"
 #include <stdint.h>
@@ -1577,9 +1578,12 @@ template <> bool I8085ExpandPseudo::expand<I8085::JMP_16_IF>(Block &MBB, BlockIt
 
 template <> bool I8085ExpandPseudo::expand<I8085::JMP_16_IF_NOT_EQUAL>(Block &MBB, BlockIt MBBI) {
   MachineInstr &MI = *MBBI;
+  MachineFunction *MF = MBB.getParent();
+  const DebugLoc &DL = MI.getDebugLoc();
   
   unsigned operandOne = MI.getOperand(0).getReg();
   unsigned operandTwo = MI.getOperand(1).getReg();
+  MachineBasicBlock *TargetMBB = MI.getOperand(2).getMBB();
 
   unsigned opOneLow,opOneHigh;
   unsigned opTwoLow,opTwoHigh;
@@ -1588,26 +1592,68 @@ template <> bool I8085ExpandPseudo::expand<I8085::JMP_16_IF_NOT_EQUAL>(Block &MB
   if (!getPairRegs(operandTwo, opTwoLow, opTwoHigh))
     return false;
 
-  buildMI(MBB, MBBI, I8085::MOV)
-    .addReg(I8085::A,RegState::Define)
-    .addReg(opOneHigh);
+  LivePhysRegs LiveRegs(*TRI);
+  LiveRegs.addLiveOuts(MBB);
+  for (auto I = MBB.rbegin(), E = MBBI.getReverse(); I != E; ++I)
+    LiveRegs.stepBackward(*I);
+  for (const MachineOperand &MO : MI.operands()) {
+    if (!MO.isReg() || MO.isDef())
+      continue;
+    Register Reg = MO.getReg();
+    if (Reg.isPhysical())
+      LiveRegs.addReg(Reg);
+  }
 
-  buildMI(MBB, MBBI, I8085::CMP)
-    .addReg(opTwoHigh);
+  const BasicBlock *LLVMBB = MBB.getBasicBlock();
+  MachineBasicBlock *CmpLowMBB = MF->CreateMachineBasicBlock(LLVMBB);
+  MachineBasicBlock *TailMBB = MF->CreateMachineBasicBlock(LLVMBB);
+  MachineBasicBlock *DiffMBB = MF->CreateMachineBasicBlock(LLVMBB);
+  auto InsertPos = std::next(MBB.getIterator());
+  MF->insert(InsertPos, CmpLowMBB);
+  MF->insert(InsertPos, TailMBB);
+  MF->insert(InsertPos, DiffMBB);
+  MF->RenumberBlocks(&MBB);
 
-  buildMI(MBB, MBBI, I8085::JNZ)
-    .addMBB(MI.getOperand(2).getMBB());
+  TailMBB->splice(TailMBB->begin(), &MBB, std::next(MBBI), MBB.end());
+  TailMBB->transferSuccessorsAndUpdatePHIs(&MBB);
+  if (TailMBB->isSuccessor(TargetMBB)) {
+    TailMBB->removeSuccessor(TargetMBB);
+    TargetMBB->replacePhiUsesWith(TailMBB, DiffMBB);
+  }
 
-  buildMI(MBB, MBBI, I8085::MOV)
-    .addReg(I8085::A,RegState::Define)
-    .addReg(opOneLow);
+  MBB.addSuccessor(CmpLowMBB);
+  MBB.addSuccessor(DiffMBB);
+  CmpLowMBB->addSuccessor(TailMBB);
+  CmpLowMBB->addSuccessor(DiffMBB);
+  DiffMBB->addSuccessor(TargetMBB);
 
-  buildMI(MBB, MBBI, I8085::CMP)
-    .addReg(opTwoLow);
+  addLiveIns(*CmpLowMBB, LiveRegs);
+  addLiveIns(*TailMBB, LiveRegs);
+  addLiveIns(*DiffMBB, LiveRegs);
 
-  buildMI(MBB, MBBI, I8085::JNZ)
-    .addMBB(MI.getOperand(2).getMBB());
-  
+  BuildMI(MBB, MBBI, DL, TII->get(I8085::MOV))
+      .addReg(I8085::A, RegState::Define)
+      .addReg(opOneHigh);
+  BuildMI(MBB, MBBI, DL, TII->get(I8085::CMP)).addReg(opTwoHigh);
+  BuildMI(MBB, MBBI, DL, TII->get(I8085::JNZ)).addMBB(DiffMBB);
+  BuildMI(MBB, MBBI, DL, TII->get(I8085::JMP)).addMBB(CmpLowMBB);
+
+  BuildMI(CmpLowMBB, DL, TII->get(I8085::MOV))
+      .addReg(I8085::A, RegState::Define)
+      .addReg(opOneLow);
+  BuildMI(CmpLowMBB, DL, TII->get(I8085::CMP)).addReg(opTwoLow);
+  BuildMI(CmpLowMBB, DL, TII->get(I8085::JNZ)).addMBB(DiffMBB);
+  BuildMI(CmpLowMBB, DL, TII->get(I8085::JMP)).addMBB(TailMBB);
+
+  BuildMI(DiffMBB, DL, TII->get(I8085::JMP)).addMBB(TargetMBB);
+
+  if (TailMBB->succ_size() == 1) {
+    auto Last = TailMBB->getLastNonDebugInstr();
+    if (Last == TailMBB->end() || !Last->isTerminator())
+      BuildMI(TailMBB, DL, TII->get(I8085::JMP))
+          .addMBB(*TailMBB->succ_begin());
+  }
+
   MI.eraseFromParent();
   return true;
 }

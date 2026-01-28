@@ -1,0 +1,103 @@
+# RUN: llc -O0 -run-pass=i8085-expand-pseudo %s -o - | FileCheck %s
+
+--- |
+  target triple = "i8085-unknown-elf"
+  define void @grow_stack_small() { ret void }
+  define void @grow_stack_large() { ret void }
+  define void @shrink_stack_small() { ret void }
+  define void @shrink_stack_large() { ret void }
+  define void @frmidx_neg_bc() { ret void }
+  define void @frmidx_large_hl() { ret void }
+  define void @load8_sp_large() { ret void }
+...
+
+---
+name:            grow_stack_small
+body:             |
+  bb.0:
+    liveins: $sp
+    ; CHECK-LABEL: name:            grow_stack_small
+    ; CHECK: $hl = LXI 65530
+    ; CHECK-NEXT: DAD $sp
+    ; CHECK-NEXT: SPHL
+    GROW_STACK_BY 6, implicit-def $sp, implicit $sp
+    RET
+...
+
+---
+name:            grow_stack_large
+body:             |
+  bb.0:
+    liveins: $sp
+    ; CHECK-LABEL: name:            grow_stack_large
+    ; CHECK: $hl = LXI 65236
+    ; CHECK-NEXT: DAD $sp
+    ; CHECK-NEXT: SPHL
+    GROW_STACK_BY 300, implicit-def $sp, implicit $sp
+    RET
+...
+
+---
+name:            shrink_stack_small
+body:             |
+  bb.0:
+    liveins: $sp
+    ; CHECK-LABEL: name:            shrink_stack_small
+    ; CHECK: $hl = LXI 6
+    ; CHECK-NEXT: DAD $sp
+    ; CHECK-NEXT: SPHL
+    SHRINK_STACK_BY 6, implicit-def $sp, implicit $sp
+    RET
+...
+
+---
+name:            shrink_stack_large
+body:             |
+  bb.0:
+    liveins: $sp
+    ; CHECK-LABEL: name:            shrink_stack_large
+    ; CHECK: $hl = LXI 300
+    ; CHECK-NEXT: DAD $sp
+    ; CHECK-NEXT: SPHL
+    SHRINK_STACK_BY 300, implicit-def $sp, implicit $sp
+    RET
+...
+
+---
+name:            frmidx_neg_bc
+body:             |
+  bb.0:
+    liveins: $sp
+    ; CHECK-LABEL: name:            frmidx_neg_bc
+    ; CHECK: $hl = LXI -4
+    ; CHECK: DAD $sp
+    ; CHECK: $b = MOV $h
+    ; CHECK: $c = MOV $l
+    $bc = FRMIDX $sp, -4, implicit-def $sreg, implicit-def $h, implicit-def $l
+    RET
+...
+
+---
+name:            frmidx_large_hl
+body:             |
+  bb.0:
+    liveins: $sp
+    ; CHECK-LABEL: name:            frmidx_large_hl
+    ; CHECK: $hl = LXI 1024
+    ; CHECK: DAD $sp
+    $hl = FRMIDX $sp, 1024, implicit-def $sreg, implicit-def $h, implicit-def $l
+    RET
+...
+
+---
+name:            load8_sp_large
+body:             |
+  bb.0:
+    liveins: $sp
+    ; CHECK-LABEL: name:            load8_sp_large
+    ; CHECK: $hl = LXI 260
+    ; CHECK-NEXT: DAD $sp
+    ; CHECK-NEXT: $c = MOV_FROM_M
+    $c = LOAD_8_WITH_ADDR $sp, 260, implicit-def $h, implicit-def $l, implicit $sp
+    RET
+...

@@ -618,14 +618,13 @@ bool I8085ExpandPseudo::expand<I8085::SHRINK_STACK_BY>(Block &MBB, BlockIt MBBI)
   return true;
 }
 
-uint16_t twos_complement(uint16_t val) { return -(unsigned int)val;}
-
 template <>
 bool I8085ExpandPseudo::expand<I8085::GROW_STACK_BY>(Block &MBB, BlockIt MBBI) {
   const I8085Subtarget &STI = MBB.getParent()->getSubtarget<I8085Subtarget>();
   MachineInstr &MI = *MBBI;
 
-  uint16_t Amount = twos_complement((uint8_t) MI.getOperand(0).getImm());
+  int64_t AmountImm = MI.getOperand(0).getImm();
+  uint16_t Amount = static_cast<uint16_t>(-AmountImm);
   
   buildMI(MBB, MBBI,  I8085::LXI)
         .addReg(I8085::HL,RegState::Define)

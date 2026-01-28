@@ -503,6 +503,29 @@ template <> bool I8085DAGToDAGISel::select<ISD::STORE>(SDNode *N) {
     return false;
 
   SDValue BasePtr = ST->getBasePtr();
+  if (const auto *FI = dyn_cast<FrameIndexSDNode>(BasePtr)) {
+    SDLoc DL(N);
+    auto PtrVT = getTargetLowering()->getPointerTy(CurDAG->getDataLayout());
+    SDValue Base = CurDAG->getTargetFrameIndex(FI->getIndex(), PtrVT);
+    SDValue Offset = CurDAG->getTargetConstant(0, DL, MVT::i16);
+    SDValue Chain = ST->getChain();
+    SDValue StoreVal = ST->getValue();
+    if (MemVT == MVT::i16) {
+      SDValue RC = CurDAG->getTargetConstant(I8085::GR16BDRegClassID, DL, MVT::i32);
+      StoreVal = SDValue(CurDAG->getMachineNode(TargetOpcode::COPY_TO_REGCLASS,
+                                                DL, MemVT, StoreVal, RC),
+                         0);
+    }
+    unsigned Opc = (MemVT == MVT::i8) ? I8085::STORE_8
+                    : (MemVT == MVT::i16) ? I8085::STORE_16
+                                          : I8085::STORE_32;
+    SDValue Ops[] = {Base, Offset, StoreVal, Chain};
+    SDNode *ResNode = CurDAG->getMachineNode(Opc, DL, MVT::Other, Ops);
+    CurDAG->setNodeMemRefs(cast<MachineSDNode>(ResNode), {ST->getMemOperand()});
+    ReplaceUses(SDValue(N, 0), SDValue(ResNode, 0));
+    CurDAG->RemoveDeadNode(N);
+    return true;
+  }
   if (BasePtr.getOpcode() == ISD::ADD || BasePtr.getOpcode() == ISD::SUB) {
     const RegisterSDNode *RN = dyn_cast<RegisterSDNode>(BasePtr.getOperand(0));
     if (RN && RN->getReg() == I8085::SP) {
@@ -528,9 +551,17 @@ template <> bool I8085DAGToDAGISel::select<ISD::STORE>(SDNode *N) {
         return true;
       }
 
+      SDValue StoreVal = ST->getValue();
+      if (MemVT == MVT::i16) {
+        SDValue RC = CurDAG->getTargetConstant(I8085::GR16BDRegClassID, DL, MVT::i32);
+        StoreVal = SDValue(CurDAG->getMachineNode(TargetOpcode::COPY_TO_REGCLASS,
+                                                  DL, MemVT, StoreVal, RC),
+                           0);
+      }
+
       unsigned Opc = (MemVT == MVT::i8) ? I8085::STORE_8_AT_OFFSET_WITH_SP
                                         : I8085::STORE_16_AT_OFFSET_WITH_SP;
-      SDValue Ops[] = {ST->getValue(), Offset, Chain};
+      SDValue Ops[] = {StoreVal, Offset, Chain};
       SDNode *ResNode = CurDAG->getMachineNode(Opc, DL, MVT::Other, Ops);
       CurDAG->setNodeMemRefs(cast<MachineSDNode>(ResNode), {ST->getMemOperand()});
       ReplaceUses(SDValue(N, 0), SDValue(ResNode, 0));
@@ -552,7 +583,14 @@ template <> bool I8085DAGToDAGISel::select<ISD::STORE>(SDNode *N) {
     unsigned Opc = (MemVT == MVT::i8) ? I8085::STORE_8_ADDR_CONTENT
                     : (MemVT == MVT::i16) ? I8085::STORE_16_ADDR_CONTENT
                                           : I8085::STORE_32_ADDR_CONTENT;
-    SDValue Ops[] = {BasePtr, ST->getValue(), Chain};
+    SDValue StoreVal = ST->getValue();
+    if (MemVT == MVT::i16) {
+      SDValue RC = CurDAG->getTargetConstant(I8085::GR16BDRegClassID, DL, MVT::i32);
+      StoreVal = SDValue(CurDAG->getMachineNode(TargetOpcode::COPY_TO_REGCLASS,
+                                                DL, MemVT, StoreVal, RC),
+                         0);
+    }
+    SDValue Ops[] = {BasePtr, StoreVal, Chain};
     SDNode *ResNode = CurDAG->getMachineNode(Opc, DL, MVT::Other, Ops);
     CurDAG->setNodeMemRefs(cast<MachineSDNode>(ResNode), {ST->getMemOperand()});
     ReplaceUses(SDValue(N, 0), SDValue(ResNode, 0));

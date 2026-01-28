@@ -69,6 +69,7 @@ public:
 
   void addIRPasses() override;
   bool addInstSelector() override;
+  void addPreRegAlloc() override;
   void addPreSched2() override;
   void addPreEmitPass() override;
 };
@@ -93,6 +94,7 @@ extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializeI8085Target() {
   auto &PR = *PassRegistry::getPassRegistry();
   initializeI8085ExpandPseudoPass(PR);
   initializeI8085ExpandPseudo32Pass(PR);
+  initializeI8085StoreRegClassPass(PR);
   initializeI8085PeepholePass(PR);
   initializeI8085DAGToDAGISelLegacyPass(PR);
 }
@@ -121,6 +123,10 @@ bool I8085PassConfig::addInstSelector() {
   addPass(createI8085FrameAnalyzerPass());
 
   return false;
+}
+
+void I8085PassConfig::addPreRegAlloc() {
+  addPass(createI8085StoreRegClassPass());
 }
 
 void I8085PassConfig::addPreSched2() {

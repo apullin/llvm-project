@@ -95,6 +95,7 @@ extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializeI8085Target() {
   initializeI8085ExpandPseudoPass(PR);
   initializeI8085ExpandPseudo32Pass(PR);
   initializeI8085StoreRegClassPass(PR);
+  initializeI8085ExpandCopiesPass(PR);
   initializeI8085PeepholePass(PR);
   initializeI8085DAGToDAGISelLegacyPass(PR);
 }
@@ -132,6 +133,7 @@ void I8085PassConfig::addPreRegAlloc() {
 void I8085PassConfig::addPreSched2() {
   addPass(createI8085ExpandPseudoPass());
   addPass(createI8085ExpandPseudo32Pass());
+  addPass(createI8085ExpandCopiesPass());
   addPass(createI8085PeepholePass());
 }
 

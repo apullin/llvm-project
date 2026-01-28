@@ -5,6 +5,7 @@
   define void @jmp8_if_c() { ret void }
   define void @jmp16_if_bc() { ret void }
   define void @jmp16_if_not_equal_bc_de() { ret void }
+  define void @jmp16_if_not_equal_twice() { ret void }
   define void @jmp16_if_same_sign_bc_de() { ret void }
   define void @jmp16_if_positive_de() { ret void }
 ...
@@ -49,14 +50,31 @@ body:             |
     liveins: $bc, $de
     ; CHECK-LABEL: name:            jmp16_if_not_equal_bc_de
     ; CHECK: $a = MOV $b
-    ; CHECK-NEXT: CMP $d
-    ; CHECK-NEXT: JNZ %bb.1
-    ; CHECK-NEXT: $a = MOV $c
-    ; CHECK-NEXT: CMP $e
-    ; CHECK-NEXT: JNZ %bb.1
+    ; CHECK: CMP $d
+    ; CHECK: JNZ %bb.
+    ; CHECK: $a = MOV $c
+    ; CHECK: CMP $e
+    ; CHECK: JNZ %bb.
     JMP_16_IF_NOT_EQUAL $bc, $de, %bb.1, implicit-def $sreg
     RET
   bb.1:
+    RET
+...
+
+---
+name:            jmp16_if_not_equal_twice
+body:             |
+  bb.0:
+    liveins: $bc, $de
+    ; CHECK-LABEL: name:            jmp16_if_not_equal_twice
+    ; CHECK-NOT: JMP_16_IF_NOT_EQUAL
+    ; CHECK-COUNT-4: JNZ %bb.
+    JMP_16_IF_NOT_EQUAL $bc, $de, %bb.1, implicit-def $sreg
+    JMP_16_IF_NOT_EQUAL $bc, $de, %bb.2, implicit-def $sreg
+    RET
+  bb.1:
+    RET
+  bb.2:
     RET
 ...
 

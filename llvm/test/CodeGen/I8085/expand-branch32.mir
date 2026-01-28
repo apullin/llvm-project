@@ -3,6 +3,7 @@
 --- |
   target triple = "i8085-unknown-elf"
   define void @jmp32_if_not_equal() { ret void }
+  define void @jmp32_if_not_equal_twice() { ret void }
   define void @jmp32_if_same_sign() { ret void }
   define void @jmp32_if_positive() { ret void }
 ...
@@ -18,6 +19,23 @@ body:             |
     JMP_32_IF_NOT_EQUAL $iax, $ibx, %bb.1, implicit-def $sreg
     RET
   bb.1:
+    RET
+...
+
+---
+name:            jmp32_if_not_equal_twice
+body:             |
+  bb.0:
+    liveins: $iax, $ibx
+    ; CHECK-LABEL: name:            jmp32_if_not_equal_twice
+    ; CHECK-NOT: JMP_32_IF_NOT_EQUAL
+    ; CHECK-COUNT-8: JNZ %bb.
+    JMP_32_IF_NOT_EQUAL $iax, $ibx, %bb.1, implicit-def $sreg
+    JMP_32_IF_NOT_EQUAL $iax, $ibx, %bb.2, implicit-def $sreg
+    RET
+  bb.1:
+    RET
+  bb.2:
     RET
 ...
 

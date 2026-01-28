@@ -8,22 +8,26 @@
 // RUN:   -T %S/../../../../../sysroot/ldscripts/i8085-32kram-32krom.ld -Map %t.map \
 // RUN:   -o %t.elf %t.crt0.o %t.o
 // RUN: llvm-objcopy -O binary %t.elf %t.bin
-// RUN: %S/../../../../../i8085-trace/build/i8085-trace -S -q -n 200000 -d 0x0202:0x02 %t.bin 2>&1 | FileCheck %s --check-prefix=SUM
+// RUN: %S/../../../../../i8085-trace/build/i8085-trace -S -q -n 200000 -d 0x0210:0x09 %t.bin 2>&1 | FileCheck %s --check-prefix=MEM
 
 #include <stdint.h>
 
-static const uint8_t data[5] = {1, 2, 3, 4, 5};
+static const uint8_t src[8] = {1, 2, 3, 4, 5, 6, 7, 8};
 
 int main(void) {
-  volatile uint16_t *out = (uint16_t *)0x0202;
-  uint16_t sum = 0;
-  for (uint8_t i = 0; i < 5; ++i) {
-    sum = (uint16_t)(sum + data[i]);
+  volatile uint8_t *dst = (uint8_t *)0x0210;
+  volatile uint8_t *sum_out = (uint8_t *)0x0218;
+  uint8_t sum = 0;
+
+  for (uint8_t i = 0; i < 8; ++i) {
+    dst[i] = src[i];
+    sum = (uint8_t)(sum + dst[i]);
   }
-  *out = sum; // 1+2+3+4+5 = 15 (0x000F)
+
+  *sum_out = sum; // 36 (0x24)
   return 0;
 }
 
-// SUM: Memory dump 0x0202 - 0x0203 (2 bytes):
-// SUM: 0202: 0F 00
-// SUM: "halt":"hlt"
+// MEM: Memory dump 0x0210 - 0x0218 (9 bytes):
+// MEM: 0210: 01 02 03 04 05 06 07 08 24
+// MEM: "halt":"hlt"

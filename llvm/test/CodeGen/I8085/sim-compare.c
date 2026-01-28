@@ -8,22 +8,34 @@
 // RUN:   -T %S/../../../../../sysroot/ldscripts/i8085-32kram-32krom.ld -Map %t.map \
 // RUN:   -o %t.elf %t.crt0.o %t.o
 // RUN: llvm-objcopy -O binary %t.elf %t.bin
-// RUN: %S/../../../../../i8085-trace/build/i8085-trace -S -q -n 200000 -d 0x0202:0x02 %t.bin 2>&1 | FileCheck %s --check-prefix=SUM
+// RUN: %S/../../../../../i8085-trace/build/i8085-trace -S -q -n 200000 -d 0x0206:0x06 %t.bin 2>&1 | FileCheck %s --check-prefix=CMP
 
 #include <stdint.h>
 
-static const uint8_t data[5] = {1, 2, 3, 4, 5};
+static const int16_t vals[6] = {-3, -1, 0, 1, 2, 7};
 
 int main(void) {
-  volatile uint16_t *out = (uint16_t *)0x0202;
-  uint16_t sum = 0;
-  for (uint8_t i = 0; i < 5; ++i) {
-    sum = (uint16_t)(sum + data[i]);
+  volatile uint16_t *out = (uint16_t *)0x0206;
+  uint16_t neg = 0;
+  uint16_t le1 = 0;
+  uint16_t bigu = 0;
+
+  for (uint8_t i = 0; i < 6; ++i) {
+    int16_t v = vals[i];
+    if (v < 0)
+      neg++;
+    if (v <= 1)
+      le1++;
+    if ((uint16_t)v >= 0xFF00u)
+      bigu++;
   }
-  *out = sum; // 1+2+3+4+5 = 15 (0x000F)
+
+  out[0] = neg;  // expect 2
+  out[1] = le1;  // expect 4
+  out[2] = bigu; // expect 2
   return 0;
 }
 
-// SUM: Memory dump 0x0202 - 0x0203 (2 bytes):
-// SUM: 0202: 0F 00
-// SUM: "halt":"hlt"
+// CMP: Memory dump 0x0206 - 0x020B (6 bytes):
+// CMP: 0206: 02 00 04 00 02 00
+// CMP: "halt":"hlt"

@@ -8,22 +8,30 @@
 // RUN:   -T %S/../../../../../sysroot/ldscripts/i8085-32kram-32krom.ld -Map %t.map \
 // RUN:   -o %t.elf %t.crt0.o %t.o
 // RUN: llvm-objcopy -O binary %t.elf %t.bin
-// RUN: %S/../../../../../i8085-trace/build/i8085-trace -S -q -n 200000 -d 0x0202:0x02 %t.bin 2>&1 | FileCheck %s --check-prefix=SUM
+// RUN: %S/../../../../../i8085-trace/build/i8085-trace -S -q -n 200000 -d 0x0220:0x08 %t.bin 2>&1 | FileCheck %s --check-prefix=SHIFT
 
 #include <stdint.h>
 
-static const uint8_t data[5] = {1, 2, 3, 4, 5};
-
 int main(void) {
-  volatile uint16_t *out = (uint16_t *)0x0202;
-  uint16_t sum = 0;
-  for (uint8_t i = 0; i < 5; ++i) {
-    sum = (uint16_t)(sum + data[i]);
-  }
-  *out = sum; // 1+2+3+4+5 = 15 (0x000F)
+  volatile uint8_t *out8 = (uint8_t *)0x0220;
+  volatile uint8_t *pad = (uint8_t *)0x0221;
+  volatile uint16_t *out16 = (uint16_t *)0x0222;
+  volatile uint32_t *out32 = (uint32_t *)0x0224;
+
+  uint8_t a = 0x81u;
+  uint8_t b = (uint8_t)(a >> 3); // 0x10
+  uint16_t c = 0x1234u;
+  uint16_t d = (uint16_t)(c << 3); // 0x91A0
+  uint32_t e = 0x80000001u;
+  uint32_t f = e >> 4; // 0x08000000
+
+  *out8 = b;
+  *pad = 0x55;
+  *out16 = d;
+  *out32 = f;
   return 0;
 }
 
-// SUM: Memory dump 0x0202 - 0x0203 (2 bytes):
-// SUM: 0202: 0F 00
-// SUM: "halt":"hlt"
+// SHIFT: Memory dump 0x0220 - 0x0227 (8 bytes):
+// SHIFT: 0220: 10 55 A0 91 00 00 00 08
+// SHIFT: "halt":"hlt"

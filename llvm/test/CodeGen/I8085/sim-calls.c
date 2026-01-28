@@ -8,22 +8,26 @@
 // RUN:   -T %S/../../../../../sysroot/ldscripts/i8085-32kram-32krom.ld -Map %t.map \
 // RUN:   -o %t.elf %t.crt0.o %t.o
 // RUN: llvm-objcopy -O binary %t.elf %t.bin
-// RUN: %S/../../../../../i8085-trace/build/i8085-trace -S -q -n 200000 -d 0x0202:0x02 %t.bin 2>&1 | FileCheck %s --check-prefix=SUM
+// RUN: %S/../../../../../i8085-trace/build/i8085-trace -S -q -n 200000 -d 0x0202:0x04 %t.bin 2>&1 | FileCheck %s --check-prefix=CALLS
 
 #include <stdint.h>
 
-static const uint8_t data[5] = {1, 2, 3, 4, 5};
+static uint32_t mix(uint8_t a, uint16_t b, uint32_t c, uint8_t d,
+                    uint16_t e, uint32_t f, uint8_t g, uint16_t h) {
+  uint32_t r = c + f;
+  r += (uint32_t)a + d + g;
+  r += (uint32_t)b + e + h;
+  r ^= 0x00FF00FFu;
+  return r;
+}
 
 int main(void) {
-  volatile uint16_t *out = (uint16_t *)0x0202;
-  uint16_t sum = 0;
-  for (uint8_t i = 0; i < 5; ++i) {
-    sum = (uint16_t)(sum + data[i]);
-  }
-  *out = sum; // 1+2+3+4+5 = 15 (0x000F)
+  volatile uint32_t *out = (uint32_t *)0x0202;
+  uint32_t v = mix(1, 0x0203, 0x11223344u, 2, 0x0304, 0x55667788u, 3, 0x0405);
+  *out = v; // expect 0x6677B321
   return 0;
 }
 
-// SUM: Memory dump 0x0202 - 0x0203 (2 bytes):
-// SUM: 0202: 0F 00
-// SUM: "halt":"hlt"
+// CALLS: Memory dump 0x0202 - 0x0205 (4 bytes):
+// CALLS: 0202: 21 B3 77 66
+// CALLS: "halt":"hlt"

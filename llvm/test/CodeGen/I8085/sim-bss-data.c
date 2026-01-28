@@ -8,22 +8,33 @@
 // RUN:   -T %S/../../../../../sysroot/ldscripts/i8085-32kram-32krom.ld -Map %t.map \
 // RUN:   -o %t.elf %t.crt0.o %t.o
 // RUN: llvm-objcopy -O binary %t.elf %t.bin
-// RUN: %S/../../../../../i8085-trace/build/i8085-trace -S -q -n 200000 -d 0x0202:0x02 %t.bin 2>&1 | FileCheck %s --check-prefix=SUM
+// RUN: %S/../../../../../i8085-trace/build/i8085-trace -S -q -n 200000 -d 0x0200:0x02 %t.bin 2>&1 | FileCheck %s --check-prefix=BSS
 
 #include <stdint.h>
 
-static const uint8_t data[5] = {1, 2, 3, 4, 5};
+static uint16_t bss_word;
+static uint8_t bss_bytes[3];
+
+static uint16_t data_word = 0x1234;
+static uint8_t data_bytes[4] = {0x11, 0x22, 0x33, 0x44};
 
 int main(void) {
-  volatile uint16_t *out = (uint16_t *)0x0202;
-  uint16_t sum = 0;
-  for (uint8_t i = 0; i < 5; ++i) {
-    sum = (uint16_t)(sum + data[i]);
-  }
-  *out = sum; // 1+2+3+4+5 = 15 (0x000F)
+  volatile uint16_t *out = (uint16_t *)0x0200;
+  uint16_t ok = 0;
+
+  if (bss_word == 0)
+    ok++;
+  if (bss_bytes[2] == 0)
+    ok++;
+  if (data_word == 0x1234)
+    ok++;
+  if (data_bytes[1] == 0x22)
+    ok++;
+
+  *out = ok; // expect 4
   return 0;
 }
 
-// SUM: Memory dump 0x0202 - 0x0203 (2 bytes):
-// SUM: 0202: 0F 00
-// SUM: "halt":"hlt"
+// BSS: Memory dump 0x0200 - 0x0201 (2 bytes):
+// BSS: 0200: 04 00
+// BSS: "halt":"hlt"

@@ -16,15 +16,15 @@ entry:
   ret i16 %v16
 }
 
-define i16 @realign_alloca(i16 %n) #0 {
+define i16 @realign_alloca() #0 {
 ; CHECK-LABEL: realign_alloca:
+; CHECK: ANI 252
 ; CHECK: SPHL
 ; CHECK: RET
 entry:
-  %p = alloca i32, i16 %n, align 4
-  %q = getelementptr inbounds i32, ptr %p, i16 %n
-  store i32 0, ptr %q, align 4
-  %v = load i32, ptr %q, align 4
+  %p = alloca i32, align 4
+  store i32 0, ptr %p, align 4
+  %v = load i32, ptr %p, align 4
   %v16 = trunc i32 %v to i16
   ret i16 %v16
 }

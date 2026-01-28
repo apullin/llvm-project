@@ -24,6 +24,8 @@
 #include "llvm/CodeGen/MachineInstrBuilder.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
 #include "llvm/IR/Function.h"
+#include "llvm/Support/ErrorHandling.h"
+#include "llvm/Support/MathExtras.h"
 
 #include <vector>
 #include <iostream>
@@ -32,6 +34,56 @@ namespace llvm {
 
 I8085FrameLowering::I8085FrameLowering()
     : TargetFrameLowering(TargetFrameLowering::StackGrowsDown, Align(1), -2) {}
+
+static Align getStackRealignAlignment(const MachineFunction &MF) {
+  if (!MF.getFunction().hasFnAttribute("stackrealign"))
+    return Align(1);
+
+  const MachineFrameInfo &MFI = MF.getFrameInfo();
+  Align MaxAlign = MFI.getMaxAlign();
+  Align StackAlign = MF.getSubtarget<I8085Subtarget>()
+                         .getFrameLowering()
+                         ->getStackAlign();
+  if (MaxAlign <= StackAlign)
+    return StackAlign;
+
+  return MaxAlign;
+}
+
+static bool needsStackRealign(const MachineFunction &MF) {
+  Align Realign = getStackRealignAlignment(MF);
+  Align StackAlign = MF.getSubtarget<I8085Subtarget>()
+                         .getFrameLowering()
+                         ->getStackAlign();
+  return Realign > StackAlign;
+}
+
+static bool getPairRegs(unsigned Pair, unsigned &LowReg, unsigned &HighReg) {
+  switch (Pair) {
+  case I8085::BC:
+    LowReg = I8085::C;
+    HighReg = I8085::B;
+    return true;
+  case I8085::DE:
+    LowReg = I8085::E;
+    HighReg = I8085::D;
+    return true;
+  default:
+    return false;
+  }
+}
+
+static unsigned getScratchPair(const MachineBasicBlock &MBB) {
+  bool BCFree = !MBB.isLiveIn(I8085::B) && !MBB.isLiveIn(I8085::C) &&
+                !MBB.isLiveIn(I8085::BC);
+  bool DEFree = !MBB.isLiveIn(I8085::D) && !MBB.isLiveIn(I8085::E) &&
+                !MBB.isLiveIn(I8085::DE);
+  if (DEFree)
+    return I8085::DE;
+  if (BCFree)
+    return I8085::BC;
+  return 0;
+}
 
 bool I8085FrameLowering::canSimplifyCallFramePseudos(
     const MachineFunction &MF) const {
@@ -74,13 +126,47 @@ void I8085FrameLowering::emitPrologue(MachineFunction &MF,
   }
   
   /*Prologue sequence for 8085 processor */ 
-  
+  unsigned ScratchPair = 0;
+  if (AFI->hasStackRealign()) {
+    Align Realign = getStackRealignAlignment(MF);
+    unsigned AlignBytes = Realign.value();
+    if (!isPowerOf2_32(AlignBytes) || AlignBytes > 256)
+      report_fatal_error("Unsupported I8085 stack realignment");
 
+    uint8_t Mask = static_cast<uint8_t>(~(AlignBytes - 1u));
+    ScratchPair = getScratchPair(MBB);
+    if (ScratchPair == 0)
+      report_fatal_error("I8085 stack realignment requires free BC/DE");
+    unsigned ScratchLow = 0, ScratchHigh = 0;
+    if (!getPairRegs(ScratchPair, ScratchLow, ScratchHigh))
+      report_fatal_error("I8085 stack realignment scratch pair invalid");
+
+    BuildMI(MBB, MBBI, DL, TII.get(I8085::LXI), I8085::HL).addImm(0);
+    BuildMI(MBB, MBBI, DL, TII.get(I8085::DAD)).addReg(I8085::SP);
+    BuildMI(MBB, MBBI, DL, TII.get(I8085::MOV), ScratchHigh)
+        .addReg(I8085::H);
+    BuildMI(MBB, MBBI, DL, TII.get(I8085::MOV), ScratchLow)
+        .addReg(I8085::L);
+    BuildMI(MBB, MBBI, DL, TII.get(I8085::MOV), I8085::A)
+        .addReg(I8085::L);
+    BuildMI(MBB, MBBI, DL, TII.get(I8085::ANI)).addImm(Mask);
+    BuildMI(MBB, MBBI, DL, TII.get(I8085::MOV), I8085::L)
+        .addReg(I8085::A);
+    BuildMI(MBB, MBBI, DL, TII.get(I8085::SPHL));
+  }
 
   if(FrameSize) {
       BuildMI(MBB, MBBI, DL, TII.get(I8085::GROW_STACK_BY))
           .addImm(FrameSize);
       
+  }
+
+  if (AFI->hasStackRealignSaveFI()) {
+    assert(ScratchPair && "missing scratch pair for stack realignment");
+    BuildMI(MBB, MBBI, DL, TII.get(I8085::STORE_16))
+        .addFrameIndex(AFI->getStackRealignSaveFI())
+        .addImm(0)
+        .addReg(ScratchPair);
   }
 }
 
@@ -114,6 +200,15 @@ void I8085FrameLowering::emitEpilogue(MachineFunction &MF,
   unsigned FrameSize = MFI.getStackSize() - AFI->getCalleeSavedFrameSize();
   const I8085Subtarget &STI = MF.getSubtarget<I8085Subtarget>();
   const I8085InstrInfo &TII = *STI.getInstrInfo();
+
+  if (AFI->hasStackRealignSaveFI()) {
+    BuildMI(MBB, MBBI, DL, TII.get(I8085::LOAD_16_WITH_ADDR), I8085::HL)
+        .addFrameIndex(AFI->getStackRealignSaveFI())
+        .addImm(0);
+    BuildMI(MBB, MBBI, DL, TII.get(I8085::SPHL));
+    restoreStatusRegister(MF, MBB);
+    return;
+  }
 
   // Early exit if there is no need to restore the frame pointer.
   if (!FrameSize && !MF.getFrameInfo().hasVarSizedObjects()) {
@@ -152,6 +247,15 @@ void I8085FrameLowering::processFunctionBeforeFrameFinalized(
     MachineFunction &MF, RegScavenger *RS) const {
   (void)RS;
   I8085MachineFunctionInfo *FuncInfo = MF.getInfo<I8085MachineFunctionInfo>();
+  MachineFrameInfo &MFI = MF.getFrameInfo();
+
+  if (needsStackRealign(MF) && !MFI.hasVarSizedObjects()) {
+    // Only realign fixed-size frames for now (no base pointer support).
+    int FI = MFI.CreateStackObject(2, Align(1), false);
+    FuncInfo->setStackRealignSaveFI(FI);
+    FuncInfo->setHasStackRealign(true);
+    FuncInfo->setHasSpills(true);
+  }
   if (FuncInfo->hasGR32ScratchFI())
     return;
 
@@ -177,7 +281,7 @@ void I8085FrameLowering::processFunctionBeforeFrameFinalized(
   if (!UsesGR32)
     return;
 
-  MachineFrameInfo &MFI = MF.getFrameInfo();
+  // MFI already available above.
   int FI = MFI.CreateStackObject(8, Align(1), false);
   FuncInfo->setGR32ScratchFI(FI);
   // Ensure we emit a frame adjustment even if there are no spills/allocas.
@@ -197,7 +301,7 @@ bool I8085FrameLowering::hasFP(const MachineFunction &MF) const {
   const I8085MachineFunctionInfo *FuncInfo = MF.getInfo<I8085MachineFunctionInfo>();
 
   return (FuncInfo->getHasSpills() || FuncInfo->getHasAllocas() ||
-          FuncInfo->getHasStackArgs() ||
+          FuncInfo->getHasStackArgs() || FuncInfo->hasStackRealign() ||
           MF.getFrameInfo().hasVarSizedObjects());
 }
 

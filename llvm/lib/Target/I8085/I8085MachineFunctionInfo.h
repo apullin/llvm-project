@@ -45,11 +45,16 @@ class I8085MachineFunctionInfo : public MachineFunctionInfo {
   int VarArgsFrameIndex;
   /// FrameIndex for per-function GR32 scratch storage (IAX/IBX bytes).
   int GR32ScratchFI;
+  /// FrameIndex for saved original SP when stack realignment is used.
+  int StackRealignSaveFI;
+  /// Indicates whether this function realigns the stack.
+  bool HasStackRealign;
 
   public:
   I8085MachineFunctionInfo(const Function &F, const TargetSubtargetInfo *STI)
       : HasSpills(false), HasAllocas(false), HasStackArgs(false),
-        CalleeSavedFrameSize(0), VarArgsFrameIndex(0), GR32ScratchFI(-1) {
+        CalleeSavedFrameSize(0), VarArgsFrameIndex(0), GR32ScratchFI(-1),
+        StackRealignSaveFI(-1), HasStackRealign(false) {
     CallingConv::ID CallConv = F.getCallingConv();
 
     this->IsInterruptHandler =
@@ -84,6 +89,13 @@ class I8085MachineFunctionInfo : public MachineFunctionInfo {
   int getGR32ScratchFI() const { return GR32ScratchFI; }
   void setGR32ScratchFI(int Idx) { GR32ScratchFI = Idx; }
   bool hasGR32ScratchFI() const { return GR32ScratchFI >= 0; }
+
+  int getStackRealignSaveFI() const { return StackRealignSaveFI; }
+  void setStackRealignSaveFI(int Idx) { StackRealignSaveFI = Idx; }
+  bool hasStackRealignSaveFI() const { return StackRealignSaveFI >= 0; }
+
+  bool hasStackRealign() const { return HasStackRealign; }
+  void setHasStackRealign(bool B) { HasStackRealign = B; }
 };
 
 } // namespace llvm

@@ -418,6 +418,43 @@ bool I8085ExpandPseudo::expand<I8085::STORE_16_ADDR_CONTENT>(Block &MBB, BlockIt
 }
 
 template <>
+bool I8085ExpandPseudo::expand<I8085::CALL_INDIRECT>(Block &MBB, BlockIt MBBI) {
+  MachineInstr &MI = *MBBI;
+  MachineFunction *MF = MBB.getParent();
+  LivePhysRegs LiveRegs(*TRI);
+  LiveRegs.addLiveOuts(MBB);
+  for (auto I = MBB.rbegin(), E = MBBI.getReverse(); I != E; ++I)
+    LiveRegs.stepBackward(*I);
+  for (const MachineOperand &MO : MI.operands()) {
+    if (!MO.isReg() || MO.isDef())
+      continue;
+    Register Reg = MO.getReg();
+    if (Reg.isPhysical())
+      LiveRegs.addReg(Reg);
+  }
+
+  const BasicBlock *LLVMBB = MBB.getBasicBlock();
+  MachineBasicBlock *ReturnMBB = MF->CreateMachineBasicBlock(LLVMBB);
+  auto InsertPos = std::next(MBB.getIterator());
+  MF->insert(InsertPos, ReturnMBB);
+  MF->RenumberBlocks(&MBB);
+
+  ReturnMBB->splice(ReturnMBB->begin(), &MBB, std::next(MBBI), MBB.end());
+  ReturnMBB->transferSuccessorsAndUpdatePHIs(&MBB);
+  MBB.addSuccessor(ReturnMBB);
+  addLiveIns(*ReturnMBB, LiveRegs);
+
+  buildMI(MBB, MBBI, I8085::LXI)
+      .addReg(I8085::DE, RegState::Define)
+      .addMBB(ReturnMBB);
+  buildMI(MBB, MBBI, I8085::PUSH).addReg(I8085::DE);
+  buildMI(MBB, MBBI, I8085::PCHL);
+
+  MI.eraseFromParent();
+  return true;
+}
+
+template <>
 bool I8085ExpandPseudo::expand<I8085::STORE_8>(Block &MBB, BlockIt MBBI) {
   MachineInstr &MI = *MBBI;
 
@@ -1832,6 +1869,7 @@ bool I8085ExpandPseudo::expandMI(Block &MBB, BlockIt MBBI) {
     EXPAND(I8085::ASR_8);
     EXPAND(I8085::STORE_16_ADDR_CONTENT);
     EXPAND(I8085::STORE_8_ADDR_CONTENT);
+    EXPAND(I8085::CALL_INDIRECT);
     // EXPAND(I8085::SET_NE_16);
     // EXPAND(I8085::SET_EQ_16);
     // EXPAND(I8085::SET_NE_8);

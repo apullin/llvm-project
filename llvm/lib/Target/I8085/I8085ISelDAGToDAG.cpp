@@ -46,6 +46,7 @@ public:
 private:
   void Select(SDNode *N) override;
   bool trySelect(SDNode *N);
+  bool selectCall(SDNode *N);
 
   template <unsigned NodeType> bool select(SDNode *N);
 
@@ -651,6 +652,8 @@ bool I8085DAGToDAGISel::trySelect(SDNode *N) {
   SDLoc DL(N);
 
   switch (Opcode) {
+  case I8085ISD::CALL:
+    return selectCall(N);
   case ISD::SETCC:
     return select<ISD::SETCC>(N);
   case ISD::BR_CC:
@@ -674,6 +677,43 @@ bool I8085DAGToDAGISel::trySelect(SDNode *N) {
   default:
     return false;
   }
+}
+
+bool I8085DAGToDAGISel::selectCall(SDNode *N) {
+  SDValue InGlue;
+  SDValue Chain = N->getOperand(0);
+  SDValue Callee = N->getOperand(1);
+  unsigned LastOpNum = N->getNumOperands() - 1;
+
+  unsigned CalleeOpc = Callee.getOpcode();
+  if (CalleeOpc == ISD::TargetGlobalAddress ||
+      CalleeOpc == ISD::TargetExternalSymbol) {
+    return false;
+  }
+
+  if (N->getOperand(LastOpNum).getValueType() == MVT::Glue) {
+    InGlue = N->getOperand(LastOpNum);
+    --LastOpNum;
+  }
+
+  SDLoc DL(N);
+  Chain = CurDAG->getCopyToReg(Chain, DL, I8085::HL, Callee, InGlue);
+
+  SmallVector<SDValue, 8> Ops;
+  for (unsigned I = 2, E = LastOpNum + 1; I != E; ++I)
+    Ops.push_back(N->getOperand(I));
+
+  Ops.push_back(Chain);
+  Ops.push_back(Chain.getValue(1));
+
+  SDVTList NodeTys = CurDAG->getVTList(MVT::Other, MVT::Glue);
+  SDNode *ResNode =
+      CurDAG->getMachineNode(I8085::CALL_INDIRECT, DL, NodeTys, Ops);
+
+  ReplaceUses(SDValue(N, 0), SDValue(ResNode, 0));
+  ReplaceUses(SDValue(N, 1), SDValue(ResNode, 1));
+  CurDAG->RemoveDeadNode(N);
+  return true;
 }
 
 FunctionPass *llvm::createI8085ISelDag(I8085TargetMachine &TM,

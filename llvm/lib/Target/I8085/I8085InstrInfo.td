@@ -530,6 +530,11 @@ let Uses = [SP] in def CALL : F6<0b11001101,(outs), (ins imm16Addr:$k),
                                        "CALL $k", [(I8085call imm:$k)]>;
 }
 
+let isCall = 1 in {
+let Uses = [SP, HL] in def CALL_INDIRECT : I8085Pseudo<(outs), (ins),
+                                       "CALL_INDIRECT", []>;
+}
+
 let isCall = 1, isTerminator = 1, isReturn = 1, isBarrier = 1, Uses = [SP] in {
   def TCRETURN : I8085Pseudo<(outs), (ins imm16Addr:$dst, I8085Imm16:$adj),
                              "TCRETURN $dst", []>;

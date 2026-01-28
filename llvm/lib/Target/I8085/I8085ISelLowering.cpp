@@ -108,6 +108,8 @@ I8085TargetLowering::I8085TargetLowering(const I8085TargetMachine &TM,
   setOperationAction(ISD::VASTART, MVT::Other, Custom);
   setOperationAction(ISD::VAEND, MVT::Other, Custom);
   setOperationAction(ISD::VAARG, MVT::Other, Expand);
+  setOperationAction(ISD::DYNAMIC_STACKALLOC, MVT::i8, Expand);
+  setOperationAction(ISD::DYNAMIC_STACKALLOC, MVT::i16, Expand);
 
   for (MVT VT : {MVT::i8, MVT::i16}) {
     setOperationAction(ISD::CTLZ, VT, Expand);

@@ -310,6 +310,7 @@ bool I8085ExpandPseudo32::binOperation(unsigned opCode, Block &MBB, BlockIt MBBI
   MachineInstr &MI = *MBBI;
 
   unsigned operandOne = MI.getOperand(1).getReg();
+  unsigned destReg = operandOne;
   unsigned operandTwo = MI.getOperand(2).getReg();
   
   for(int i=0;i<4;i++){
@@ -755,6 +756,7 @@ template <> bool I8085ExpandPseudo32::expand<I8085::ADD_32>(Block &MBB, BlockIt 
   MachineInstr &MI = *MBBI;
 
   unsigned operandOne = MI.getOperand(1).getReg();
+  unsigned destReg = operandOne;
   unsigned operandTwo = MI.getOperand(2).getReg();
   
   for(int i=0;i<4;i++){

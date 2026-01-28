@@ -416,6 +416,11 @@ MachineBasicBlock *I8085TargetLowering::insertCond16Set(MachineInstr &MI,
   MachineBasicBlock *trueMBB = MF->CreateMachineBasicBlock(LLVM_BB);
   MachineBasicBlock *falseMBB = MF->CreateMachineBasicBlock(LLVM_BB);
   MachineBasicBlock *continMBB = MF->CreateMachineBasicBlock(LLVM_BB);
+  MachineBasicBlock *checkMBB = nullptr;
+  bool NeedsCarryCheck =
+      (Opc == I8085::SET_UGT_16 || Opc == I8085::SET_ULE_16);
+  if (NeedsCarryCheck)
+    checkMBB = MF->CreateMachineBasicBlock(LLVM_BB);
 
   MachineFunction::iterator I;
   for (I = MF->begin(); I != MF->end() && &(*I) != MBB; ++I)
@@ -423,9 +428,11 @@ MachineBasicBlock *I8085TargetLowering::insertCond16Set(MachineInstr &MI,
   if (I != MF->end())
     ++I;
 
-  MF->insert(I, continMBB);  
+  MF->insert(I, continMBB);
   MF->insert(I, trueMBB);
   MF->insert(I, falseMBB);
+  if (checkMBB)
+    MF->insert(I, checkMBB);
   
 
   // Transfer remaining instructions and all successors of the current
@@ -458,33 +465,49 @@ MachineBasicBlock *I8085TargetLowering::insertCond16Set(MachineInstr &MI,
 
   if(Opc == I8085::SET_UGT_16){
     BuildMI(MBB, dl, TII.get(I8085::JC)).addMBB(falseMBB);
-    BuildMI(MBB, dl, TII.get(I8085::JMP_16_IF_ZERO))
+    BuildMI(MBB, dl, TII.get(I8085::JMP)).addMBB(checkMBB);
+
+    MBB->addSuccessor(falseMBB);
+    MBB->addSuccessor(checkMBB);
+
+    BuildMI(checkMBB, dl, TII.get(I8085::JMP_16_IF_ZERO))
         .addReg(tempRegThree)
         .addMBB(falseMBB);
-    BuildMI(MBB, dl, TII.get(I8085::JMP)).addMBB(trueMBB);
+    BuildMI(checkMBB, dl, TII.get(I8085::JMP)).addMBB(trueMBB);
+
+    checkMBB->addSuccessor(falseMBB);
+    checkMBB->addSuccessor(trueMBB);
   }
 
   else if(Opc == I8085::SET_ULT_16){
     BuildMI(MBB, dl, TII.get(I8085::JC)).addMBB(trueMBB);
     BuildMI(MBB, dl, TII.get(I8085::JMP)).addMBB(falseMBB);  
+    MBB->addSuccessor(trueMBB);
+    MBB->addSuccessor(falseMBB);
   }
 
   else if(Opc == I8085::SET_UGE_16){
     BuildMI(MBB, dl, TII.get(I8085::JC)).addMBB(falseMBB);
     BuildMI(MBB, dl, TII.get(I8085::JMP)).addMBB(trueMBB);  
+    MBB->addSuccessor(falseMBB);
+    MBB->addSuccessor(trueMBB);
   }
 
   else if(Opc == I8085::SET_ULE_16){
     BuildMI(MBB, dl, TII.get(I8085::JC)).addMBB(trueMBB);
-    BuildMI(MBB, dl, TII.get(I8085::JMP_16_IF_ZERO))
+    BuildMI(MBB, dl, TII.get(I8085::JMP)).addMBB(checkMBB);
+
+    MBB->addSuccessor(trueMBB);
+    MBB->addSuccessor(checkMBB);
+
+    BuildMI(checkMBB, dl, TII.get(I8085::JMP_16_IF_ZERO))
         .addReg(tempRegThree)
         .addMBB(trueMBB);
-    BuildMI(MBB, dl, TII.get(I8085::JMP)).addMBB(falseMBB);
-  }
+    BuildMI(checkMBB, dl, TII.get(I8085::JMP)).addMBB(falseMBB);
 
-  
-  MBB->addSuccessor(falseMBB);
-  MBB->addSuccessor(trueMBB);
+    checkMBB->addSuccessor(trueMBB);
+    checkMBB->addSuccessor(falseMBB);
+  }
   
   BuildMI(trueMBB, dl, TII.get(I8085::MVI))
         .addReg(tempRegOne, RegState::Define)
@@ -958,6 +981,11 @@ MachineBasicBlock *I8085TargetLowering::insertCond32Set(MachineInstr &MI,
   MachineBasicBlock *trueMBB = MF->CreateMachineBasicBlock(LLVM_BB);
   MachineBasicBlock *falseMBB = MF->CreateMachineBasicBlock(LLVM_BB);
   MachineBasicBlock *continMBB = MF->CreateMachineBasicBlock(LLVM_BB);
+  MachineBasicBlock *checkMBB = nullptr;
+  bool NeedsCarryCheck =
+      (Opc == I8085::SET_UGT_32 || Opc == I8085::SET_ULE_32);
+  if (NeedsCarryCheck)
+    checkMBB = MF->CreateMachineBasicBlock(LLVM_BB);
 
   MachineFunction::iterator I;
   for (I = MF->begin(); I != MF->end() && &(*I) != MBB; ++I)
@@ -967,6 +995,8 @@ MachineBasicBlock *I8085TargetLowering::insertCond32Set(MachineInstr &MI,
   MF->insert(I, trueMBB);
   MF->insert(I, falseMBB);
   MF->insert(I, continMBB);
+  if (checkMBB)
+    MF->insert(I, checkMBB);
 
   // Transfer remaining instructions and all successors of the current
   // block to the block which will contain the Phi node for the
@@ -997,29 +1027,51 @@ MachineBasicBlock *I8085TargetLowering::insertCond32Set(MachineInstr &MI,
 
   if(Opc == I8085::SET_UGT_32){
     BuildMI(MBB, dl, TII.get(I8085::JC)).addMBB(falseMBB);
-    BuildMI(MBB, dl, TII.get(I8085::JMP_32_IF_NOT_EQUAL)).addReg(operandOne).addReg(operandTwo).addMBB(trueMBB); 
-    BuildMI(MBB, dl, TII.get(I8085::JMP)).addMBB(falseMBB);  
+    BuildMI(MBB, dl, TII.get(I8085::JMP)).addMBB(checkMBB);
+
+    MBB->addSuccessor(falseMBB);
+    MBB->addSuccessor(checkMBB);
+
+    BuildMI(checkMBB, dl, TII.get(I8085::JMP_32_IF_NOT_EQUAL))
+        .addReg(operandOne)
+        .addReg(operandTwo)
+        .addMBB(trueMBB);
+    BuildMI(checkMBB, dl, TII.get(I8085::JMP)).addMBB(falseMBB);
+
+    checkMBB->addSuccessor(trueMBB);
+    checkMBB->addSuccessor(falseMBB);
   }
 
   else if(Opc == I8085::SET_ULT_32){
     BuildMI(MBB, dl, TII.get(I8085::JC)).addMBB(trueMBB);
     BuildMI(MBB, dl, TII.get(I8085::JMP)).addMBB(falseMBB);  
+    MBB->addSuccessor(trueMBB);
+    MBB->addSuccessor(falseMBB);
   }
 
   else if(Opc == I8085::SET_UGE_32){
     BuildMI(MBB, dl, TII.get(I8085::JC)).addMBB(falseMBB);
     BuildMI(MBB, dl, TII.get(I8085::JMP)).addMBB(trueMBB);  
+    MBB->addSuccessor(falseMBB);
+    MBB->addSuccessor(trueMBB);
   }
 
   else if(Opc == I8085::SET_ULE_32){
     BuildMI(MBB, dl, TII.get(I8085::JC)).addMBB(trueMBB);
-    BuildMI(MBB, dl, TII.get(I8085::JMP_32_IF_NOT_EQUAL)).addReg(operandOne).addReg(operandTwo).addMBB(falseMBB); 
-    BuildMI(MBB, dl, TII.get(I8085::JMP)).addMBB(trueMBB); 
-  }
+    BuildMI(MBB, dl, TII.get(I8085::JMP)).addMBB(checkMBB);
 
-  
-  MBB->addSuccessor(falseMBB);
-  MBB->addSuccessor(trueMBB);
+    MBB->addSuccessor(trueMBB);
+    MBB->addSuccessor(checkMBB);
+
+    BuildMI(checkMBB, dl, TII.get(I8085::JMP_32_IF_NOT_EQUAL))
+        .addReg(operandOne)
+        .addReg(operandTwo)
+        .addMBB(falseMBB);
+    BuildMI(checkMBB, dl, TII.get(I8085::JMP)).addMBB(trueMBB);
+
+    checkMBB->addSuccessor(falseMBB);
+    checkMBB->addSuccessor(trueMBB);
+  }
 
   // Unconditionally flow back to the true block
   BuildMI(falseMBB, dl, TII.get(I8085::MVI))

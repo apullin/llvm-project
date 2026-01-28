@@ -219,7 +219,7 @@ def MOV_32 : I8085Pseudo<(outs GR32: $rd),
                     "MOV_32 $rd, $rs", []>;
 
 
-let isBarrier = 1, isBranch = 1, isTerminator = 1 , Defs=[SREG] in {
+let isBranch = 1, isTerminator = 1, Defs=[SREG] in {
 
    def JMP_32_IF_NOT_EQUAL : I8085Pseudo<(outs),(ins GR32: $lhs, GR32: $rhs, addressTarget:$k),
                                            "JMP_32_IF_NOT_EQUAL $lhs, $rhs, $k", []>; 

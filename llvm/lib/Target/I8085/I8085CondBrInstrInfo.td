@@ -126,7 +126,7 @@ def SET_LE_16 : I8085InserterPseudo<(outs GR8: $dst),
                         "SET_SLE_16\t$dst, $lhs, $rhs", []>;   
 }
 
-let isBarrier = 1, isBranch = 1, Uses=[SREG]  in {                                                                                                                                                                           
+let isBranch = 1, isTerminator = 1, Uses=[SREG] in {
 
    def JZ :  F6<0b11001010,(outs),(ins addressTarget: $k),"JZ $k", []>;
 
@@ -173,7 +173,7 @@ let isCall = 1 in {
 }
 
 
-let isBarrier = 1, isBranch = 1, isTerminator = 1 , Defs=[SREG] in {
+let isBranch = 1, isTerminator = 1, Defs=[SREG] in {
    def JMP_8_IF : I8085Pseudo<(outs),(ins GR8: $reg, addressTarget:$k),
                                            "JMP_8_IF $reg, $k", []>;
 

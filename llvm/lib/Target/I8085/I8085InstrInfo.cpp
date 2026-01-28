@@ -304,6 +304,185 @@ unsigned I8085InstrInfo::getInstSizeInBytes(const MachineInstr &MI) const {
   }
 }
 
+static bool isCondBranchOpcode(unsigned Opc) {
+  switch (Opc) {
+  case I8085::JZ:
+  case I8085::JNZ:
+  case I8085::JC:
+  case I8085::JNC:
+  case I8085::JP:
+  case I8085::JM:
+  case I8085::JPE:
+  case I8085::JPO:
+    return true;
+  default:
+    return false;
+  }
+}
+
+static unsigned getOppositeBranchOpcode(unsigned Opc) {
+  switch (Opc) {
+  case I8085::JZ:
+    return I8085::JNZ;
+  case I8085::JNZ:
+    return I8085::JZ;
+  case I8085::JC:
+    return I8085::JNC;
+  case I8085::JNC:
+    return I8085::JC;
+  case I8085::JP:
+    return I8085::JM;
+  case I8085::JM:
+    return I8085::JP;
+  case I8085::JPE:
+    return I8085::JPO;
+  case I8085::JPO:
+    return I8085::JPE;
+  default:
+    llvm_unreachable("unexpected branch opcode!");
+  }
+}
+
+bool I8085InstrInfo::analyzeBranch(MachineBasicBlock &MBB,
+                                   MachineBasicBlock *&TBB,
+                                   MachineBasicBlock *&FBB,
+                                   SmallVectorImpl<MachineOperand> &Cond,
+                                   bool AllowModify) const {
+  TBB = nullptr;
+  FBB = nullptr;
+  Cond.clear();
+
+  MachineBasicBlock::iterator I = MBB.end();
+  while (I != MBB.begin()) {
+    --I;
+    if (I->isDebugInstr())
+      continue;
+
+    if (!isUnpredicatedTerminator(*I))
+      break;
+
+    if (!I->isBranch())
+      return true;
+
+    unsigned Opc = I->getOpcode();
+    if (Opc == I8085::JMP) {
+      if (!AllowModify) {
+        TBB = I->getOperand(0).getMBB();
+        continue;
+      }
+
+      MBB.erase(std::next(I), MBB.end());
+      Cond.clear();
+      FBB = nullptr;
+
+      if (MBB.isLayoutSuccessor(I->getOperand(0).getMBB())) {
+        TBB = nullptr;
+        I->eraseFromParent();
+        I = MBB.end();
+        continue;
+      }
+
+      TBB = I->getOperand(0).getMBB();
+      continue;
+    }
+
+    if (!isCondBranchOpcode(Opc))
+      return true;
+
+    if (Cond.empty()) {
+      FBB = TBB;
+      TBB = I->getOperand(0).getMBB();
+      Cond.push_back(MachineOperand::CreateImm(Opc));
+      continue;
+    }
+
+    assert(Cond.size() == 1);
+    assert(TBB);
+
+    if (TBB != I->getOperand(0).getMBB())
+      return true;
+
+    unsigned OldOpc = Cond[0].getImm();
+    if (OldOpc == Opc)
+      continue;
+
+    return true;
+  }
+
+  return false;
+}
+
+unsigned I8085InstrInfo::insertBranch(MachineBasicBlock &MBB,
+                                      MachineBasicBlock *TBB,
+                                      MachineBasicBlock *FBB,
+                                      ArrayRef<MachineOperand> Cond,
+                                      const DebugLoc &DL,
+                                      int *BytesAdded) const {
+  assert(TBB && "insertBranch must not be told to insert a fallthrough");
+  assert((Cond.size() == 1 || Cond.empty()) &&
+         "I8085 branch conditions have one component!");
+
+  if (BytesAdded)
+    *BytesAdded = 0;
+
+  if (Cond.empty()) {
+    assert(!FBB && "Unconditional branch with multiple successors!");
+    auto &MI = *BuildMI(&MBB, DL, get(I8085::JMP)).addMBB(TBB);
+    if (BytesAdded)
+      *BytesAdded += getInstSizeInBytes(MI);
+    return 1;
+  }
+
+  unsigned Opc = Cond[0].getImm();
+  assert(isCondBranchOpcode(Opc) && "Invalid conditional branch opcode");
+  auto &CondMI = *BuildMI(&MBB, DL, get(Opc)).addMBB(TBB);
+  if (BytesAdded)
+    *BytesAdded += getInstSizeInBytes(CondMI);
+
+  if (FBB) {
+    auto &MI = *BuildMI(&MBB, DL, get(I8085::JMP)).addMBB(FBB);
+    if (BytesAdded)
+      *BytesAdded += getInstSizeInBytes(MI);
+    return 2;
+  }
+
+  return 1;
+}
+
+unsigned I8085InstrInfo::removeBranch(MachineBasicBlock &MBB,
+                                      int *BytesRemoved) const {
+  if (BytesRemoved)
+    *BytesRemoved = 0;
+
+  unsigned Count = 0;
+  MachineBasicBlock::iterator I = MBB.end();
+  while (I != MBB.begin()) {
+    --I;
+    if (I->isDebugInstr())
+      continue;
+
+    unsigned Opc = I->getOpcode();
+    if (Opc != I8085::JMP && !isCondBranchOpcode(Opc))
+      break;
+
+    if (BytesRemoved)
+      *BytesRemoved += getInstSizeInBytes(*I);
+    I->eraseFromParent();
+    I = MBB.end();
+    ++Count;
+  }
+
+  return Count;
+}
+
+bool I8085InstrInfo::reverseBranchCondition(
+    SmallVectorImpl<MachineOperand> &Cond) const {
+  assert(Cond.size() == 1 && "Invalid I8085 branch condition");
+  unsigned Opc = Cond[0].getImm();
+  Cond[0].setImm(getOppositeBranchOpcode(Opc));
+  return false;
+}
+
 MachineBasicBlock *I8085InstrInfo::getBranchDestBlock(const MachineInstr &MI) const {
   switch (MI.getOpcode()) {
   default:

@@ -18,6 +18,7 @@
 #include "MCTargetDesc/I8085MCTargetDesc.h"
 
 #include "llvm/CodeGen/MachineFunctionPass.h"
+#include "llvm/Support/ErrorHandling.h"
 #include "llvm/CodeGen/MachineInstrBuilder.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
 #include "llvm/CodeGen/LivePhysRegs.h"
@@ -125,16 +126,15 @@ static void addAddrOperand(MachineInstrBuilder &MIB,
 }
 
 bool I8085ExpandPseudo::expandMBB(MachineBasicBlock &MBB) {
-  bool Modified = false;
-
-  BlockIt MBBI = MBB.begin(), E = MBB.end();
-  while (MBBI != E) {
-    BlockIt NMBBI = std::next(MBBI);
-    Modified |= expandMI(MBB, MBBI);
-    MBBI = NMBBI;
+  for (BlockIt MBBI = MBB.begin(), E = MBB.end(); MBBI != E; ) {
+    // Some expansions splice instructions into new blocks, which can invalidate
+    // iterators. Restart the scan after any successful expansion.
+    if (expandMI(MBB, MBBI))
+      return true;
+    MBBI = std::next(MBBI);
   }
 
-  return Modified;
+  return false;
 }
 
 bool I8085ExpandPseudo::runOnMachineFunction(MachineFunction &MF) {
@@ -150,11 +150,12 @@ bool I8085ExpandPseudo::runOnMachineFunction(MachineFunction &MF) {
   for (Block &MBB : MF) {
     bool ContinueExpanding = true;
     unsigned ExpandCount = 0;
+    unsigned MaxExpansions = static_cast<unsigned>(MBB.size()) + 16;
 
     // Continue expanding the block until all pseudos are expanded.
     do {
-      if (ExpandCount++ >= 10)
-        llvm_unreachable("pseudo expand limit reached");
+      if (ExpandCount++ >= MaxExpansions)
+        report_fatal_error("I8085 pseudo expand limit reached");
 
       bool BlockModified = expandMBB(MBB);
       Modified |= BlockModified;

@@ -105,9 +105,6 @@ bool I8085RegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
   int FrameIndex = MI.getOperand(FIOperandNum).getIndex();
   int Offset = MFI.getObjectOffset(FrameIndex);
 
-  // Add one to the offset because SP points to an empty slot.
-  // Offset += MFI.getStackSize() - TFI->getOffsetOfLocalArea() + 1;
-
   Offset += MFI.getStackSize() - TFI->getOffsetOfLocalArea();
   // Fold incoming offset.
   Offset += MI.getOperand(FIOperandNum + 1).getImm();

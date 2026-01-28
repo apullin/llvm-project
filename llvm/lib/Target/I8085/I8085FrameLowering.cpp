@@ -197,7 +197,7 @@ bool I8085FrameLowering::spillCalleeSavedRegisters(
     // BuildMI(MBB, MI, DL, TII.get(I8085::PUSHRr))
     //     .addReg(Reg, getKillRegState(IsNotLiveIn))
     //     .setMIFlag(MachineInstr::FrameSetup);
-    ++CalleeFrameSize;
+    // No callee-saved spills are emitted yet, so keep frame size unchanged.
   }
 
   I8085FI->setCalleeSavedFrameSize(CalleeFrameSize);

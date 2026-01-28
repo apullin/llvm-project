@@ -342,6 +342,17 @@ template <> bool I8085DAGToDAGISel::select<ISD::SHL>(SDNode *N) {
   SDValue RHS = N->getOperand(1);
   
   
+  if(LHS.getSimpleValueType() == MVT::i16){
+    if (const auto *C = dyn_cast<ConstantSDNode>(RHS)) {
+      if (C->getZExtValue() == 1) {
+        SDValue Ops[] = {LHS, LHS};
+        SDNode *ResNode = CurDAG->getMachineNode(I8085::ADD_16, dl, MVT::i16, Ops);
+        ReplaceUses(SDValue(N, 0), SDValue(ResNode, 0));
+        CurDAG->RemoveDeadNode(N);
+        return true;
+      }
+    }
+  }
   if(LHS.getSimpleValueType() == MVT::i8 && RHS.getSimpleValueType() == MVT::i8){
     unsigned Opc=I8085::SHL_8;
     SDValue Ops[] = {LHS,RHS};

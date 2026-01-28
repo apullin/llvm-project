@@ -75,6 +75,12 @@ def GR8 : RegisterClass<"I8085", [i8], 8,
                             add A,B,C,D,E,H,L,M
                             )>; 
 
+// 8-bit GPRs that are safe to use when HL is needed as an address register.
+def GR8NoHL : RegisterClass<"I8085", [i8], 8,
+                        (
+                            add A,B,C,D,E
+                            )>;
+
 def GR16 : RegisterClass<"I8085", [i16], 8,
                         (
                             add BC,DE,HL,SP

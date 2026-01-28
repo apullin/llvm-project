@@ -97,6 +97,7 @@ def I8085Imm8 : Operand<i8>,
 def I8085Imm16 : Operand<i16>,
                  ImmLeaf<i16, [{ return Imm >= -32768 && Imm <= 65535; }] > {
   let ParserMatchClass = I8085Imm16AsmOperand;
+  let EncoderMethod = "encodeImm<I8085::fixup_16, 1>";
 }
 
 
@@ -106,7 +107,7 @@ def memspi : Operand<iPTR> {
 }
 
 def imm16Addr : Operand<i16> {
-  let EncoderMethod = "encodeImm<I8085::fixup_16, 0>";
+  let EncoderMethod = "encodeImm<I8085::fixup_16, 1>";
 }
 
 
@@ -455,31 +456,31 @@ def LOAD_16 : I8085Pseudo<(outs GR16: $dst),
                                              : $dst, imm
                                              : $src)]>; 
 
-def STORE_16 : I8085Pseudo<(outs),
-                            (ins mspi: $dst, GR16: $src),
+let Defs=[H,L] in def STORE_16 : I8085Pseudo<(outs),
+                            (ins mspi: $dst, GR16BD: $src),
                             "STORE_16 $dst, $src", [(store i16: $src, addr: $dst)]>;
 
-def STORE_8 : I8085Pseudo<(outs),
+let Defs=[H,L] in def STORE_8 : I8085Pseudo<(outs),
                         (ins mspi: $memri,
-                         GR8: $reg),
+                         GR8NoHL: $reg),
                         "STORE $memri, $reg", [(store i8: $reg, addr: $memri)]>;
 
 
-def LOAD_16_WITH_ADDR : I8085Pseudo<(outs GR16: $dst),
+let Defs=[H,L] in def LOAD_16_WITH_ADDR : I8085Pseudo<(outs GR16: $dst),
                        (ins mspi: $src),
                        "LOAD $dst, $src", [(set i16: $dst, (load addr: $src))]>;    
 
-def LOAD_8_WITH_ADDR : I8085Pseudo<(outs GR8: $dst),
+let Defs=[H,L] in def LOAD_8_WITH_ADDR : I8085Pseudo<(outs GR8: $dst),
                        (ins mspi: $src),
                        "LOAD $dst, $src", [(set i8: $dst, (load addr: $src))]>;
 
 
-def STORE_8_AT_OFFSET_WITH_SP : I8085Pseudo<(outs),
-                       (ins GR8: $src, I8085Imm16: $offset),
+let Defs=[H,L] in def STORE_8_AT_OFFSET_WITH_SP : I8085Pseudo<(outs),
+                       (ins GR8NoHL: $src, I8085Imm16: $offset),
                        "STORE_8_SP_AT_OFFSET\t$offset, $src", [(store i8: $src, imm: $offset)]>;
 
-def STORE_16_AT_OFFSET_WITH_SP : I8085Pseudo<(outs),
-                       (ins GR16: $src, I8085Imm16: $offset),
+let Defs=[H,L] in def STORE_16_AT_OFFSET_WITH_SP : I8085Pseudo<(outs),
+                       (ins GR16BD: $src, I8085Imm16: $offset),
                        "STORE_16_SP_AT_OFFSET\t$offset, $src", [(store i16: $src, imm: $offset)]>;                       
 
 }       
@@ -489,29 +490,29 @@ def PUSH : F10<0b0101,(outs), (ins GR16PP: $rd), "PUSH $rd", []>;
 
 let Uses=[SP] in {
 
-def LOAD_8_WITH_IMM_ADDR : I8085Pseudo<(outs GR8: $dst),
+let Defs=[H,L] in def LOAD_8_WITH_IMM_ADDR : I8085Pseudo<(outs GR8: $dst),
                        (ins imm16Addr: $src),
                        "LOAD_8_ADDR $dst, $src", []>;  
 
-def LOAD_16_WITH_IMM_ADDR : I8085Pseudo<(outs GR16: $dst),
+let Defs=[H,L] in def LOAD_16_WITH_IMM_ADDR : I8085Pseudo<(outs GR16: $dst),
                        (ins imm16Addr: $src),
                        "LOAD_16_ADDR $dst, $src", []>;
 
-def LOAD_8_ADDR_CONTENT : I8085Pseudo<(outs GR8: $dst),
+let Defs=[H,L] in def LOAD_8_ADDR_CONTENT : I8085Pseudo<(outs GR8: $dst),
                        (ins GR16: $src),
                        "LOAD_8_ADDR_CONTENT $dst, $src", [(set i8: $dst, (load i16: $src))]>;
 
-def LOAD_16_ADDR_CONTENT : I8085Pseudo<(outs GR16: $dst),
+let Defs=[H,L] in def LOAD_16_ADDR_CONTENT : I8085Pseudo<(outs GR16BD: $dst),
                        (ins GR16: $src),
                        "LOAD_16_ADDR_CONTENT $dst, $src", [(set i16: $dst, (load i16: $src))]>;
 
-def STORE_8_ADDR_CONTENT : I8085Pseudo<(outs),
-                       (ins GR16: $addr, GR8: $src),
+let Defs=[H,L] in def STORE_8_ADDR_CONTENT : I8085Pseudo<(outs),
+                       (ins GR16: $addr, GR8NoHL: $src),
                        "STORE_8_ADDR_CONTENT $addr, $src",
                        [(store i8: $src, i16: $addr)]>;
 
-def STORE_16_ADDR_CONTENT : I8085Pseudo<(outs),
-                       (ins GR16: $addr, GR16: $src),
+let Defs=[H,L] in def STORE_16_ADDR_CONTENT : I8085Pseudo<(outs),
+                       (ins GR16: $addr, GR16BD: $src),
                        "STORE_16_ADDR_CONTENT $addr, $src",
                        [(store i16: $src, i16: $addr)]>;
 }  
@@ -519,7 +520,7 @@ def STORE_16_ADDR_CONTENT : I8085Pseudo<(outs),
 
 def addressTarget : Operand<OtherVT> {
   // let PrintMethod = "printPCRelImm";
-  let EncoderMethod = "encodeCallTarget<I8085::fixup_16, 0>";
+  let EncoderMethod = "encodeCallTarget<I8085::fixup_16, 1>";
 }
 
 let isCall = 1 in {                                                                                                 
@@ -642,8 +643,8 @@ def : Pat<(i16(I8085Wrapper tconstpool : $dst)),
           (LOAD_16_WITH_IMM_ADDR tconstpool : $dst)>;
 
 
-let Defs = [SREG],
-    hasSideEffects = 0 in  def FRMIDX : I8085Pseudo<(outs GR16: $dst),
+let Defs = [SREG, H, L],
+    hasSideEffects = 0 in  def FRMIDX : I8085Pseudo<(outs GR16BD: $dst),
                                                     (ins mspi: $memri),
                                                     "FRMIDX\t$dst, $memri", []>;
 

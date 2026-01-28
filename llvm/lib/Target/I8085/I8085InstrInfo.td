@@ -502,7 +502,7 @@ let Defs=[H,L] in def LOAD_8_ADDR_CONTENT : I8085Pseudo<(outs GR8: $dst),
                        (ins GR16: $src),
                        "LOAD_8_ADDR_CONTENT $dst, $src", [(set i8: $dst, (load i16: $src))]>;
 
-let Defs=[H,L] in def LOAD_16_ADDR_CONTENT : I8085Pseudo<(outs GR16BD: $dst),
+let Defs=[H,L] in def LOAD_16_ADDR_CONTENT : I8085Pseudo<(outs GR16: $dst),
                        (ins GR16: $src),
                        "LOAD_16_ADDR_CONTENT $dst, $src", [(set i16: $dst, (load i16: $src))]>;
 
@@ -644,7 +644,7 @@ def : Pat<(i16(I8085Wrapper tconstpool : $dst)),
 
 
 let Defs = [SREG, H, L],
-    hasSideEffects = 0 in  def FRMIDX : I8085Pseudo<(outs GR16BD: $dst),
+    hasSideEffects = 0 in  def FRMIDX : I8085Pseudo<(outs GR16: $dst),
                                                     (ins mspi: $memri),
                                                     "FRMIDX\t$dst, $memri", []>;
 

@@ -4,9 +4,11 @@
   target triple = "i8085-unknown-elf"
   define void @load16_bc() { ret void }
   define void @load8_de() { ret void }
+  define void @load16_hl() { ret void }
   define void @store8_bc() { ret void }
   define void @store16_bc() { ret void }
   define void @frmidx_bc() { ret void }
+  define void @frmidx_hl() { ret void }
 ...
 
 ---
@@ -34,6 +36,23 @@ body:             |
     ; CHECK: LDAX $de
     ; CHECK-NEXT: $c = MOV $a
     $c = LOAD_8_ADDR_CONTENT $de, implicit-def $h, implicit-def $l, implicit $sp
+    RET
+...
+
+---
+name:            load16_hl
+body:             |
+  bb.0:
+    liveins: $bc
+
+    ; CHECK-LABEL: name:            load16_hl
+    ; CHECK: LDAX $bc
+    ; CHECK-NEXT: $l = MOV $a
+    ; CHECK-NEXT: $bc = INX
+    ; CHECK-NEXT: LDAX $bc
+    ; CHECK-NEXT: $h = MOV $a
+    ; CHECK-NEXT: $bc = DCX
+    $hl = LOAD_16_ADDR_CONTENT $bc, implicit-def $h, implicit-def $l, implicit $sp
     RET
 ...
 
@@ -76,5 +95,18 @@ body:             |
     ; CHECK: $b = MOV $h
     ; CHECK: $c = MOV $l
     $bc = FRMIDX $sp, 6, implicit-def $sreg, implicit-def $h, implicit-def $l
+    RET
+...
+
+---
+name:            frmidx_hl
+body:             |
+  bb.0:
+    liveins: $sp
+
+    ; CHECK-LABEL: name:            frmidx_hl
+    ; CHECK: $hl = LXI 8
+    ; CHECK: DAD $sp
+    $hl = FRMIDX $sp, 8, implicit-def $sreg, implicit-def $h, implicit-def $l
     RET
 ...

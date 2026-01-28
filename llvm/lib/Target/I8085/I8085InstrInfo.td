@@ -172,7 +172,9 @@ let Constraints = "$src = $rd", Defs=[SREG]  in {
       : I8085Pseudo<(outs GR16: $rd),
               (ins GR16: $src, GR16: $rr),
               "SUB_16\t$rd, $rr",
-              [(set i16: $rd, (sub i16: $src, i16: $rr))]>;
+              [(set i16: $rd, (sub i16: $src, i16: $rr))]> {
+    let Constraints = "";
+  }
 
   def ADD_8
       : I8085Pseudo<(outs GR8: $rd),

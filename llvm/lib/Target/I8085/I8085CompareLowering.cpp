@@ -450,13 +450,11 @@ MachineBasicBlock *I8085TargetLowering::insertCond16Set(MachineInstr &MI,
 
   unsigned destReg = MI.getOperand(0).getReg();
 
-  // SUB_16 is a two-operand pseudo (dest == src). Copy to a temp first
-  // so we don't clobber operandOne during comparisons.
-  BuildMI(MBB, dl, TII.get(TargetOpcode::COPY), tempRegThree)
-        .addReg(operandOne);
+  // SUB_16 is a two-operand pseudo (dest == src). Let the two-address pass
+  // insert a copy if needed so operandOne remains available for later compares.
   BuildMI(MBB, dl, TII.get(I8085::SUB_16))
         .addReg(tempRegThree, RegState::Define)
-        .addReg(tempRegThree)
+        .addReg(operandOne)
         .addReg(operandTwo);
 
   if(Opc == I8085::SET_UGT_16){

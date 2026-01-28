@@ -72,6 +72,12 @@ I8085TargetLowering::I8085TargetLowering(const I8085TargetMachine &TM,
   setOperationAction(ISD::MUL, MVT::i16, LibCall);
   setOperationAction(ISD::MUL, MVT::i32, LibCall);
   setOperationAction(ISD::MUL, MVT::i64, Custom);
+  for (MVT VT : {MVT::i8, MVT::i16, MVT::i32, MVT::i64}) {
+    setOperationAction(ISD::MULHS, VT, Expand);
+    setOperationAction(ISD::MULHU, VT, Expand);
+    setOperationAction(ISD::SMUL_LOHI, VT, Expand);
+    setOperationAction(ISD::UMUL_LOHI, VT, Expand);
+  }
 
   setOperationAction(ISD::SDIV, MVT::i8, LibCall);
   setOperationAction(ISD::SDIV, MVT::i16, LibCall);

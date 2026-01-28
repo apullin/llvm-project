@@ -45,3 +45,25 @@ entry:
   %z = zext i1 %cmp to i8
   ret i8 %z
 }
+
+define i8 @cmp_sge_i32(i32 %a, i32 %b) {
+; CHECK-LABEL: cmp_sge_i32:
+; CHECK-NOT: SET_
+; CHECK-NOT: JMP_32_IF
+; CHECK: RET
+entry:
+  %cmp = icmp sge i32 %a, %b
+  %z = zext i1 %cmp to i8
+  ret i8 %z
+}
+
+define i8 @cmp_sle_i32(i32 %a, i32 %b) {
+; CHECK-LABEL: cmp_sle_i32:
+; CHECK-NOT: SET_
+; CHECK-NOT: JMP_32_IF
+; CHECK: RET
+entry:
+  %cmp = icmp sle i32 %a, %b
+  %z = zext i1 %cmp to i8
+  ret i8 %z
+}

@@ -24,3 +24,15 @@ entry:
   %sar = ashr i16 %shr, %s1_16
   ret i16 %sar
 }
+
+define i32 @var_shifts_i32(i32 %x, i8 %s) {
+; CHECK-LABEL: var_shifts_i32:
+; CHECK: RET
+entry:
+  %s1 = and i8 %s, 31
+  %s1_32 = zext i8 %s1 to i32
+  %shl = shl i32 %x, %s1_32
+  %shr = lshr i32 %shl, %s1_32
+  %sar = ashr i32 %shr, %s1_32
+  ret i32 %sar
+}

@@ -152,11 +152,11 @@ bool I8085ExpandPseudo::runOnMachineFunction(MachineFunction &MF) {
 
     // Continue expanding the block until all pseudos are expanded.
     do {
-      assert(ExpandCount < 10 && "pseudo expand limit reached");
+      if (ExpandCount++ >= 10)
+        llvm_unreachable("pseudo expand limit reached");
 
       bool BlockModified = expandMBB(MBB);
       Modified |= BlockModified;
-      ExpandCount++;
 
       ContinueExpanding = BlockModified;
     } while (ContinueExpanding);
@@ -167,7 +167,6 @@ bool I8085ExpandPseudo::runOnMachineFunction(MachineFunction &MF) {
 
 template <>
 bool I8085ExpandPseudo::expand<I8085::LOAD_16_ADDR_CONTENT>(Block &MBB, BlockIt MBBI) {
-  const I8085Subtarget &STI = MBB.getParent()->getSubtarget<I8085Subtarget>();
   MachineInstr &MI = *MBBI;
 
   unsigned srcLowReg,srcHighReg;
@@ -257,7 +256,6 @@ bool I8085ExpandPseudo::expand<I8085::LOAD_16_ADDR_CONTENT>(Block &MBB, BlockIt 
 
 template <>
 bool I8085ExpandPseudo::expand<I8085::LOAD_8_ADDR_CONTENT>(Block &MBB, BlockIt MBBI) {
-  const I8085Subtarget &STI = MBB.getParent()->getSubtarget<I8085Subtarget>();
   MachineInstr &MI = *MBBI;
 
   unsigned lowReg,highReg;
@@ -417,7 +415,6 @@ bool I8085ExpandPseudo::expand<I8085::STORE_16_ADDR_CONTENT>(Block &MBB, BlockIt
 
 template <>
 bool I8085ExpandPseudo::expand<I8085::STORE_8>(Block &MBB, BlockIt MBBI) {
-  const I8085Subtarget &STI = MBB.getParent()->getSubtarget<I8085Subtarget>();
   MachineInstr &MI = *MBBI;
 
 
@@ -461,7 +458,6 @@ uint8_t low(uint64_t input){return input & 0xFF;}
 
 template <>
 bool I8085ExpandPseudo::expand<I8085::LOAD_16>(Block &MBB, BlockIt MBBI) {
-  const I8085Subtarget &STI = MBB.getParent()->getSubtarget<I8085Subtarget>();
   MachineInstr &MI = *MBBI;
 
   unsigned lowReg,highReg;
@@ -496,10 +492,8 @@ bool I8085ExpandPseudo::expand<I8085::LOAD_16>(Block &MBB, BlockIt MBBI) {
 
 template <>
 bool I8085ExpandPseudo::expand<I8085::LOAD_8_WITH_IMM_ADDR>(Block &MBB, BlockIt MBBI) {
-const I8085Subtarget &STI = MBB.getParent()->getSubtarget<I8085Subtarget>();
   MachineInstr &MI = *MBBI;
 
-  unsigned lowReg,highReg;
   unsigned destReg = MI.getOperand(0).getReg();
 
   const MachineOperand &AddrMO = MI.getOperand(1);
@@ -517,7 +511,6 @@ const I8085Subtarget &STI = MBB.getParent()->getSubtarget<I8085Subtarget>();
 
 template <>
 bool I8085ExpandPseudo::expand<I8085::LOAD_16_WITH_IMM_ADDR>(Block &MBB, BlockIt MBBI) {
-  const I8085Subtarget &STI = MBB.getParent()->getSubtarget<I8085Subtarget>();
   MachineInstr &MI = *MBBI;
 
   unsigned lowReg,highReg;
@@ -564,7 +557,6 @@ bool I8085ExpandPseudo::expand<I8085::LOAD_16_WITH_IMM_ADDR>(Block &MBB, BlockIt
 
 template <>
 bool I8085ExpandPseudo::expand<I8085::STORE_16>(Block &MBB, BlockIt MBBI) {
-  const I8085Subtarget &STI = MBB.getParent()->getSubtarget<I8085Subtarget>();
   MachineInstr &MI = *MBBI;
   
   unsigned lowReg,highReg;
@@ -600,7 +592,6 @@ bool I8085ExpandPseudo::expand<I8085::STORE_16>(Block &MBB, BlockIt MBBI) {
 
 template <>
 bool I8085ExpandPseudo::expand<I8085::SHRINK_STACK_BY>(Block &MBB, BlockIt MBBI) {
-  const I8085Subtarget &STI = MBB.getParent()->getSubtarget<I8085Subtarget>();
   MachineInstr &MI = *MBBI;
 
   int64_t Amount = MI.getOperand(0).getImm();
@@ -620,7 +611,6 @@ bool I8085ExpandPseudo::expand<I8085::SHRINK_STACK_BY>(Block &MBB, BlockIt MBBI)
 
 template <>
 bool I8085ExpandPseudo::expand<I8085::GROW_STACK_BY>(Block &MBB, BlockIt MBBI) {
-  const I8085Subtarget &STI = MBB.getParent()->getSubtarget<I8085Subtarget>();
   MachineInstr &MI = *MBBI;
 
   int64_t AmountImm = MI.getOperand(0).getImm();
@@ -641,7 +631,6 @@ bool I8085ExpandPseudo::expand<I8085::GROW_STACK_BY>(Block &MBB, BlockIt MBBI) {
 
 template <>
 bool I8085ExpandPseudo::expand<I8085::LOAD_8_WITH_ADDR>(Block &MBB, BlockIt MBBI) {
-  const I8085Subtarget &STI = MBB.getParent()->getSubtarget<I8085Subtarget>();
   MachineInstr &MI = *MBBI;
  
 
@@ -681,7 +670,6 @@ bool I8085ExpandPseudo::expand<I8085::LOAD_8_WITH_ADDR>(Block &MBB, BlockIt MBBI
 
 template <>
 bool I8085ExpandPseudo::expand<I8085::LOAD_16_WITH_ADDR>(Block &MBB, BlockIt MBBI) {
-  const I8085Subtarget &STI = MBB.getParent()->getSubtarget<I8085Subtarget>();
   MachineInstr &MI = *MBBI;
   
   unsigned lowReg,highReg;
@@ -784,7 +772,6 @@ bool I8085ExpandPseudo::expand<I8085::FRMIDX>(Block &MBB, BlockIt MBBI) {
 
 template <>
 bool I8085ExpandPseudo::expand<I8085::ANDI_8>(Block &MBB, BlockIt MBBI) {
-  const I8085Subtarget &STI = MBB.getParent()->getSubtarget<I8085Subtarget>();
   MachineInstr &MI = *MBBI;
 
   unsigned operandOne = MI.getOperand(1).getReg();
@@ -808,7 +795,6 @@ bool I8085ExpandPseudo::expand<I8085::ANDI_8>(Block &MBB, BlockIt MBBI) {
 
 template <>
 bool I8085ExpandPseudo::expand<I8085::ORI_8>(Block &MBB, BlockIt MBBI) {
-  const I8085Subtarget &STI = MBB.getParent()->getSubtarget<I8085Subtarget>();
   MachineInstr &MI = *MBBI;
 
   unsigned operandOne = MI.getOperand(1).getReg();
@@ -832,7 +818,6 @@ bool I8085ExpandPseudo::expand<I8085::ORI_8>(Block &MBB, BlockIt MBBI) {
 
 template <>
 bool I8085ExpandPseudo::expand<I8085::XORI_8>(Block &MBB, BlockIt MBBI) {
-  const I8085Subtarget &STI = MBB.getParent()->getSubtarget<I8085Subtarget>();
   MachineInstr &MI = *MBBI;
 
   unsigned operandOne = MI.getOperand(1).getReg();
@@ -858,7 +843,6 @@ bool I8085ExpandPseudo::expand<I8085::XORI_8>(Block &MBB, BlockIt MBBI) {
 
 template <>
 bool I8085ExpandPseudo::expand<I8085::AND_8>(Block &MBB, BlockIt MBBI) {
-  const I8085Subtarget &STI = MBB.getParent()->getSubtarget<I8085Subtarget>();
   MachineInstr &MI = *MBBI;
 
   unsigned destReg = MI.getOperand(0).getReg();
@@ -887,7 +871,6 @@ bool I8085ExpandPseudo::expand<I8085::AND_8>(Block &MBB, BlockIt MBBI) {
 
 template <>
 bool I8085ExpandPseudo::expand<I8085::OR_8>(Block &MBB, BlockIt MBBI) {
-  const I8085Subtarget &STI = MBB.getParent()->getSubtarget<I8085Subtarget>();
   MachineInstr &MI = *MBBI;
 
   unsigned operandOne = MI.getOperand(1).getReg();
@@ -911,7 +894,6 @@ bool I8085ExpandPseudo::expand<I8085::OR_8>(Block &MBB, BlockIt MBBI) {
 
 template <>
 bool I8085ExpandPseudo::expand<I8085::XOR_8>(Block &MBB, BlockIt MBBI) {
-  const I8085Subtarget &STI = MBB.getParent()->getSubtarget<I8085Subtarget>();
   MachineInstr &MI = *MBBI;
 
   unsigned operandOne = MI.getOperand(1).getReg();
@@ -935,7 +917,6 @@ bool I8085ExpandPseudo::expand<I8085::XOR_8>(Block &MBB, BlockIt MBBI) {
 
 template <>
 bool I8085ExpandPseudo::expand<I8085::AND_16>(Block &MBB, BlockIt MBBI) {
-const I8085Subtarget &STI = MBB.getParent()->getSubtarget<I8085Subtarget>();
   MachineInstr &MI = *MBBI;
 
   unsigned destReg = MI.getOperand(0).getReg();
@@ -971,7 +952,6 @@ const I8085Subtarget &STI = MBB.getParent()->getSubtarget<I8085Subtarget>();
 
 template <>
 bool I8085ExpandPseudo::expand<I8085::OR_16>(Block &MBB, BlockIt MBBI) {
-const I8085Subtarget &STI = MBB.getParent()->getSubtarget<I8085Subtarget>();
   MachineInstr &MI = *MBBI;
 
   unsigned operandOne = MI.getOperand(1).getReg();
@@ -1003,7 +983,6 @@ const I8085Subtarget &STI = MBB.getParent()->getSubtarget<I8085Subtarget>();
 
 template <>
 bool I8085ExpandPseudo::expand<I8085::XOR_16>(Block &MBB, BlockIt MBBI) {
-const I8085Subtarget &STI = MBB.getParent()->getSubtarget<I8085Subtarget>();
   MachineInstr &MI = *MBBI;
 
   unsigned operandOne = MI.getOperand(1).getReg();
@@ -1035,7 +1014,6 @@ const I8085Subtarget &STI = MBB.getParent()->getSubtarget<I8085Subtarget>();
 
 template <>
 bool I8085ExpandPseudo::expand<I8085::ADD_8>(Block &MBB, BlockIt MBBI) {
-  const I8085Subtarget &STI = MBB.getParent()->getSubtarget<I8085Subtarget>();
   MachineInstr &MI = *MBBI;
 
   unsigned destReg = MI.getOperand(0).getReg();
@@ -1065,7 +1043,6 @@ bool I8085ExpandPseudo::expand<I8085::ADD_8>(Block &MBB, BlockIt MBBI) {
 
 template <>
 bool I8085ExpandPseudo::expand<I8085::SUB_8>(Block &MBB, BlockIt MBBI) {
-  const I8085Subtarget &STI = MBB.getParent()->getSubtarget<I8085Subtarget>();
   MachineInstr &MI = *MBBI;
 
   unsigned destReg = MI.getOperand(0).getReg();
@@ -1094,7 +1071,6 @@ bool I8085ExpandPseudo::expand<I8085::SUB_8>(Block &MBB, BlockIt MBBI) {
 
 template <>
 bool I8085ExpandPseudo::expand<I8085::ADD_16>(Block &MBB, BlockIt MBBI) {
-  const I8085Subtarget &STI = MBB.getParent()->getSubtarget<I8085Subtarget>();
   MachineInstr &MI = *MBBI;
 
   unsigned destReg = MI.getOperand(0).getReg();
@@ -1136,7 +1112,6 @@ bool I8085ExpandPseudo::expand<I8085::ADD_16>(Block &MBB, BlockIt MBBI) {
 }
 
 template <> bool I8085ExpandPseudo::expand<I8085::SUB_16>(Block &MBB, BlockIt MBBI) {
-  const I8085Subtarget &STI = MBB.getParent()->getSubtarget<I8085Subtarget>();
   MachineInstr &MI = *MBBI;
   
   unsigned destReg = MI.getOperand(0).getReg();
@@ -1189,13 +1164,11 @@ template <> bool I8085ExpandPseudo::expand<I8085::SUB_16>(Block &MBB, BlockIt MB
 }
 
 template <> bool I8085ExpandPseudo::expand<I8085::SET_EQ_8>(Block &MBB, BlockIt MBBI) {
-  const I8085Subtarget &STI = MBB.getParent()->getSubtarget<I8085Subtarget>();
   MachineInstr &MI = *MBBI;
   
   unsigned operandOne = MI.getOperand(0).getReg();
   unsigned destReg = operandOne;
   uint16_t operandTwo = MI.getOperand(2).getReg();  
-  bool DstIsDead=MI.getOperand(0).isDead();
 
   buildMI(MBB, MBBI, I8085::MOV)
     .addReg(I8085::A,RegState::Define)
@@ -1215,13 +1188,11 @@ template <> bool I8085ExpandPseudo::expand<I8085::SET_EQ_8>(Block &MBB, BlockIt 
 }
 
 template <> bool I8085ExpandPseudo::expand<I8085::SET_NE_8>(Block &MBB, BlockIt MBBI) {
-  const I8085Subtarget &STI = MBB.getParent()->getSubtarget<I8085Subtarget>();
   MachineInstr &MI = *MBBI;
   
   unsigned operandOne = MI.getOperand(0).getReg();
   unsigned destReg = operandOne;
   uint16_t operandTwo = MI.getOperand(2).getReg();  
-  bool DstIsDead=MI.getOperand(0).isDead();
 
   buildMI(MBB, MBBI, I8085::MOV)
     .addReg(I8085::A,RegState::Define)
@@ -1239,21 +1210,12 @@ template <> bool I8085ExpandPseudo::expand<I8085::SET_NE_8>(Block &MBB, BlockIt 
 }
 
 template <> bool I8085ExpandPseudo::expand<I8085::SET_EQ_16>(Block &MBB, BlockIt MBBI) {
-  const I8085Subtarget &STI = MBB.getParent()->getSubtarget<I8085Subtarget>();
   MachineInstr &MI = *MBBI;
   
   unsigned operandOne = MI.getOperand(1).getReg();
   unsigned destReg = operandOne;
   uint16_t operandTwo = MI.getOperand(2).getReg();  
   bool DstIsDead=MI.getOperand(0).isDead();
-  unsigned opLow,opHigh;
-  unsigned destLow,destHigh;
-
-  if(destReg==I8085::BC){  destLow=I8085::C;  destHigh=I8085::B; }
-  if(destReg==I8085::DE){  destLow=I8085::E;  destHigh=I8085::D; }
-
-  if(operandTwo==I8085::BC){  opLow=I8085::C;  opHigh=I8085::B; }
-  if(operandTwo==I8085::DE){  opLow=I8085::E;  opHigh=I8085::D; }
 
   buildMI(MBB, MBBI, I8085::SUB_16)
     .addReg(destReg, RegState::Define | getDeadRegState(DstIsDead))
@@ -1271,21 +1233,12 @@ template <> bool I8085ExpandPseudo::expand<I8085::SET_EQ_16>(Block &MBB, BlockIt
 }
 
 template <> bool I8085ExpandPseudo::expand<I8085::SET_NE_16>(Block &MBB, BlockIt MBBI) {
-  const I8085Subtarget &STI = MBB.getParent()->getSubtarget<I8085Subtarget>();
   MachineInstr &MI = *MBBI;
   
   unsigned operandOne = MI.getOperand(1).getReg();
   unsigned destReg = operandOne;
   uint16_t operandTwo = MI.getOperand(2).getReg();  
   bool DstIsDead=MI.getOperand(0).isDead();
-  unsigned opLow,opHigh;
-  unsigned destLow,destHigh;
-
-  if(destReg==I8085::BC){  destLow=I8085::C;  destHigh=I8085::B; }
-  if(destReg==I8085::DE){  destLow=I8085::E;  destHigh=I8085::D; }
-
-  if(operandTwo==I8085::BC){  opLow=I8085::C;  opHigh=I8085::B; }
-  if(operandTwo==I8085::DE){  opLow=I8085::E;  opHigh=I8085::D; }
 
   buildMI(MBB, MBBI, I8085::SUB_16)
     .addReg(destReg, RegState::Define | getDeadRegState(DstIsDead))
@@ -1301,7 +1254,6 @@ template <> bool I8085ExpandPseudo::expand<I8085::SET_NE_16>(Block &MBB, BlockIt
 }
 
 template <> bool I8085ExpandPseudo::expand<I8085::JMP_8_IF>(Block &MBB, BlockIt MBBI) {
-  const I8085Subtarget &STI = MBB.getParent()->getSubtarget<I8085Subtarget>();
   MachineInstr &MI = *MBBI;
   
   unsigned operand = MI.getOperand(0).getReg();
@@ -1321,7 +1273,6 @@ template <> bool I8085ExpandPseudo::expand<I8085::JMP_8_IF>(Block &MBB, BlockIt 
 }
 
 template <> bool I8085ExpandPseudo::expand<I8085::TRUNC16TO8>(Block &MBB, BlockIt MBBI) {
-  const I8085Subtarget &STI = MBB.getParent()->getSubtarget<I8085Subtarget>();
   MachineInstr &MI = *MBBI;
   
   unsigned destReg = MI.getOperand(0).getReg();
@@ -1340,7 +1291,6 @@ template <> bool I8085ExpandPseudo::expand<I8085::TRUNC16TO8>(Block &MBB, BlockI
 }
 
 template <> bool I8085ExpandPseudo::expand<I8085::SEXT8TO16>(Block &MBB, BlockIt MBBI) {
-  const I8085Subtarget &STI = MBB.getParent()->getSubtarget<I8085Subtarget>();
   MachineInstr &MI = *MBBI;
   
   unsigned destReg = MI.getOperand(0).getReg();
@@ -1374,7 +1324,6 @@ template <> bool I8085ExpandPseudo::expand<I8085::SEXT8TO16>(Block &MBB, BlockIt
 }
 
 template <> bool I8085ExpandPseudo::expand<I8085::ZEXT8TO16>(Block &MBB, BlockIt MBBI) {
-  const I8085Subtarget &STI = MBB.getParent()->getSubtarget<I8085Subtarget>();
   MachineInstr &MI = *MBBI;
   
   unsigned destReg = MI.getOperand(0).getReg();
@@ -1406,7 +1355,6 @@ template <> bool I8085ExpandPseudo::expand<I8085::AEXT8TO16>(Block &MBB, BlockIt
 }
 
 template <> bool I8085ExpandPseudo::expand<I8085::RL_16>(Block &MBB, BlockIt MBBI) {
-  const I8085Subtarget &STI = MBB.getParent()->getSubtarget<I8085Subtarget>();
   MachineInstr &MI = *MBBI;
   
   unsigned reg = MI.getOperand(0).getReg();
@@ -1456,7 +1404,6 @@ template <> bool I8085ExpandPseudo::expand<I8085::RL_16>(Block &MBB, BlockIt MBB
 
 
 template <> bool I8085ExpandPseudo::expand<I8085::RR_16>(Block &MBB, BlockIt MBBI) {
-  const I8085Subtarget &STI = MBB.getParent()->getSubtarget<I8085Subtarget>();
   MachineInstr &MI = *MBBI;
   
   unsigned reg = MI.getOperand(0).getReg();
@@ -1548,7 +1495,6 @@ template <> bool I8085ExpandPseudo::expand<I8085::ASR_16>(Block &MBB, BlockIt MB
 }
 
 template <> bool I8085ExpandPseudo::expand<I8085::RL_8>(Block &MBB, BlockIt MBBI) {
-  const I8085Subtarget &STI = MBB.getParent()->getSubtarget<I8085Subtarget>();
   MachineInstr &MI = *MBBI;
   
   unsigned reg = MI.getOperand(0).getReg();
@@ -1570,7 +1516,6 @@ template <> bool I8085ExpandPseudo::expand<I8085::RL_8>(Block &MBB, BlockIt MBBI
 
 
 template <> bool I8085ExpandPseudo::expand<I8085::RR_8>(Block &MBB, BlockIt MBBI) {
-  const I8085Subtarget &STI = MBB.getParent()->getSubtarget<I8085Subtarget>();
   MachineInstr &MI = *MBBI;
   
   unsigned reg = MI.getOperand(0).getReg();
@@ -1620,7 +1565,6 @@ template <> bool I8085ExpandPseudo::expand<I8085::ASR_8>(Block &MBB, BlockIt MBB
 }
 
 template <> bool I8085ExpandPseudo::expand<I8085::JMP_16_IF>(Block &MBB, BlockIt MBBI) {
-  const I8085Subtarget &STI = MBB.getParent()->getSubtarget<I8085Subtarget>();
   MachineInstr &MI = *MBBI;
   
   unsigned operandOne = MI.getOperand(0).getReg();
@@ -1654,7 +1598,6 @@ template <> bool I8085ExpandPseudo::expand<I8085::JMP_16_IF>(Block &MBB, BlockIt
 }
 
 template <> bool I8085ExpandPseudo::expand<I8085::JMP_16_IF_NOT_EQUAL>(Block &MBB, BlockIt MBBI) {
-  const I8085Subtarget &STI = MBB.getParent()->getSubtarget<I8085Subtarget>();
   MachineInstr &MI = *MBBI;
   
   unsigned operandOne = MI.getOperand(0).getReg();
@@ -1694,7 +1637,6 @@ template <> bool I8085ExpandPseudo::expand<I8085::JMP_16_IF_NOT_EQUAL>(Block &MB
 
 
 template <> bool I8085ExpandPseudo::expand<I8085::JMP_16_IF_SAME_SIGN>(Block &MBB, BlockIt MBBI) {
-  const I8085Subtarget &STI = MBB.getParent()->getSubtarget<I8085Subtarget>();
   MachineInstr &MI = *MBBI;
   
   unsigned operandOne = MI.getOperand(0).getReg();
@@ -1725,7 +1667,6 @@ template <> bool I8085ExpandPseudo::expand<I8085::JMP_16_IF_SAME_SIGN>(Block &MB
 }
 
 template <> bool I8085ExpandPseudo::expand<I8085::JMP_16_IF_POSITIVE>(Block &MBB, BlockIt MBBI) {
-  const I8085Subtarget &STI = MBB.getParent()->getSubtarget<I8085Subtarget>();
   MachineInstr &MI = *MBBI;
   
   unsigned operandOne = MI.getOperand(0).getReg();
@@ -1750,7 +1691,6 @@ template <> bool I8085ExpandPseudo::expand<I8085::JMP_16_IF_POSITIVE>(Block &MBB
 }
 
 template <> bool I8085ExpandPseudo::expand<I8085::STORE_8_AT_OFFSET_WITH_SP>(Block &MBB, BlockIt MBBI) {
-  const I8085Subtarget &STI = MBB.getParent()->getSubtarget<I8085Subtarget>();
   MachineInstr &MI = *MBBI;
 
   unsigned srcReg = MI.getOperand(0).getReg();
@@ -1766,7 +1706,6 @@ template <> bool I8085ExpandPseudo::expand<I8085::STORE_8_AT_OFFSET_WITH_SP>(Blo
 }
 
 template <> bool I8085ExpandPseudo::expand<I8085::STORE_16_AT_OFFSET_WITH_SP>(Block &MBB, BlockIt MBBI) {
-  const I8085Subtarget &STI = MBB.getParent()->getSubtarget<I8085Subtarget>();
   MachineInstr &MI = *MBBI;
 
   unsigned srcReg = MI.getOperand(0).getReg();

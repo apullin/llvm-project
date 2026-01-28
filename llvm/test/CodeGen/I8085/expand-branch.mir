@@ -1,0 +1,92 @@
+# RUN: llc -O0 -run-pass=i8085-expand-pseudo %s -o - | FileCheck %s
+
+--- |
+  target triple = "i8085-unknown-elf"
+  define void @jmp8_if_c() { ret void }
+  define void @jmp16_if_bc() { ret void }
+  define void @jmp16_if_not_equal_bc_de() { ret void }
+  define void @jmp16_if_same_sign_bc_de() { ret void }
+  define void @jmp16_if_positive_de() { ret void }
+...
+
+---
+name:            jmp8_if_c
+body:             |
+  bb.0:
+    liveins: $c
+    ; CHECK-LABEL: name:            jmp8_if_c
+    ; CHECK: $a = MOV $c
+    ; CHECK-NEXT: ORI 0
+    ; CHECK-NEXT: JNZ %bb.1
+    JMP_8_IF $c, %bb.1, implicit-def $sreg
+    RET
+  bb.1:
+    RET
+...
+
+---
+name:            jmp16_if_bc
+body:             |
+  bb.0:
+    liveins: $bc
+    ; CHECK-LABEL: name:            jmp16_if_bc
+    ; CHECK: $a = MOV $b
+    ; CHECK-NEXT: ANI 255
+    ; CHECK-NEXT: JNZ %bb.1
+    ; CHECK-NEXT: $a = MOV $c
+    ; CHECK-NEXT: ANI 255
+    ; CHECK-NEXT: JNZ %bb.1
+    JMP_16_IF $bc, %bb.1, implicit-def $sreg
+    RET
+  bb.1:
+    RET
+...
+
+---
+name:            jmp16_if_not_equal_bc_de
+body:             |
+  bb.0:
+    liveins: $bc, $de
+    ; CHECK-LABEL: name:            jmp16_if_not_equal_bc_de
+    ; CHECK: $a = MOV $b
+    ; CHECK-NEXT: CMP $d
+    ; CHECK-NEXT: JNZ %bb.1
+    ; CHECK-NEXT: $a = MOV $c
+    ; CHECK-NEXT: CMP $e
+    ; CHECK-NEXT: JNZ %bb.1
+    JMP_16_IF_NOT_EQUAL $bc, $de, %bb.1, implicit-def $sreg
+    RET
+  bb.1:
+    RET
+...
+
+---
+name:            jmp16_if_same_sign_bc_de
+body:             |
+  bb.0:
+    liveins: $bc, $de
+    ; CHECK-LABEL: name:            jmp16_if_same_sign_bc_de
+    ; CHECK: $a = MOV $b
+    ; CHECK-NEXT: XRA $d
+    ; CHECK-NEXT: ANI 128
+    ; CHECK-NEXT: JZ %bb.1
+    JMP_16_IF_SAME_SIGN $bc, $de, %bb.1, implicit-def $sreg
+    RET
+  bb.1:
+    RET
+...
+
+---
+name:            jmp16_if_positive_de
+body:             |
+  bb.0:
+    liveins: $de
+    ; CHECK-LABEL: name:            jmp16_if_positive_de
+    ; CHECK: $a = MOV $d
+    ; CHECK-NEXT: ANI 128
+    ; CHECK-NEXT: JZ %bb.1
+    JMP_16_IF_POSITIVE $de, %bb.1, implicit-def $sreg
+    RET
+  bb.1:
+    RET
+...

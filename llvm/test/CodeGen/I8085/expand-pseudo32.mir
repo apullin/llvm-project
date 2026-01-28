@@ -1,0 +1,52 @@
+# RUN: llc -O0 -run-pass=i8085-expand-pseudo32 %s -o - | FileCheck %s
+
+--- |
+  target triple = "i8085-unknown-elf"
+  define void @mvi32_iax() { ret void }
+  define void @add32_iax_ibx() { ret void }
+  define void @sub32_iax_ibx() { ret void }
+...
+
+---
+name:            mvi32_iax
+body:             |
+  bb.0:
+    ; CHECK-LABEL: name:            mvi32_iax
+    ; CHECK-NOT: MVI_32
+    ; CHECK: $hl = LXI 11
+    ; CHECK-NEXT: MVI_M 4
+    ; CHECK: $hl = LXI 12
+    ; CHECK-NEXT: MVI_M 3
+    ; CHECK: $hl = LXI 13
+    ; CHECK-NEXT: MVI_M 2
+    ; CHECK: $hl = LXI 14
+    ; CHECK-NEXT: MVI_M 1
+    $iax = MVI_32 16909060
+    RET
+...
+
+---
+name:            add32_iax_ibx
+body:             |
+  bb.0:
+    liveins: $iax, $ibx
+    ; CHECK-LABEL: name:            add32_iax_ibx
+    ; CHECK-NOT: ADD_32
+    ; CHECK: ADD_M
+    ; CHECK: ADC_M
+    $iax = ADD_32 $iax, $ibx, implicit-def $sreg
+    RET
+...
+
+---
+name:            sub32_iax_ibx
+body:             |
+  bb.0:
+    liveins: $iax, $ibx
+    ; CHECK-LABEL: name:            sub32_iax_ibx
+    ; CHECK-NOT: SUB_32
+    ; CHECK: SUB_M
+    ; CHECK: SBB_M
+    $iax = SUB_32 $iax, $ibx, implicit-def $sreg
+    RET
+...

@@ -1,0 +1,112 @@
+# RUN: llc -O0 -run-pass=i8085-expand-pseudo %s -o - | FileCheck %s
+
+--- |
+  target triple = "i8085-unknown-elf"
+  define void @load8_sp_pos() { ret void }
+  define void @load8_sp_neg() { ret void }
+  define void @store8_sp_offset() { ret void }
+  define void @store8_sp_neg() { ret void }
+  define void @load16_hl_from_sp() { ret void }
+  define void @load16_de_from_sp() { ret void }
+  define void @store16_sp_offset() { ret void }
+...
+
+---
+name:            load8_sp_pos
+body:             |
+  bb.0:
+    liveins: $sp
+    ; CHECK-LABEL: name:            load8_sp_pos
+    ; CHECK: $hl = LXI 2
+    ; CHECK-NEXT: DAD $sp
+    ; CHECK-NEXT: $c = MOV_FROM_M
+    $c = LOAD_8_WITH_ADDR $sp, 2, implicit-def $h, implicit-def $l, implicit $sp
+    RET
+...
+
+---
+name:            load8_sp_neg
+body:             |
+  bb.0:
+    liveins: $sp
+    ; CHECK-LABEL: name:            load8_sp_neg
+    ; CHECK: $hl = LXI {{-?[0-9]+}}
+    ; CHECK-NEXT: DAD $sp
+    ; CHECK-NEXT: $c = MOV_FROM_M
+    $c = LOAD_8_WITH_ADDR $sp, -1, implicit-def $h, implicit-def $l, implicit $sp
+    RET
+...
+
+---
+name:            store8_sp_offset
+body:             |
+  bb.0:
+    liveins: $sp, $d
+    ; CHECK-LABEL: name:            store8_sp_offset
+    ; CHECK: $hl = LXI 1
+    ; CHECK-NEXT: DAD $sp
+    ; CHECK-NEXT: MOV_M $d
+    STORE_8 $sp, 1, $d, implicit-def $h, implicit-def $l, implicit $sp
+    RET
+...
+
+---
+name:            store8_sp_neg
+body:             |
+  bb.0:
+    liveins: $sp, $b
+    ; CHECK-LABEL: name:            store8_sp_neg
+    ; CHECK: $hl = LXI {{-?[0-9]+}}
+    ; CHECK-NEXT: DAD $sp
+    ; CHECK-NEXT: MOV_M $b
+    STORE_8 $sp, -2, $b, implicit-def $h, implicit-def $l, implicit $sp
+    RET
+...
+
+---
+name:            load16_hl_from_sp
+body:             |
+  bb.0:
+    liveins: $sp
+    ; CHECK-LABEL: name:            load16_hl_from_sp
+    ; CHECK: $hl = LXI 1
+    ; CHECK-NEXT: DAD $sp
+    ; CHECK-NEXT: $a = MOV_FROM_M
+    ; CHECK-NEXT: $hl = INX
+    ; CHECK-NEXT: $h = MOV_FROM_M
+    ; CHECK-NEXT: $l = MOV $a
+    $hl = LOAD_16_WITH_ADDR $sp, 1, implicit-def $h, implicit-def $l, implicit $sp
+    RET
+...
+
+---
+name:            load16_de_from_sp
+body:             |
+  bb.0:
+    liveins: $sp
+    ; CHECK-LABEL: name:            load16_de_from_sp
+    ; CHECK: $hl = LXI 1
+    ; CHECK-NEXT: DAD $sp
+    ; CHECK-NEXT: $d = MOV_FROM_M
+    ; CHECK-NEXT: $hl = LXI 0
+    ; CHECK-NEXT: DAD $sp
+    ; CHECK-NEXT: $e = MOV_FROM_M
+    $de = LOAD_16_WITH_ADDR $sp, 0, implicit-def $h, implicit-def $l, implicit $sp
+    RET
+...
+
+---
+name:            store16_sp_offset
+body:             |
+  bb.0:
+    liveins: $bc, $sp
+    ; CHECK-LABEL: name:            store16_sp_offset
+    ; CHECK: $hl = LXI 5
+    ; CHECK-NEXT: DAD $sp
+    ; CHECK-NEXT: MOV_M $b
+    ; CHECK-NEXT: $hl = LXI 4
+    ; CHECK-NEXT: DAD $sp
+    ; CHECK-NEXT: MOV_M $c
+    STORE_16_AT_OFFSET_WITH_SP $bc, 4, implicit-def $h, implicit-def $l, implicit $sp
+    RET
+...

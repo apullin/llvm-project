@@ -1,0 +1,89 @@
+# RUN: llc -O0 -run-pass=i8085-expand-pseudo %s -o - | FileCheck %s
+
+--- |
+  target triple = "i8085-unknown-elf"
+  @g8 = external global i8
+  @g16 = external global i16
+  @g16_2 = external global i16
+  @g16_3 = external global i16
+  define void @load8_imm() { ret void }
+  define void @load16_imm_bc() { ret void }
+  define void @load16_imm_hl() { ret void }
+  define void @load16_imm_sp() { ret void }
+  define void @load16_const_bc() { ret void }
+  define void @load16_const_sp() { ret void }
+...
+
+---
+name:            load8_imm
+body:             |
+  bb.0:
+    ; CHECK-LABEL: name:            load8_imm
+    ; CHECK: $hl = LXI @g8
+    ; CHECK-NEXT: $c = MOV_FROM_M
+    $c = LOAD_8_WITH_IMM_ADDR @g8, implicit-def $h, implicit-def $l, implicit $sp
+    RET
+...
+
+---
+name:            load16_imm_bc
+body:             |
+  bb.0:
+    ; CHECK-LABEL: name:            load16_imm_bc
+    ; CHECK: $hl = LXI @g16{{.*}}1
+    ; CHECK-NEXT: $b = MOV_FROM_M
+    ; CHECK-NEXT: $hl = LXI @g16
+    ; CHECK-NEXT: $c = MOV_FROM_M
+    $bc = LOAD_16_WITH_IMM_ADDR @g16, implicit-def $h, implicit-def $l, implicit $sp
+    RET
+...
+
+---
+name:            load16_imm_hl
+body:             |
+  bb.0:
+    ; CHECK-LABEL: name:            load16_imm_hl
+    ; CHECK: $hl = LXI @g16_2
+    ; CHECK-NEXT: $a = MOV_FROM_M
+    ; CHECK-NEXT: $hl = INX
+    ; CHECK-NEXT: $h = MOV_FROM_M
+    ; CHECK-NEXT: $l = MOV $a
+    $hl = LOAD_16_WITH_IMM_ADDR @g16_2, implicit-def $h, implicit-def $l, implicit $sp
+    RET
+...
+
+---
+name:            load16_imm_sp
+body:             |
+  bb.0:
+    ; CHECK-LABEL: name:            load16_imm_sp
+    ; CHECK: $hl = LXI @g16_3
+    ; CHECK-NEXT: $a = MOV_FROM_M
+    ; CHECK-NEXT: $hl = INX
+    ; CHECK-NEXT: $h = MOV_FROM_M
+    ; CHECK-NEXT: $l = MOV $a
+    ; CHECK-NEXT: SPHL
+    $sp = LOAD_16_WITH_IMM_ADDR @g16_3, implicit-def $h, implicit-def $l, implicit $sp
+    RET
+...
+
+---
+name:            load16_const_bc
+body:             |
+  bb.0:
+    ; CHECK-LABEL: name:            load16_const_bc
+    ; CHECK: $b = MVI 1
+    ; CHECK-NEXT: $c = MVI 2
+    $bc = LOAD_16 258, implicit $sp
+    RET
+...
+
+---
+name:            load16_const_sp
+body:             |
+  bb.0:
+    ; CHECK-LABEL: name:            load16_const_sp
+    ; CHECK: $sp = LXI 4096
+    $sp = LOAD_16 4096, implicit $sp
+    RET
+...

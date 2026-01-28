@@ -1,0 +1,47 @@
+# RUN: llc -O0 -run-pass=i8085-expand-pseudo %s -o - | FileCheck %s
+
+--- |
+  target triple = "i8085-unknown-elf"
+  define void @trunc16to8_bc() { ret void }
+  define void @sext8to16_bc() { ret void }
+  define void @zext8to16_de() { ret void }
+...
+
+---
+name:            trunc16to8_bc
+body:             |
+  bb.0:
+    liveins: $bc
+    ; CHECK-LABEL: name:            trunc16to8_bc
+    ; CHECK: $d = MOV $c
+    $d = TRUNC16TO8 $bc
+    RET
+...
+
+---
+name:            sext8to16_bc
+body:             |
+  bb.0:
+    liveins: $e
+    ; CHECK-LABEL: name:            sext8to16_bc
+    ; CHECK: $a = MOV $e
+    ; CHECK-NEXT: $c = MOV $a
+    ; CHECK-NEXT: ADI 128
+    ; CHECK-NEXT: SBB $a
+    ; CHECK-NEXT: $b = MOV $a
+    $bc = SEXT8TO16 $e
+    RET
+...
+
+---
+name:            zext8to16_de
+body:             |
+  bb.0:
+    liveins: $c
+    ; CHECK-LABEL: name:            zext8to16_de
+    ; CHECK: $a = MOV $c
+    ; CHECK-NEXT: $e = MOV $a
+    ; CHECK-NEXT: $d = MVI 0
+    $de = ZEXT8TO16 $c
+    RET
+...

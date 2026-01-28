@@ -1,0 +1,310 @@
+# RUN: llc -O0 -run-pass=i8085-expand-pseudo %s -o - | FileCheck %s
+
+--- |
+  target triple = "i8085-unknown-elf"
+  define void @add8_c_d() { ret void }
+  define void @sub8_e_b() { ret void }
+  define void @and8_d_e() { ret void }
+  define void @or8_b_c() { ret void }
+  define void @xor8_e_b() { ret void }
+  define void @andi8_c() { ret void }
+  define void @ori8_d() { ret void }
+  define void @xori8_e() { ret void }
+  define void @add16_bc_de() { ret void }
+  define void @sub16_de_bc() { ret void }
+  define void @and16_bc_de() { ret void }
+  define void @or16_de_bc() { ret void }
+  define void @xor16_bc_de() { ret void }
+  define void @rl8_c() { ret void }
+  define void @rr8_c() { ret void }
+  define void @asr8_c() { ret void }
+  define void @rl16_bc() { ret void }
+  define void @rr16_de() { ret void }
+  define void @asr16_hl() { ret void }
+...
+
+---
+name:            add8_c_d
+body:             |
+  bb.0:
+    liveins: $c, $d
+    ; CHECK-LABEL: name:            add8_c_d
+    ; CHECK: $a = MOV $c
+    ; CHECK-NEXT: ADD $d
+    ; CHECK-NEXT: $c = MOV $a
+    $c = ADD_8 $c, $d, implicit-def $sreg
+    RET
+...
+
+---
+name:            sub8_e_b
+body:             |
+  bb.0:
+    liveins: $e, $b
+    ; CHECK-LABEL: name:            sub8_e_b
+    ; CHECK: $a = MOV $e
+    ; CHECK-NEXT: SUB $b
+    ; CHECK-NEXT: $e = MOV $a
+    $e = SUB_8 $e, $b, implicit-def $sreg
+    RET
+...
+
+---
+name:            and8_d_e
+body:             |
+  bb.0:
+    liveins: $d, $e
+    ; CHECK-LABEL: name:            and8_d_e
+    ; CHECK: $a = MOV $d
+    ; CHECK-NEXT: ANA $e
+    ; CHECK-NEXT: $d = MOV $a
+    $d = AND_8 $d, $e, implicit-def $sreg
+    RET
+...
+
+---
+name:            or8_b_c
+body:             |
+  bb.0:
+    liveins: $b, $c
+    ; CHECK-LABEL: name:            or8_b_c
+    ; CHECK: $a = MOV $b
+    ; CHECK-NEXT: ORA $c
+    ; CHECK-NEXT: $b = MOV $a
+    $b = OR_8 $b, $c, implicit-def $sreg
+    RET
+...
+
+---
+name:            xor8_e_b
+body:             |
+  bb.0:
+    liveins: $e, $b
+    ; CHECK-LABEL: name:            xor8_e_b
+    ; CHECK: $a = MOV $e
+    ; CHECK-NEXT: XRA $b
+    ; CHECK-NEXT: $e = MOV $a
+    $e = XOR_8 $e, $b, implicit-def $sreg
+    RET
+...
+
+---
+name:            andi8_c
+body:             |
+  bb.0:
+    liveins: $c
+    ; CHECK-LABEL: name:            andi8_c
+    ; CHECK: $a = MOV $c
+    ; CHECK-NEXT: ANI 90
+    ; CHECK-NEXT: $c = MOV $a
+    $c = ANDI_8 $c, 90, implicit-def $sreg
+    RET
+...
+
+---
+name:            ori8_d
+body:             |
+  bb.0:
+    liveins: $d
+    ; CHECK-LABEL: name:            ori8_d
+    ; CHECK: $a = MOV $d
+    ; CHECK-NEXT: ORI 15
+    ; CHECK-NEXT: $d = MOV $a
+    $d = ORI_8 $d, 15, implicit-def $sreg
+    RET
+...
+
+---
+name:            xori8_e
+body:             |
+  bb.0:
+    liveins: $e
+    ; CHECK-LABEL: name:            xori8_e
+    ; CHECK: $a = MOV $e
+    ; CHECK-NEXT: XRI 240
+    ; CHECK-NEXT: $e = MOV $a
+    $e = XORI_8 $e, 240, implicit-def $sreg
+    RET
+...
+
+---
+name:            add16_bc_de
+body:             |
+  bb.0:
+    liveins: $bc, $de
+    ; CHECK-LABEL: name:            add16_bc_de
+    ; CHECK: $a = MOV $c
+    ; CHECK-NEXT: ADD $e
+    ; CHECK-NEXT: $c = MOV $a
+    ; CHECK-NEXT: $a = MOV $b
+    ; CHECK-NEXT: ADC $d
+    ; CHECK-NEXT: $b = MOV $a
+    $bc = ADD_16 $bc, $de, implicit-def $sreg
+    RET
+...
+
+---
+name:            sub16_de_bc
+body:             |
+  bb.0:
+    liveins: $de, $bc
+    ; CHECK-LABEL: name:            sub16_de_bc
+    ; CHECK: $a = MOV $e
+    ; CHECK-NEXT: SUB $c
+    ; CHECK-NEXT: $e = MOV $a
+    ; CHECK-NEXT: $a = MOV $d
+    ; CHECK-NEXT: SBB $b
+    ; CHECK-NEXT: $d = MOV $a
+    $de = SUB_16 $de, $bc, implicit-def $sreg
+    RET
+...
+
+---
+name:            and16_bc_de
+body:             |
+  bb.0:
+    liveins: $bc, $de
+    ; CHECK-LABEL: name:            and16_bc_de
+    ; CHECK: $a = MOV $c
+    ; CHECK-NEXT: ANA $e
+    ; CHECK-NEXT: $c = MOV $a
+    ; CHECK-NEXT: $a = MOV $b
+    ; CHECK-NEXT: ANA $d
+    ; CHECK-NEXT: $b = MOV $a
+    $bc = AND_16 $bc, $de, implicit-def $sreg
+    RET
+...
+
+---
+name:            or16_de_bc
+body:             |
+  bb.0:
+    liveins: $de, $bc
+    ; CHECK-LABEL: name:            or16_de_bc
+    ; CHECK: $a = MOV $e
+    ; CHECK-NEXT: ORA $c
+    ; CHECK-NEXT: $e = MOV $a
+    ; CHECK-NEXT: $a = MOV $d
+    ; CHECK-NEXT: ORA $b
+    ; CHECK-NEXT: $d = MOV $a
+    $de = OR_16 $de, $bc, implicit-def $sreg
+    RET
+...
+
+---
+name:            xor16_bc_de
+body:             |
+  bb.0:
+    liveins: $bc, $de
+    ; CHECK-LABEL: name:            xor16_bc_de
+    ; CHECK: $a = MOV $c
+    ; CHECK-NEXT: XRA $e
+    ; CHECK-NEXT: $c = MOV $a
+    ; CHECK-NEXT: $a = MOV $b
+    ; CHECK-NEXT: XRA $d
+    ; CHECK-NEXT: $b = MOV $a
+    $bc = XOR_16 $bc, $de, implicit-def $sreg
+    RET
+...
+
+---
+name:            rl8_c
+body:             |
+  bb.0:
+    liveins: $c
+    ; CHECK-LABEL: name:            rl8_c
+    ; CHECK: $a = MOV $c
+    ; CHECK-NEXT: ADD $a
+    ; CHECK-NEXT: $c = MOV $a
+    $c = RL_8 $c, implicit-def $sreg, implicit-def $a, implicit $a
+    RET
+...
+
+---
+name:            rr8_c
+body:             |
+  bb.0:
+    liveins: $c
+    ; CHECK-LABEL: name:            rr8_c
+    ; CHECK: $a = MOV $c
+    ; CHECK-NEXT: RRC
+    ; CHECK-NEXT: ANI 127
+    ; CHECK-NEXT: $c = MOV $a
+    $c = RR_8 $c, implicit-def $sreg, implicit-def $a, implicit $a
+    RET
+...
+
+---
+name:            asr8_c
+body:             |
+  bb.0:
+    liveins: $c
+    ; CHECK-LABEL: name:            asr8_c
+    ; CHECK: $a = MOV $c
+    ; CHECK-NEXT: RLC
+    ; CHECK-NEXT: $a = MOV $c
+    ; CHECK-NEXT: RAR
+    ; CHECK-NEXT: $c = MOV $a
+    $c = ASR_8 $c, implicit-def $sreg, implicit-def $a, implicit $a
+    RET
+...
+
+---
+name:            rl16_bc
+body:             |
+  bb.0:
+    liveins: $bc
+    ; CHECK-LABEL: name:            rl16_bc
+    ; CHECK: STC
+    ; CHECK-NEXT: CMC
+    ; CHECK: $a = MOV $c
+    ; CHECK-NEXT: RAL
+    ; CHECK-NEXT: $c = MOV $a
+    ; CHECK-NEXT: $a = MOV $b
+    ; CHECK-NEXT: RAL
+    ; CHECK-NEXT: $b = MOV $a
+    ; CHECK-NEXT: $a = MOV $c
+    ; CHECK-NEXT: ANI 254
+    ; CHECK-NEXT: $c = MOV $a
+    $bc = RL_16 $bc, implicit-def $sreg, implicit-def $a, implicit $a
+    RET
+...
+
+---
+name:            rr16_de
+body:             |
+  bb.0:
+    liveins: $de
+    ; CHECK-LABEL: name:            rr16_de
+    ; CHECK: STC
+    ; CHECK-NEXT: CMC
+    ; CHECK: $a = MOV $d
+    ; CHECK-NEXT: RAR
+    ; CHECK-NEXT: $d = MOV $a
+    ; CHECK-NEXT: $a = MOV $e
+    ; CHECK-NEXT: RAR
+    ; CHECK-NEXT: $e = MOV $a
+    ; CHECK-NEXT: $a = MOV $d
+    ; CHECK-NEXT: ANI 127
+    ; CHECK-NEXT: $d = MOV $a
+    $de = RR_16 $de, implicit-def $sreg, implicit-def $a, implicit $a
+    RET
+...
+
+---
+name:            asr16_hl
+body:             |
+  bb.0:
+    liveins: $hl
+    ; CHECK-LABEL: name:            asr16_hl
+    ; CHECK: $a = MOV $h
+    ; CHECK-NEXT: RLC
+    ; CHECK-NEXT: $a = MOV $h
+    ; CHECK-NEXT: RAR
+    ; CHECK-NEXT: $h = MOV $a
+    ; CHECK-NEXT: $a = MOV $l
+    ; CHECK-NEXT: RAR
+    ; CHECK-NEXT: $l = MOV $a
+    $hl = ASR_16 $hl, implicit-def $sreg, implicit-def $a, implicit $a
+    RET
+...

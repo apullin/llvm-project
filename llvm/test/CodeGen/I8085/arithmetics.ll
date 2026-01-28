@@ -45,8 +45,7 @@ define i16 @add_sub_1(i16,i16) {
 ; CHECK: MOV	A, B
 ; CHECK: ADC B
 ; CHECK: MOV	B, A
-; CHECK: MVI	D, 0
-; CHECK: MVI	E, 223
+; CHECK: LXI D, 223
 ; CHECK: MOV	A, C
 ; CHECK: SUB E
 ; CHECK: MOV	C, A
@@ -91,8 +90,7 @@ define i16 @add_sub_2(i16,i16) {
 ; CHECK: MOV	A, D
 ; CHECK: ADC B
 ; CHECK: MOV	D, A
-; CHECK: MVI	B, 39
-; CHECK: MVI	C, 16
+; CHECK: LXI B, 10000
 ; CHECK: MOV	A, E
 ; CHECK: SUB C
 ; CHECK: MOV	E, A
@@ -105,8 +103,7 @@ define i16 @add_sub_2(i16,i16) {
 ; CHECK: MOV	A, B
 ; CHECK: ADC B
 ; CHECK: MOV	B, A
-; CHECK: MVI	D, 0
-; CHECK: MVI	E, 3
+; CHECK: LXI D, 3
 ; CHECK: MOV	A, C
 ; CHECK: ADD E
 ; CHECK: MOV	C, A
@@ -163,10 +160,7 @@ define i8 @add_sub_4(i8,i8) {
 ; CHECK:	MVI	B, 100
 ; CHECK:	LXI H, 1
 ; CHECK:	DAD	SP
-; CHECK:	MOV D, H
-; CHECK:	MOV E, L
-; CHECK:	MOV A, B
-; CHECK:	STAX D
+; CHECK:	MOV M, B
 ; CHECK:	LXI H, 4
 ; CHECK:	DAD	SP
 ; CHECK:	MOV B, H
@@ -179,10 +173,7 @@ define i8 @add_sub_4(i8,i8) {
 ; CHECK:	MOV	C, A
 ; CHECK:	LXI H, 0
 ; CHECK:	DAD	SP
-; CHECK:	MOV D, H
-; CHECK:	MOV E, L
-; CHECK:	MOV A, C
-; CHECK:	STAX D
+; CHECK:	MOV M, C
 ; CHECK:	MOV	A, C
 ; CHECK:	LXI H, 2
 ; CHECK:	DAD	SP
@@ -206,4 +197,3 @@ define i8 @add_sub_4(i8,i8) {
   
   ret i8 %10
 }
-

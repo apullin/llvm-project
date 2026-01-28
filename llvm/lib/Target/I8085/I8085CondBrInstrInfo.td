@@ -183,6 +183,12 @@ let isBarrier = 1, isBranch = 1, isTerminator = 1 , Defs=[SREG] in {
    def JMP_16_IF_NOT_EQUAL : I8085Pseudo<(outs),(ins GR16: $lhs, GR16: $rhs, addressTarget:$k),
                                            "JMP_16_IF_NOT_EQUAL $lhs, $rhs, $k", []>; 
 
+   def JMP_16_IF_ZERO : I8085Pseudo<(outs),(ins GR16: $reg, addressTarget:$k),
+                                           "JMP_16_IF_ZERO $reg, $k", []>;
+
+   def JMP_16_IF_NOT_ZERO : I8085Pseudo<(outs),(ins GR16: $reg, addressTarget:$k),
+                                           "JMP_16_IF_NOT_ZERO $reg, $k", []>;
+
    def JMP_16_IF_SAME_SIGN : I8085Pseudo<(outs),(ins GR16: $lhs, GR16: $rhs, addressTarget:$k),
                                            "JMP_16_IF_SAME_SIGN $lhs, $rhs, $k", []>;   
    

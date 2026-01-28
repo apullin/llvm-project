@@ -84,7 +84,7 @@ MachineBasicBlock *I8085TargetLowering::insertCond8Set(MachineInstr &MI,
 
   trueMBB->transferSuccessorsAndUpdatePHIs(MBB);
 
-  unsigned operandOne = MI.getOperand(1).getReg(); 
+  unsigned operandOne = MI.getOperand(1).getReg();
   unsigned operandTwo = MI.getOperand(2).getReg();
   
   
@@ -213,7 +213,7 @@ MachineBasicBlock *I8085TargetLowering::insertSigned8Cond(MachineInstr &MI,
 
   continMBB->transferSuccessorsAndUpdatePHIs(MBB);
 
-  unsigned operandOne = MI.getOperand(1).getReg(); 
+  unsigned operandOne = MI.getOperand(1).getReg();
   unsigned operandTwo = MI.getOperand(2).getReg();
   
   
@@ -331,8 +331,7 @@ MachineBasicBlock *I8085TargetLowering::insertDifferentSigned8Cond(MachineInstr 
 
   continMBB->transferSuccessorsAndUpdatePHIs(MBB);
 
-  unsigned operandOne = MI.getOperand(1).getReg(); 
-  unsigned operandTwo = MI.getOperand(2).getReg();
+  unsigned operandOne = MI.getOperand(1).getReg();
   
   
   unsigned tempRegOne = MF->getRegInfo().createVirtualRegister(getRegClassFor(MVT::i8));
@@ -359,7 +358,7 @@ MachineBasicBlock *I8085TargetLowering::insertDifferentSigned8Cond(MachineInstr 
     BuildMI(firstOperandNegMBB, dl, TII.get(I8085::MVI)).addReg(tempRegTwo, RegState::Define).addImm(0);
   }
 
-  else if(Opc == I8085::SET_DIFF_SIGN_LT_8 || I8085::SET_DIFF_SIGN_LE_8){
+  else if(Opc == I8085::SET_DIFF_SIGN_LT_8 || Opc == I8085::SET_DIFF_SIGN_LE_8){
     BuildMI(firstOperandPosMBB, dl, TII.get(I8085::MVI)).addReg(tempRegOne, RegState::Define).addImm(0);
     BuildMI(firstOperandNegMBB, dl, TII.get(I8085::MVI)).addReg(tempRegTwo, RegState::Define).addImm(1);
   }
@@ -437,7 +436,7 @@ MachineBasicBlock *I8085TargetLowering::insertCond16Set(MachineInstr &MI,
 
   continMBB->transferSuccessorsAndUpdatePHIs(MBB);
 
-  unsigned operandOne = MI.getOperand(1).getReg(); 
+  unsigned operandOne = MI.getOperand(1).getReg();
   unsigned operandTwo = MI.getOperand(2).getReg();
   
   
@@ -459,8 +458,10 @@ MachineBasicBlock *I8085TargetLowering::insertCond16Set(MachineInstr &MI,
 
   if(Opc == I8085::SET_UGT_16){
     BuildMI(MBB, dl, TII.get(I8085::JC)).addMBB(falseMBB);
-    BuildMI(MBB, dl, TII.get(I8085::JMP_16_IF_NOT_EQUAL)).addReg(operandOne).addReg(operandTwo).addMBB(trueMBB); 
-    BuildMI(MBB, dl, TII.get(I8085::JMP)).addMBB(falseMBB);  
+    BuildMI(MBB, dl, TII.get(I8085::JMP_16_IF_ZERO))
+        .addReg(tempRegThree)
+        .addMBB(falseMBB);
+    BuildMI(MBB, dl, TII.get(I8085::JMP)).addMBB(trueMBB);
   }
 
   else if(Opc == I8085::SET_ULT_16){
@@ -475,8 +476,10 @@ MachineBasicBlock *I8085TargetLowering::insertCond16Set(MachineInstr &MI,
 
   else if(Opc == I8085::SET_ULE_16){
     BuildMI(MBB, dl, TII.get(I8085::JC)).addMBB(trueMBB);
-    BuildMI(MBB, dl, TII.get(I8085::JMP_16_IF_NOT_EQUAL)).addReg(operandOne).addReg(operandTwo).addMBB(falseMBB); 
-    BuildMI(MBB, dl, TII.get(I8085::JMP)).addMBB(trueMBB); 
+    BuildMI(MBB, dl, TII.get(I8085::JMP_16_IF_ZERO))
+        .addReg(tempRegThree)
+        .addMBB(trueMBB);
+    BuildMI(MBB, dl, TII.get(I8085::JMP)).addMBB(falseMBB);
   }
 
   
@@ -561,7 +564,7 @@ MachineBasicBlock *I8085TargetLowering::insertEqualityCond16Set(MachineInstr &MI
 
   trueMBB->transferSuccessorsAndUpdatePHIs(MBB);
 
-  unsigned operandOne = MI.getOperand(1).getReg(); 
+  unsigned operandOne = MI.getOperand(1).getReg();
   unsigned operandTwo = MI.getOperand(2).getReg();
   
   
@@ -666,7 +669,7 @@ MachineBasicBlock *I8085TargetLowering::insertSignedCond16Set(MachineInstr &MI,
 
   continMBB->transferSuccessorsAndUpdatePHIs(MBB);
 
-  unsigned operandOne = MI.getOperand(1).getReg(); 
+  unsigned operandOne = MI.getOperand(1).getReg();
   unsigned operandTwo = MI.getOperand(2).getReg();
   
   
@@ -776,8 +779,7 @@ MachineBasicBlock *I8085TargetLowering::insertDifferentSignedCond16Set(MachineIn
 
   continMBB->transferSuccessorsAndUpdatePHIs(MBB);
 
-  unsigned operandOne = MI.getOperand(1).getReg(); 
-  unsigned operandTwo = MI.getOperand(2).getReg();
+  unsigned operandOne = MI.getOperand(1).getReg();
   
   unsigned tempRegOne = MF->getRegInfo().createVirtualRegister(getRegClassFor(MVT::i8));
   unsigned tempRegTwo = MF->getRegInfo().createVirtualRegister(getRegClassFor(MVT::i8));
@@ -870,7 +872,7 @@ MachineBasicBlock *I8085TargetLowering::insertEqualityCond32Set(MachineInstr &MI
 
   trueMBB->transferSuccessorsAndUpdatePHIs(MBB);
 
-  unsigned operandOne = MI.getOperand(1).getReg(); 
+  unsigned operandOne = MI.getOperand(1).getReg();
   unsigned operandTwo = MI.getOperand(2).getReg();
   
   
@@ -974,7 +976,7 @@ MachineBasicBlock *I8085TargetLowering::insertCond32Set(MachineInstr &MI,
 
   continMBB->transferSuccessorsAndUpdatePHIs(MBB);
 
-  unsigned operandOne = MI.getOperand(1).getReg(); 
+  unsigned operandOne = MI.getOperand(1).getReg();
   unsigned operandTwo = MI.getOperand(2).getReg();
   
   
@@ -1098,7 +1100,7 @@ MachineBasicBlock *I8085TargetLowering::insertSignedCond32Set(MachineInstr &MI,
 
   continMBB->transferSuccessorsAndUpdatePHIs(MBB);
 
-  unsigned operandOne = MI.getOperand(1).getReg(); 
+  unsigned operandOne = MI.getOperand(1).getReg();
   unsigned operandTwo = MI.getOperand(2).getReg();
   
   
@@ -1208,7 +1210,6 @@ MachineBasicBlock *I8085TargetLowering::insertDifferentSignedCond32Set(MachineIn
   continMBB->transferSuccessorsAndUpdatePHIs(MBB);
 
   unsigned operandOne = MI.getOperand(1).getReg(); 
-  unsigned operandTwo = MI.getOperand(2).getReg();
   
   unsigned tempRegOne = MF->getRegInfo().createVirtualRegister(getRegClassFor(MVT::i8));
   unsigned tempRegTwo = MF->getRegInfo().createVirtualRegister(getRegClassFor(MVT::i8));

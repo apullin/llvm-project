@@ -158,10 +158,6 @@ bool I8085ExpandPseudo32::runOnMachineFunction(MachineFunction &MF) {
   return Modified;
 }
 
-uint8_t high(uint64_t input){return (input >> 8) & 0xFF;}
-
-uint8_t low(uint64_t input){return input & 0xFF;}
-
 bool I8085ExpandPseudo32::binOperationWithImmediateOperand(unsigned opCode, Block &MBB, BlockIt MBBI) {
   const I8085Subtarget &STI = MBB.getParent()->getSubtarget<I8085Subtarget>();
   MachineInstr &MI = *MBBI;

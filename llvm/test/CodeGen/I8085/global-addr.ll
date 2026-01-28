@@ -7,9 +7,11 @@
 
 define void @store_globals(i8 %a, i16 %b) {
 ; CHECK-LABEL: store_globals:
-; CHECK: LXI H, g16+1
+; CHECK: LXI D, g16
 ; CHECK: STAX D
-; CHECK: LXI H, g8
+; CHECK: INX D
+; CHECK: STAX D
+; CHECK: LXI D, g8
 ; CHECK: STAX D
 entry:
   store i8 %a, i8* @g8, align 1
@@ -23,6 +25,8 @@ define i16 @load_globals() {
 ; CHECK: MOV B, M
 ; CHECK: LXI H, g16+1
 ; CHECK: MOV D, M
+; CHECK: LXI H, g16
+; CHECK: MOV E, M
 ; CHECK: RET
 entry:
   %a = load i8, i8* @g8, align 1

@@ -72,8 +72,7 @@ name:            load16_const_bc
 body:             |
   bb.0:
     ; CHECK-LABEL: name:            load16_const_bc
-    ; CHECK: $b = MVI 1
-    ; CHECK-NEXT: $c = MVI 2
+    ; CHECK: $bc = LXI 258
     $bc = LOAD_16 258, implicit $sp
     RET
 ...

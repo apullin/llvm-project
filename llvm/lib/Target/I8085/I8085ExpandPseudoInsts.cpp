@@ -452,38 +452,16 @@ bool I8085ExpandPseudo::expand<I8085::STORE_8>(Block &MBB, BlockIt MBBI) {
 }
 
 
-uint8_t high(uint64_t input){return (input >> 8) & 0xFF;}
-
-uint8_t low(uint64_t input){return input & 0xFF;}
-
 template <>
 bool I8085ExpandPseudo::expand<I8085::LOAD_16>(Block &MBB, BlockIt MBBI) {
   MachineInstr &MI = *MBBI;
 
-  unsigned lowReg,highReg;
   unsigned destReg = MI.getOperand(0).getReg();
+  const MachineOperand &Src = MI.getOperand(1);
 
-  uint64_t amount = MI.getOperand(1).getImm();
-
-  if (destReg == I8085::SP) {
-    buildMI(MBB, MBBI, I8085::LXI)
-        .addReg(I8085::SP, RegState::Define)
-        .addImm(amount);
-    MI.eraseFromParent();
-    return true;
-  }
-
-  if (!getPairRegs(destReg, lowReg, highReg))
-    return false;
-
-
-  buildMI(MBB, MBBI,  I8085::MVI)
-        .addReg(highReg, RegState::Define)
-        .addImm(high(amount));
-
-  buildMI(MBB, MBBI,  I8085::MVI)
-        .addReg(lowReg, RegState::Define)
-        .addImm(low(amount));
+  MachineInstrBuilder MIB = buildMI(MBB, MBBI, I8085::LXI)
+                                .addReg(destReg, RegState::Define);
+  addAddrOperand(MIB, Src);
 
   MI.eraseFromParent();
 
@@ -1634,6 +1612,52 @@ template <> bool I8085ExpandPseudo::expand<I8085::JMP_16_IF_NOT_EQUAL>(Block &MB
   return true;
 }
 
+template <> bool I8085ExpandPseudo::expand<I8085::JMP_16_IF_ZERO>(Block &MBB, BlockIt MBBI) {
+  MachineInstr &MI = *MBBI;
+
+  unsigned operand = MI.getOperand(0).getReg();
+
+  unsigned opLow, opHigh;
+  if (!getPairRegs(operand, opLow, opHigh))
+    return false;
+
+  buildMI(MBB, MBBI, I8085::MOV)
+    .addReg(I8085::A, RegState::Define)
+    .addReg(opHigh);
+
+  buildMI(MBB, MBBI, I8085::ORA)
+    .addReg(opLow);
+
+  buildMI(MBB, MBBI, I8085::JZ)
+    .addMBB(MI.getOperand(1).getMBB());
+
+  MI.eraseFromParent();
+  return true;
+}
+
+template <> bool I8085ExpandPseudo::expand<I8085::JMP_16_IF_NOT_ZERO>(Block &MBB, BlockIt MBBI) {
+  MachineInstr &MI = *MBBI;
+
+  unsigned operand = MI.getOperand(0).getReg();
+
+  unsigned opLow, opHigh;
+  if (!getPairRegs(operand, opLow, opHigh))
+    return false;
+
+  buildMI(MBB, MBBI, I8085::MOV)
+    .addReg(I8085::A, RegState::Define)
+    .addReg(opHigh);
+
+  buildMI(MBB, MBBI, I8085::ORA)
+    .addReg(opLow);
+
+  buildMI(MBB, MBBI, I8085::JNZ)
+    .addMBB(MI.getOperand(1).getMBB());
+
+  MI.eraseFromParent();
+  return true;
+}
+
 
 
 template <> bool I8085ExpandPseudo::expand<I8085::JMP_16_IF_SAME_SIGN>(Block &MBB, BlockIt MBBI) {
@@ -1744,6 +1768,8 @@ bool I8085ExpandPseudo::expandMI(Block &MBB, BlockIt MBBI) {
     EXPAND(I8085::JMP_16_IF_POSITIVE);
     EXPAND(I8085::JMP_16_IF_SAME_SIGN);
     EXPAND(I8085::JMP_16_IF_NOT_EQUAL);
+    EXPAND(I8085::JMP_16_IF_ZERO);
+    EXPAND(I8085::JMP_16_IF_NOT_ZERO);
     EXPAND(I8085::JMP_8_IF);
     EXPAND(I8085::TRUNC16TO8);
     EXPAND(I8085::AEXT8TO16);

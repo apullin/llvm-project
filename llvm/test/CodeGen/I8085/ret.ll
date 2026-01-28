@@ -16,8 +16,7 @@ define i8 @reteight() #0 {
 
 define i16 @retsixteen() {
 ; CHECK-LABEL: retsixteen:
-; CHECK: MVI	B, 18
-; CHECK: MVI	C, 52
+; CHECK: LXI B, 4660
 ; CHECK: RET
   ret i16 4660
 }

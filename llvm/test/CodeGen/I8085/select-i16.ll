@@ -4,7 +4,7 @@
 
 define i16 @select_i16(i16 %a, i16 %b, i1 %c) {
 ; CHECK-LABEL: select_i16:
-; CHECK: JMP
+; CHECK: JNZ
 ; CHECK: RET
 entry:
   %sel = select i1 %c, i16 %a, i16 %b

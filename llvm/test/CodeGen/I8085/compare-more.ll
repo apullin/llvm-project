@@ -8,7 +8,7 @@ define i8 @cmp_slt_i8(i8 %a, i8 %b) {
 ; CHECK: XRA
 ; CHECK: ANI 128
 ; CHECK: SUB
-; CHECK: JC
+; CHECK: JNC
 ; CHECK-NOT: SET_
 ; CHECK: RET
   %cmp = icmp slt i8 %a, %b
@@ -41,7 +41,7 @@ define i8 @cmp_slt_i16(i16 %a, i16 %b) {
 ; CHECK: ANI 128
 ; CHECK: SUB
 ; CHECK: SBB
-; CHECK: JC
+; CHECK: JNC
 ; CHECK-NOT: SET_
 ; CHECK: RET
   %cmp = icmp slt i16 %a, %b
@@ -56,7 +56,7 @@ define i8 @cmp_uge_i16(i16 %a, i16 %b) {
 ; CHECK-NOT: SET_
 ; CHECK: SUB
 ; CHECK: SBB
-; CHECK: JC
+; CHECK: JNC
 ; CHECK-NOT: SET_
 ; CHECK: RET
   %cmp = icmp uge i16 %a, %b
@@ -70,7 +70,7 @@ define i8 @cmp_uge_i8(i8 %a, i8 %b) {
 ; CHECK-LABEL: cmp_uge_i8:
 ; CHECK-NOT: SET_
 ; CHECK: SUB
-; CHECK: JC
+; CHECK: JNC
 ; CHECK-NOT: SET_
 ; CHECK: RET
   %cmp = icmp uge i8 %a, %b

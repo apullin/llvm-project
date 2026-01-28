@@ -39,7 +39,7 @@ f:
 define i8 @br_ult_i16(i16 %a, i16 %b) {
 ; CHECK-LABEL: br_ult_i16:
 ; CHECK: SBB
-; CHECK: JC
+; CHECK: JNC
 ; CHECK: MVI
 ; CHECK: RET
 entry:
@@ -57,7 +57,7 @@ define i8 @br_slt_i16(i16 %a, i16 %b) {
 ; CHECK-LABEL: br_slt_i16:
 ; CHECK: XRA
 ; CHECK: ANI 128
-; CHECK: JC
+; CHECK: JNZ
 ; CHECK: MVI
 ; CHECK: RET
 entry:

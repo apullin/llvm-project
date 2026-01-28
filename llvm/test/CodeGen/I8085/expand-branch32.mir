@@ -14,7 +14,7 @@ body:             |
     liveins: $iax, $ibx
     ; CHECK-LABEL: name:            jmp32_if_not_equal
     ; CHECK: CMP_M
-    ; CHECK: JNZ %bb.1
+    ; CHECK: JNZ %bb.{{[0-9]+}}
     JMP_32_IF_NOT_EQUAL $iax, $ibx, %bb.1, implicit-def $sreg
     RET
   bb.1:

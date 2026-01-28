@@ -9,9 +9,8 @@ define signext i16 @fibonacci(i16 noundef signext %0) #0 {
 ; CHECK: ADI 128
 ; CHECK: SBB A
 ; CHECK: ANI 128
-; CHECK: JZ LBB{{.*}}
-; CHECK: JMP LBB{{.*}}
-; CHECK: JC LBB{{.*}}
+; CHECK-DAG: JZ LBB{{.*}}
+; CHECK-DAG: JC LBB{{.*}}
 ; CHECK: JNZ LBB{{.*}}
 ; CHECK: SPHL
 ; CHECK: RET

@@ -1,0 +1,151 @@
+# RUN: llc -O0 -run-pass=i8085-expand-pseudo32 %s -o - | FileCheck %s
+
+--- |
+  target triple = "i8085-unknown-elf"
+  @g32 = external global i32
+  define void @load32_const_iax() { ret void }
+  define void @add32_imm_iax() { ret void }
+  define void @sub32_imm_iax() { ret void }
+  define void @mov32_ibx_iax() { ret void }
+  define void @load32_with_addr_sp() { ret void }
+  define void @store32_sp_offset_iax() { ret void }
+  define void @load32_imm_addr_iax() { ret void }
+  define void @load32_addr_content_sp() { ret void }
+  define void @load32_addr_content_hl() { ret void }
+  define void @store32_addr_content_bc() { ret void }
+...
+
+---
+name:            load32_const_iax
+body:             |
+  bb.0:
+    ; CHECK-LABEL: name:            load32_const_iax
+    ; CHECK-NOT: LOAD_32
+    ; CHECK: $hl = LXI 11
+    ; CHECK-NEXT: MVI_M 4
+    ; CHECK: $hl = LXI 12
+    ; CHECK-NEXT: MVI_M 3
+    ; CHECK: $hl = LXI 13
+    ; CHECK-NEXT: MVI_M 2
+    ; CHECK: $hl = LXI 14
+    ; CHECK-NEXT: MVI_M 1
+    $iax = LOAD_32 16909060, implicit $sp
+    RET
+...
+
+---
+name:            add32_imm_iax
+body:             |
+  bb.0:
+    liveins: $iax
+    ; CHECK-LABEL: name:            add32_imm_iax
+    ; CHECK-NOT: ADDI_32
+    ; CHECK: ADI 1
+    ; CHECK: ACI 0
+    $iax = ADDI_32 $iax, 1, implicit-def $sreg
+    RET
+...
+
+---
+name:            sub32_imm_iax
+body:             |
+  bb.0:
+    liveins: $iax
+    ; CHECK-LABEL: name:            sub32_imm_iax
+    ; CHECK-NOT: SUBI_32
+    ; CHECK: SUI 1
+    ; CHECK: SBI 0
+    $iax = SUBI_32 $iax, 1, implicit-def $sreg
+    RET
+...
+
+---
+name:            mov32_ibx_iax
+body:             |
+  bb.0:
+    liveins: $iax
+    ; CHECK-LABEL: name:            mov32_ibx_iax
+    ; CHECK-NOT: MOV_32
+    ; CHECK: MOV_FROM_M
+    ; CHECK: MOV_M
+    $ibx = MOV_32 $iax
+    RET
+...
+
+---
+name:            load32_with_addr_sp
+body:             |
+  bb.0:
+    liveins: $sp
+    ; CHECK-LABEL: name:            load32_with_addr_sp
+    ; CHECK: $hl = LXI 6
+    ; CHECK: DAD $sp
+    ; CHECK: MOV_FROM_M
+    $iax = LOAD_32_WITH_ADDR $sp, 6, implicit $sp
+    RET
+...
+
+---
+name:            store32_sp_offset_iax
+body:             |
+  bb.0:
+    liveins: $sp, $iax
+    ; CHECK-LABEL: name:            store32_sp_offset_iax
+    ; CHECK: $hl = LXI 11
+    ; CHECK: MOV_FROM_M
+    ; CHECK: $hl = LXI 8
+    ; CHECK: DAD $sp
+    ; CHECK: MOV_M
+    STORE_32 $sp, 8, $iax, implicit $sp
+    RET
+...
+
+---
+name:            load32_imm_addr_iax
+body:             |
+  bb.0:
+    ; CHECK-LABEL: name:            load32_imm_addr_iax
+    ; CHECK: $hl = LXI @g32
+    ; CHECK: DAD $sp
+    ; CHECK: MOV_FROM_M
+    $iax = LOAD_32_WITH_IMM_ADDR @g32, implicit $sp
+    RET
+...
+
+---
+name:            load32_addr_content_sp
+body:             |
+  bb.0:
+    liveins: $sp
+    ; CHECK-LABEL: name:            load32_addr_content_sp
+    ; CHECK: $hl = LXI 0
+    ; CHECK: DAD $sp
+    ; CHECK: MOV_FROM_M
+    $iax = LOAD_32_ADDR_CONTENT $sp, implicit $sp
+    RET
+...
+
+---
+name:            load32_addr_content_hl
+body:             |
+  bb.0:
+    liveins: $hl
+    ; CHECK-LABEL: name:            load32_addr_content_hl
+    ; CHECK: MOV_FROM_M
+    ; CHECK: INX
+    ; CHECK: MOV_FROM_M
+    $iax = LOAD_32_ADDR_CONTENT $hl, implicit $sp
+    RET
+...
+
+---
+name:            store32_addr_content_bc
+body:             |
+  bb.0:
+    liveins: $bc, $iax
+    ; CHECK-LABEL: name:            store32_addr_content_bc
+    ; CHECK: MOV_FROM_M
+    ; CHECK: MOV_M
+    STORE_32_ADDR_CONTENT $bc, $iax, implicit $sp
+    RET
+...

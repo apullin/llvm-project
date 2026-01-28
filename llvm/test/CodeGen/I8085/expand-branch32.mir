@@ -1,0 +1,52 @@
+# RUN: llc -O0 -run-pass=i8085-expand-pseudo32 %s -o - | FileCheck %s
+
+--- |
+  target triple = "i8085-unknown-elf"
+  define void @jmp32_if_not_equal() { ret void }
+  define void @jmp32_if_same_sign() { ret void }
+  define void @jmp32_if_positive() { ret void }
+...
+
+---
+name:            jmp32_if_not_equal
+body:             |
+  bb.0:
+    liveins: $iax, $ibx
+    ; CHECK-LABEL: name:            jmp32_if_not_equal
+    ; CHECK: CMP_M
+    ; CHECK: JNZ %bb.1
+    JMP_32_IF_NOT_EQUAL $iax, $ibx, %bb.1, implicit-def $sreg
+    RET
+  bb.1:
+    RET
+...
+
+---
+name:            jmp32_if_same_sign
+body:             |
+  bb.0:
+    liveins: $iax, $ibx
+    ; CHECK-LABEL: name:            jmp32_if_same_sign
+    ; CHECK: XRA_M
+    ; CHECK-NEXT: ANI 128
+    ; CHECK-NEXT: JZ %bb.1
+    JMP_32_IF_SAME_SIGN $iax, $ibx, %bb.1, implicit-def $sreg
+    RET
+  bb.1:
+    RET
+...
+
+---
+name:            jmp32_if_positive
+body:             |
+  bb.0:
+    liveins: $iax
+    ; CHECK-LABEL: name:            jmp32_if_positive
+    ; CHECK: MOV_FROM_M
+    ; CHECK-NEXT: ANI 128
+    ; CHECK-NEXT: JZ %bb.1
+    JMP_32_IF_POSITIVE $iax, %bb.1, implicit-def $sreg
+    RET
+  bb.1:
+    RET
+...

@@ -150,7 +150,9 @@ bool I8085ExpandPseudo::runOnMachineFunction(MachineFunction &MF) {
   for (Block &MBB : MF) {
     bool ContinueExpanding = true;
     unsigned ExpandCount = 0;
-    unsigned MaxExpansions = static_cast<unsigned>(MBB.size()) + 16;
+    unsigned MaxExpansions = static_cast<unsigned>(MBB.size()) * 20;
+    if (MaxExpansions < 500)
+      MaxExpansions = 500;
 
     // Continue expanding the block until all pseudos are expanded.
     do {

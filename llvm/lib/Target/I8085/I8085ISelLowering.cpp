@@ -116,9 +116,15 @@ I8085TargetLowering::I8085TargetLowering(const I8085TargetMachine &TM,
     setOperationAction(ISD::CTTZ_ZERO_UNDEF, VT, Expand);
     setOperationAction(ISD::CTPOP, VT, Expand);
   }
+  setOperationAction(ISD::BITREVERSE, MVT::i8, Expand);
+  setOperationAction(ISD::BITREVERSE, MVT::i16, Expand);
+  setOperationAction(ISD::BITREVERSE, MVT::i32, Expand);
+  setOperationAction(ISD::BITREVERSE, MVT::i64, Expand);
   setOperationAction(ISD::BSWAP, MVT::i16, Expand);
   setOperationAction(ISD::BSWAP, MVT::i32, Expand);
   setOperationAction(ISD::BSWAP, MVT::i64, Expand);
+  setOperationAction(ISD::ROTL, MVT::i8, Expand);
+  setOperationAction(ISD::ROTR, MVT::i8, Expand);
   setOperationAction(ISD::ROTL, MVT::i16, Expand);
   setOperationAction(ISD::ROTR, MVT::i16, Expand);
   setOperationAction(ISD::ROTL, MVT::i32, Expand);

@@ -30,10 +30,6 @@ I8085ToolChain::I8085ToolChain(const Driver &D, const llvm::Triple &Triple,
     : Generic_ELF(D, Triple, Args) {
   DefaultSysRoot = computeI8085SysRoot(D);
 
-  std::string Script = GetFilePath("i8085.ld");
-  if (getVFS().exists(Script))
-    DefaultLinkerScriptArg = "-T" + Script;
-
   SmallString<128> LibPath(DefaultSysRoot);
   llvm::sys::path::append(LibPath, "lib");
   addPathIfExists(D, LibPath, getFilePaths());
@@ -53,9 +49,4 @@ void I8085ToolChain::AddClangSystemIncludeArgs(
 
 Tool *I8085ToolChain::buildLinker() const {
   return new tools::gnutools::Linker(*this);
-}
-
-void I8085ToolChain::addExtraOpts(llvm::opt::ArgStringList &CmdArgs) const {
-  if (!DefaultLinkerScriptArg.empty())
-    CmdArgs.push_back(DefaultLinkerScriptArg.c_str());
 }

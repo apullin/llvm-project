@@ -41,10 +41,8 @@ public:
 
 protected:
   Tool *buildLinker() const override;
-  void addExtraOpts(llvm::opt::ArgStringList &CmdArgs) const override;
 
 private:
-  std::string DefaultLinkerScriptArg;
   std::string DefaultSysRoot;
 };
 

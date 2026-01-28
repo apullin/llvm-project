@@ -13,3 +13,24 @@ define i8 @reteight() #0 {
 ; CHECK: RET
   ret i8 56
 }
+
+define i16 @retsixteen() {
+; CHECK-LABEL: retsixteen:
+; CHECK: MVI	B, 18
+; CHECK: MVI	C, 52
+; CHECK: RET
+  ret i16 4660
+}
+
+define i32 @retthirtytwo() {
+; CHECK-LABEL: retthirtytwo:
+; CHECK: MVI M,
+; CHECK: RET
+  ret i32 16909060
+}
+
+define i64 @retsixtyfour() {
+; CHECK-LABEL: retsixtyfour:
+; CHECK: RET
+  ret i64 72623859790382856
+}

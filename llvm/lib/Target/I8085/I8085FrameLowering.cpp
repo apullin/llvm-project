@@ -140,6 +140,15 @@ void I8085FrameLowering::emitPrologue(MachineFunction &MF,
 
   // Early exit if the frame pointer is not needed in this function.
   if (!HasFP) {
+    if (!EmitCFI)
+      return;
+    // Emit callee-saved CFI even in frameless functions.
+    MachineBasicBlock::iterator CFIInsert = MBB.begin();
+    while (CFIInsert != MBB.end() &&
+           CFIInsert->getFlag(MachineInstr::FrameSetup)) {
+      ++CFIInsert;
+    }
+    emitCalleeSavedFrameMoves(MBB, CFIInsert, DL, true, TII);
     return;
   }
 
@@ -213,14 +222,6 @@ void I8085FrameLowering::emitPrologue(MachineFunction &MF,
 }
 
 static void restoreStatusRegister(MachineFunction &MF, MachineBasicBlock &MBB) {
-  const I8085MachineFunctionInfo *AFI = MF.getInfo<I8085MachineFunctionInfo>();
-
-  MachineBasicBlock::iterator MBBI = MBB.getLastNonDebugInstr();
-
-  DebugLoc DL = MBBI->getDebugLoc();
-  const I8085Subtarget &STI = MF.getSubtarget<I8085Subtarget>();
-  const I8085InstrInfo &TII = *STI.getInstrInfo();
-
 }
 
 void I8085FrameLowering::emitEpilogue(MachineFunction &MF,
@@ -228,21 +229,46 @@ void I8085FrameLowering::emitEpilogue(MachineFunction &MF,
   const I8085MachineFunctionInfo *AFI = MF.getInfo<I8085MachineFunctionInfo>();
   bool EmitCFI = MF.needsFrameMoves() && !AFI->hasStackRealign();
 
-  // Early exit if the frame pointer is not needed in this function except for
-  // signal/interrupt handlers where special code generation is required.
-  if (!hasFP(MF) && !AFI->isInterruptOrSignalHandler()) {
-    return;
-  }
-
   MachineBasicBlock::iterator MBBI = MBB.getLastNonDebugInstr();
   assert(MBBI->getDesc().isReturn() &&
          "Can only insert epilog into returning blocks");
 
   DebugLoc DL = MBBI->getDebugLoc();
-  const MachineFrameInfo &MFI = MF.getFrameInfo();
-  unsigned FrameSize = MFI.getStackSize() - AFI->getCalleeSavedFrameSize();
   const I8085Subtarget &STI = MF.getSubtarget<I8085Subtarget>();
   const I8085InstrInfo &TII = *STI.getInstrInfo();
+
+  // Early exit if the frame pointer is not needed in this function except for
+  // signal/interrupt handlers where special code generation is required.
+  if (!hasFP(MF) && !AFI->isInterruptOrSignalHandler()) {
+    if (!EmitCFI)
+      return;
+
+    // Find the first callee-saved pop so we can insert restores after it.
+    MachineBasicBlock::iterator FirstCSPop = MBBI;
+    MachineBasicBlock::iterator Scan = MBBI;
+    while (Scan != MBB.begin()) {
+      MachineBasicBlock::iterator PI = std::prev(Scan);
+      int Opc = PI->getOpcode();
+      if ((Opc != I8085::POP || !PI->getFlag(MachineInstr::FrameDestroy)) &&
+          !PI->isTerminator())
+        break;
+      FirstCSPop = PI;
+      --Scan;
+    }
+
+    MachineBasicBlock::iterator AfterPop = FirstCSPop;
+    while (AfterPop != MBB.end() &&
+           AfterPop->getFlag(MachineInstr::FrameDestroy) &&
+           AfterPop->getOpcode() == I8085::POP) {
+      ++AfterPop;
+    }
+
+    emitCalleeSavedFrameMoves(MBB, AfterPop, DL, false, TII);
+    return;
+  }
+
+  const MachineFrameInfo &MFI = MF.getFrameInfo();
+  unsigned FrameSize = MFI.getStackSize() - AFI->getCalleeSavedFrameSize();
 
   // Find the first callee-saved pop so we can insert adjustments before it.
   MachineBasicBlock::iterator FirstCSPop = MBBI;
@@ -533,8 +559,6 @@ struct I8085FrameAnalyzer : public MachineFunctionPass {
     // are really being used, otherwise we can ignore them.
     for (const MachineBasicBlock &BB : MF) {
       for (const MachineInstr &MI : BB) {
-        int Opcode = MI.getOpcode();
-
         for (const MachineOperand &MO : MI.operands()) {
           if (!MO.isFI()) {
             continue;

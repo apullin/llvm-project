@@ -43,6 +43,7 @@ define i16 @load_globals() {
 ; CHECK:       LBB1_0:
 ; CHECK-NEXT:    PUSH D
 ; CHECK-NEXT:    .cfi_adjust_cfa_offset 2
+; CHECK-NEXT:    .cfi_offset 13, {{-?[0-9]+}}
 ; CHECK-NEXT:    LXI H, g8
 ; CHECK-NEXT:    MOV B, M
 ; CHECK-NEXT:    MOV A, B

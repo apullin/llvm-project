@@ -18,16 +18,16 @@ clang/runtime support. It is intended as a living checklist.
 - [x] opcode roundtrip and MC coverage for core instruction groups
 - [x] RST encoding validation
 - [x] ELF relocation emission for absolute 16-bit fixups
-- [x] symbol modifiers / target exprs (hi8/lo8/pm) wiring for i8085
+- [x] symbol modifiers / target exprs (hi8/lo8/pm/gs) wiring for i8085
 - [x] assembler diagnostics coverage for illegal operands/ranges
 
 ## ABI / Runtime
 - [x] libcall names set for mul/div/rem (signed + unsigned)
 - [x] minimal compiler-rt builtins for mul/div/rem (signed + unsigned)
 - [x] sysroot libgcc built from compiler-rt builtins (i64 + shifts + clz/ctz)
-- [x] calling convention doc + validation tests for aggregates/struct returns
+- [ ] calling convention doc + validation tests for aggregates/struct returns
 - [x] startup/CRT objects (data copy + bss + stack)
-- [x] default linker script
+- [ ] default linker script (external examples only)
 
 ## Clang Driver
 - [x] TargetInfo and minimal toolchain stub
@@ -36,9 +36,10 @@ clang/runtime support. It is intended as a living checklist.
 
 ## Tooling / Tests
 - [x] CodeGen regression tests for call args and large stack
-- [x] MC relocation tests
+- [x] MC relocation tests (absolute + modifier relocs)
 - [x] end-to-end clang -> asm -> object smoke test
 - [x] end-to-end link smoke test (lld)
+- [x] LLD relocation application tests for modifier relocs
 - [x] TTI cost model smoke tests
 - [x] peephole tests for LXI step folding
 
@@ -47,3 +48,4 @@ clang/runtime support. It is intended as a living checklist.
 - 32-bit lowering uses pseudo-registers with zero-page memory; needs audit.
 - No floating point support.
 - libc in sysroot is a stub; real runtime still needed.
+- No default linker script bundled; users must pass -Wl,-T to link.

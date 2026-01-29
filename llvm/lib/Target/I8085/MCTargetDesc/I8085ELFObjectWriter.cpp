@@ -37,11 +37,14 @@ I8085ELFObjectWriter::I8085ELFObjectWriter(uint8_t OSABI)
 unsigned I8085ELFObjectWriter::getRelocType(MCContext &Ctx, const MCValue &Target,
                                           const MCFixup &Fixup,
                                           bool IsPCRel) const {
-  MCSymbolRefExpr::VariantKind Modifier = Target.getAccessVariant();
+  (void)Target;
   switch (Fixup.getTargetKind()) {
   case FK_Data_1:
     return ELF::R_I8085_8;
   case FK_Data_2:
+  case FK_Data_4:
+  case FK_Data_8:
+    // I8085 uses 16-bit addresses; map wider data fixups to 16-bit relocs.
     return ELF::R_I8085_16;
   case I8085::fixup_16:
     return ELF::R_I8085_16;

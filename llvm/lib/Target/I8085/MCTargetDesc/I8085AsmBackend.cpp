@@ -48,6 +48,12 @@ void I8085AsmBackend::adjustFixupValue(const MCFixup &Fixup,
   uint64_t Size = I8085AsmBackend::getFixupKindInfo(Fixup.getKind()).TargetSize;
 
   unsigned Kind = Fixup.getKind();
+  if (Kind < FirstTargetFixupKind) {
+    if (Size < 64) {
+      Value &= ((1ULL << Size) - 1);
+    }
+    return;
+  }
   switch (Kind) {
   default:
     llvm_unreachable("unhandled fixup");

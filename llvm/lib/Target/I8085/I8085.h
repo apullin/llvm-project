@@ -40,6 +40,7 @@ void initializeI8085ExpandPseudo32Pass(PassRegistry &);
 void initializeI8085StoreRegClassPass(PassRegistry &);
 void initializeI8085ExpandCopiesPass(PassRegistry &);
 void initializeI8085PeepholePass(PassRegistry &);
+void initializeI8085FrameAnalyzerPass(PassRegistry &);
 void initializeI8085DAGToDAGISelLegacyPass(PassRegistry &);
 
 /// Contains the I8085 backend.

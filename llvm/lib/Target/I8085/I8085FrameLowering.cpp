@@ -500,7 +500,9 @@ void I8085FrameLowering::determineCalleeSaves(MachineFunction &MF,
 /// that are passed through the stack.
 struct I8085FrameAnalyzer : public MachineFunctionPass {
   static char ID;
-  I8085FrameAnalyzer() : MachineFunctionPass(ID) {}
+  I8085FrameAnalyzer() : MachineFunctionPass(ID) {
+    initializeI8085FrameAnalyzerPass(*PassRegistry::getPassRegistry());
+  }
 
   bool runOnMachineFunction(MachineFunction &MF) override {
     const MachineFrameInfo &MFI = MF.getFrameInfo();
@@ -558,3 +560,9 @@ char I8085FrameAnalyzer::ID = 0;
 FunctionPass *createI8085FrameAnalyzerPass() { return new I8085FrameAnalyzer(); }
 
 } // end of namespace llvm
+
+using namespace llvm;
+
+#define I8085_FRAME_ANALYZER_NAME "I8085 Frame Analyzer"
+INITIALIZE_PASS(I8085FrameAnalyzer, "i8085-frame-analyzer",
+                I8085_FRAME_ANALYZER_NAME, false, false)

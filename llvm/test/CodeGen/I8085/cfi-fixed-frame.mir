@@ -1,0 +1,27 @@
+# RUN: llc -mtriple=i8085-unknown-elf -run-pass=i8085-frame-analyzer,prologepilog -verify-machineinstrs -o - %s | FileCheck %s
+
+--- |
+  target triple = "i8085-unknown-elf"
+  define void @cfi_fixed_frame(i16 %x) {
+  entry:
+    ret void
+  }
+...
+
+---
+name:            cfi_fixed_frame
+tracksRegLiveness: true
+frameInfo:
+  hasCalls:        false
+  stackSize:       4
+  maxAlignment:    1
+  adjustsStack:    true
+stack:
+  - { id: 0, name: '', type: default, offset: -4, size: 4, alignment: 1 }
+body:             |
+  bb.0.entry:
+    ; CHECK-LABEL: name: cfi_fixed_frame
+    ; CHECK: frame-setup CFI_INSTRUCTION adjust_cfa_offset 4
+    ; CHECK: frame-destroy CFI_INSTRUCTION adjust_cfa_offset {{(-4|4294967292)}}
+    RET
+...

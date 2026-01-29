@@ -551,6 +551,7 @@ let isCall = 1, isTerminator = 1, isReturn = 1, isBarrier = 1, Uses = [SP] in {
 
 let isTerminator = 1, isReturn = 1, isBarrier = 1 in {
   def RET : F1<0b11001001, (outs), (ins), "RET", [(I8085retflag)]>;
+  def RETI : F1<0b11011001, (outs), (ins), "RETI", [(I8085retiflag)]>;
 }
 
 def RST : FRST<(outs), (ins I8085Imm8: $k), "RST $k", []>;

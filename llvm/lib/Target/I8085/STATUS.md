@@ -25,7 +25,7 @@ clang/runtime support. It is intended as a living checklist.
 - [x] libcall names set for mul/div/rem (signed + unsigned)
 - [x] minimal compiler-rt builtins for mul/div/rem (signed + unsigned)
 - [x] sysroot libgcc built from compiler-rt builtins (i64 + shifts + clz/ctz)
-- [ ] calling convention doc + validation tests for aggregates/struct returns
+- [x] calling convention doc + validation tests for aggregates/struct returns
 - [x] startup/CRT objects (data copy + bss + stack)
 - [ ] default linker script (external examples only)
 

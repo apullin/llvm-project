@@ -1218,6 +1218,16 @@ bool I8085TargetLowering::CanLowerReturn(
     return CCInfo.CheckReturn(Outs, RetCC_I8085_BUILTIN);
   }
 
+  bool IsI64 =
+      (!Outs.empty() && Outs[0].VT == MVT::i64) ||
+      (Outs.size() == 2 && Outs[0].VT == MVT::i32 && Outs[1].VT == MVT::i32);
+  if (Outs.size() > 1 && !IsI64)
+    return false;
+  for (const auto &Out : Outs) {
+    if (!Out.VT.isInteger())
+      return false;
+  }
+
   unsigned TotalBytes = getTotalArgumentsSizeInBytes(Outs);
   return TotalBytes <= 8;
 }

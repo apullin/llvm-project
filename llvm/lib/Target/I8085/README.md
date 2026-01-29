@@ -25,8 +25,9 @@ Currently basic constructs such as , loading and storing variables, function cal
 
 ## <a id="notes">**Some implementation note:**
 
-1. Arguments are passed via stack, and return value is stored in register.
-2. 8 bit integers are returned via A reg, 16 bit integers are returned via BC reg pair and 32 bit integers are returned via stack.
+1. Arguments are passed via stack.
+2. Scalar returns use registers: i8 in A, i16 in BC, i32 in IAX, i64 in IAX+IBX.
+3. Aggregate returns are currently demoted to `sret` (hidden pointer).
 
 
 ## <a id="correctness">**Correctness:**

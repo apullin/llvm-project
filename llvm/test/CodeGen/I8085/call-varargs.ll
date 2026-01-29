@@ -9,6 +9,6 @@ define void @caller_varargs(i16 %a, i8 %b, i32 %c) {
 ; CHECK: CALL vfoo
 ; CHECK: RET
 entry:
-  call void (i16, ...) @vfoo(i16 %a, i8 %b, i32 %c, i16 4660, i8 7)
+  call void (i16, ...) @vfoo(i16 %a, i8 %b, i32 %c, i16 4660, i8 7, i64 72623859790382856)
   ret void
 }

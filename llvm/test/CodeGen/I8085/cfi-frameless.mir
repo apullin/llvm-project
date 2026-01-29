@@ -1,0 +1,25 @@
+# RUN: llc -mtriple=i8085-unknown-elf -run-pass=prologepilog -verify-machineinstrs -o - %s | FileCheck %s
+
+--- |
+  target triple = "i8085-unknown-elf"
+  define void @cfi_frameless() {
+  entry:
+    ret void
+  }
+...
+
+---
+name:            cfi_frameless
+tracksRegLiveness: true
+frameInfo:
+  hasCalls:        false
+  stackSize:       0
+  maxAlignment:    1
+  adjustsStack:    false
+body:             |
+  bb.0.entry:
+    ; CHECK-LABEL: name: cfi_frameless
+    ; CHECK-NOT: CFI_INSTRUCTION
+    ; CHECK: RET
+    RET
+...

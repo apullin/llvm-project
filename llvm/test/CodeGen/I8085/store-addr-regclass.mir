@@ -11,9 +11,9 @@ body:             |
   bb.0:
     liveins: $hl, $b, $sp
     ; CHECK-LABEL: name:            store8_addr_content
-    ; CHECK: %[[ADDR:[0-9]+]]:gr16bd = COPY $hl
-    ; CHECK: STORE_8_ADDR_CONTENT {{.*}}%[[ADDR]]
+    ; CHECK: %0:gr8nohl = COPY $b
+    ; CHECK: STORE_8_ADDR_CONTENT $hl, %0, implicit-def $h, implicit-def $l, implicit $sp
     %0:gr8nohl = COPY $b
-    STORE_8_ADDR_CONTENT $hl, %0, implicit-def $hl, implicit $sp
+    STORE_8_ADDR_CONTENT $hl, %0, implicit-def $h, implicit-def $l, implicit $sp
     RET
 ...

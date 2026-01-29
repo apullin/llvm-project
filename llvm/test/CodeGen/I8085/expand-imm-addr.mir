@@ -21,7 +21,7 @@ body:             |
     ; CHECK-LABEL: name:            load8_imm
     ; CHECK: $hl = LXI @g8
     ; CHECK-NEXT: $c = MOV_FROM_M
-    $c = LOAD_8_WITH_IMM_ADDR @g8, implicit-def $hl, implicit $sp
+    $c = LOAD_8_WITH_IMM_ADDR @g8, implicit-def $h, implicit-def $l, implicit $sp
     RET
 ...
 
@@ -34,7 +34,7 @@ body:             |
     ; CHECK-NEXT: $b = MOV_FROM_M
     ; CHECK-NEXT: $hl = LXI @g16
     ; CHECK-NEXT: $c = MOV_FROM_M
-    $bc = LOAD_16_WITH_IMM_ADDR @g16, implicit-def $hl, implicit $sp
+    $bc = LOAD_16_WITH_IMM_ADDR @g16, implicit-def $h, implicit-def $l, implicit $sp
     RET
 ...
 
@@ -48,7 +48,7 @@ body:             |
     ; CHECK-NEXT: $hl = INX
     ; CHECK-NEXT: $h = MOV_FROM_M
     ; CHECK-NEXT: $l = MOV $a
-    $hl = LOAD_16_WITH_IMM_ADDR @g16_2, implicit-def $hl, implicit $sp
+    $hl = LOAD_16_WITH_IMM_ADDR @g16_2, implicit-def $h, implicit-def $l, implicit $sp
     RET
 ...
 
@@ -63,7 +63,7 @@ body:             |
     ; CHECK-NEXT: $h = MOV_FROM_M
     ; CHECK-NEXT: $l = MOV $a
     ; CHECK-NEXT: SPHL
-    $sp = LOAD_16_WITH_IMM_ADDR @g16_3, implicit-def $hl, implicit $sp
+    $sp = LOAD_16_WITH_IMM_ADDR @g16_3, implicit-def $h, implicit-def $l, implicit $sp
     RET
 ...
 

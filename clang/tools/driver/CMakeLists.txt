@@ -63,17 +63,6 @@ add_dependencies(clang clang-resource-headers)
 
 include(GetClangResourceDir)
 get_clang_resource_dir(I8085_RESOURCE_DIR PREFIX ${LLVM_LIBRARY_OUTPUT_INTDIR}/..)
-set(I8085_LD_SRC "${CLANG_SOURCE_DIR}/lib/Driver/ToolChains/i8085.ld")
-set(I8085_LD_DST "${I8085_RESOURCE_DIR}/i8085.ld")
-add_custom_command(
-  OUTPUT ${I8085_LD_DST}
-  COMMAND ${CMAKE_COMMAND} -E make_directory ${I8085_RESOURCE_DIR}
-  COMMAND ${CMAKE_COMMAND} -E copy_if_different ${I8085_LD_SRC} ${I8085_LD_DST}
-  DEPENDS ${I8085_LD_SRC}
-  COMMENT "Copying i8085 linker script to Clang resource dir"
-  VERBATIM)
-add_custom_target(clang-i8085-ldscript DEPENDS ${I8085_LD_DST})
-add_dependencies(clang clang-i8085-ldscript)
 
 set(I8085_SYSROOT_DIR "${I8085_RESOURCE_DIR}/i8085")
 set(I8085_SYSROOT_LIB_DIR "${I8085_SYSROOT_DIR}/lib")

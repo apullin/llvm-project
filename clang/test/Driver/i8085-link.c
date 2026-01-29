@@ -6,7 +6,6 @@
 // CC1-SAME: "-internal-isystem" "{{.*}}/lib/clang/{{[^" ]*}}/i8085/include"
 //
 // LINK: "{{.*}}ld.lld"
-// LINK-SAME: "-T{{.*}}/lib/clang/{{[^" ]*}}/i8085.ld"
 // LINK-SAME: "{{.*}}/lib/clang/{{[^" ]*}}/i8085/lib/crt1.o"
 // LINK-SAME: "{{.*}}/lib/clang/{{[^" ]*}}/i8085/lib/crti.o"
 // LINK-SAME: "{{.*}}/lib/clang/{{[^" ]*}}/i8085/lib/crtbegin.o"

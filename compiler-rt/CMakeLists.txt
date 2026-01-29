@@ -470,7 +470,7 @@ if(MSVC)
     string(REGEX REPLACE "(^| )/Z[i7I]($| )" " /Z7 "
            "${var_to_update}" "${${var_to_update}}")
   endforeach()
-elseif(APPLE)
+elseif(APPLE AND NOT COMPILER_RT_BAREMETAL_BUILD)
   # On Apple platforms use full debug info (i.e. not `-gline-tables-only`)
   # for all build types so that the runtime can be debugged.
   if(NOT COMPILER_RT_HAS_G_FLAG)

@@ -804,7 +804,6 @@ MachineBasicBlock *I8085TargetLowering::insertDifferentSignedCond16Set(MachineIn
   MF->insert(I, continMBB);
   MF->insert(I, firstOperandPos);
   MF->insert(I, firstOperandNeg);
-  MF->RenumberBlocks(MBB);
 
   // Transfer remaining instructions and all successors of the current
   // block to the block which will contain the Phi node for the

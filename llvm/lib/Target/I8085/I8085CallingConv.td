@@ -55,4 +55,4 @@ def ArgCC_I8085_Vararg : CallingConv<[
 // Callee-saved register lists.
 //===----------------------------------------------------------------------===//
 
-def CSR_Normal : CalleeSavedRegs<(add DE)>;
+def CSR_Normal : CalleeSavedRegs<(add)>;

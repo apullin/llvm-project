@@ -869,11 +869,13 @@ SDValue I8085TargetLowering::LowerFormalArguments(
 
       EVT LocVT = VA.getLocVT();
 
+      int32_t StackOffset = VA.getLocMemOffset();
+
       if (Arg.Flags.isByVal() && Arg.Flags.getByValSize()) {
         unsigned Size = Arg.Flags.getByValSize();
         Align Alignment =
             std::max(Align(1), Arg.Flags.getNonZeroByValAlign());
-        int FI = MFI.CreateFixedObject(Size, VA.getLocMemOffset(), true);
+        int FI = MFI.CreateFixedObject(Size, StackOffset, true);
         MFI.setObjectAlignment(FI, Alignment);
         SDValue FIN = DAG.getFrameIndex(FI, getPointerTy(DL));
         InVals.push_back(FIN);
@@ -882,7 +884,7 @@ SDValue I8085TargetLowering::LowerFormalArguments(
 
       // Create the frame index object for this incoming parameter.
       int FI = MFI.CreateFixedObject(LocVT.getSizeInBits() / 8,
-                                     VA.getLocMemOffset(), true);
+                                     StackOffset, true);
 
       // Create the SelectionDAG nodes corresponding to a load
       // from this parameter.
@@ -1135,6 +1137,9 @@ SDValue I8085TargetLowering::LowerCallResult(
       (Ins.size() == 2 &&
        Ins[0].VT == MVT::i32 && Ins[1].VT == MVT::i32);
 
+  bool IsI32 =
+      (Ins.size() == 1 && Ins[0].VT == MVT::i32);
+
   if (IsI64) {
     SDValue Lo = DAG.getCopyFromReg(Chain, dl, I8085::IAX, MVT::i32, InFlag);
     Chain = Lo.getValue(1);
@@ -1145,6 +1150,24 @@ SDValue I8085TargetLowering::LowerCallResult(
 
     InVals.push_back(Lo.getValue(0));
     InVals.push_back(Hi.getValue(0));
+    return Chain;
+  }
+
+  if (IsI32) {
+    SDValue Lo = DAG.getCopyFromReg(Chain, dl, I8085::BC, MVT::i16, InFlag);
+    Chain = Lo.getValue(1);
+    InFlag = Lo.getValue(2);
+    SDValue Hi = DAG.getCopyFromReg(Chain, dl, I8085::DE, MVT::i16, InFlag);
+    Chain = Hi.getValue(1);
+    InFlag = Hi.getValue(2);
+
+    SDValue LoZ = DAG.getNode(ISD::ZERO_EXTEND, dl, MVT::i32, Lo);
+    SDValue HiZ = DAG.getNode(ISD::ZERO_EXTEND, dl, MVT::i32, Hi);
+    SDValue HiShift = DAG.getNode(ISD::SHL, dl, MVT::i32, HiZ,
+                                  DAG.getConstant(16, dl, MVT::i32));
+    SDValue Val = DAG.getNode(ISD::OR, dl, MVT::i32, LoZ, HiShift);
+
+    InVals.push_back(Val);
     return Chain;
   }
 
@@ -1260,6 +1283,10 @@ I8085TargetLowering::LowerReturn(SDValue Chain, CallingConv::ID CallConv,
        OutVals[0].getValueType() == MVT::i32 &&
        OutVals[1].getValueType() == MVT::i32);
 
+  bool IsI32 =
+      (Outs.size() == 1 && Outs[0].VT == MVT::i32) ||
+      (OutVals.size() == 1 && OutVals[0].getValueType() == MVT::i32);
+
   if (IsI64) {
     SDValue Lo;
     SDValue Hi;
@@ -1285,6 +1312,30 @@ I8085TargetLowering::LowerReturn(SDValue Chain, CallingConv::ID CallConv,
     RetOps.push_back(Chain);
     RetOps.push_back(DAG.getRegister(I8085::IAX, MVT::i32));
     RetOps.push_back(DAG.getRegister(I8085::IBX, MVT::i32));
+    if (Flag.getNode())
+      RetOps.push_back(Flag);
+
+    return DAG.getNode(I8085ISD::RET_FLAG, dl, MVT::Other, RetOps);
+  }
+
+  if (IsI32) {
+    SDValue Val = OutVals[0];
+    SDValue Lo = DAG.getNode(ISD::TRUNCATE, dl, MVT::i16, Val);
+    SDValue Hi = DAG.getNode(
+        ISD::TRUNCATE, dl, MVT::i16,
+        DAG.getNode(ISD::SRL, dl, MVT::i32, Val,
+                    DAG.getConstant(16, dl, MVT::i32)));
+
+    SDValue Flag;
+    Chain = DAG.getCopyToReg(Chain, dl, I8085::BC, Lo, Flag);
+    Flag = Chain.getValue(1);
+    Chain = DAG.getCopyToReg(Chain, dl, I8085::DE, Hi, Flag);
+    Flag = Chain.getValue(1);
+
+    SmallVector<SDValue, 4> RetOps;
+    RetOps.push_back(Chain);
+    RetOps.push_back(DAG.getRegister(I8085::BC, MVT::i16));
+    RetOps.push_back(DAG.getRegister(I8085::DE, MVT::i16));
     if (Flag.getNode())
       RetOps.push_back(Flag);
 

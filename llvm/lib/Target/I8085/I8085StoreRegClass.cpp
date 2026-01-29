@@ -57,7 +57,14 @@ public:
         bool IsKill = MO.isKill();
 
         if (Src.isVirtual()) {
-          if (!MRI.constrainRegClass(Src, RC)) {
+          const TargetRegisterClass *CurRC = MRI.getRegClass(Src);
+          const TargetRegisterClass *NewRC =
+              MRI.constrainRegClass(Src, RC);
+          CurRC = NewRC ? MRI.getRegClass(Src) : CurRC;
+
+          // If the register couldn't be narrowed into the required class,
+          // insert a copy for just this use.
+          if (!NewRC || !RC->hasSubClassEq(CurRC)) {
             Register Tmp = MRI.createVirtualRegister(RC);
             BuildMI(MBB, MI, MI->getDebugLoc(), TII.get(TargetOpcode::COPY), Tmp)
                 .addReg(Src, getKillRegState(IsKill));

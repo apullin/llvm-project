@@ -1,0 +1,19 @@
+# RUN: llc -run-pass=i8085-store-regclass %s -o - | FileCheck %s
+
+--- |
+  target triple = "i8085-unknown-elf"
+  define void @store8_addr_content() { ret void }
+...
+
+---
+name:            store8_addr_content
+body:             |
+  bb.0:
+    liveins: $hl, $b, $sp
+    ; CHECK-LABEL: name:            store8_addr_content
+    ; CHECK: %[[ADDR:[0-9]+]]:gr16bd = COPY $hl
+    ; CHECK: STORE_8_ADDR_CONTENT {{.*}}%[[ADDR]]
+    %0:gr8nohl = COPY $b
+    STORE_8_ADDR_CONTENT $hl, %0, implicit-def $hl, implicit $sp
+    RET
+...

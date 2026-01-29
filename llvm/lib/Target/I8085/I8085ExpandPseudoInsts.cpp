@@ -445,9 +445,9 @@ bool I8085ExpandPseudo::expand<I8085::CALL_INDIRECT>(Block &MBB, BlockIt MBBI) {
   addLiveIns(*ReturnMBB, LiveRegs);
 
   buildMI(MBB, MBBI, I8085::LXI)
-      .addReg(I8085::DE, RegState::Define)
+      .addReg(I8085::BC, RegState::Define)
       .addMBB(ReturnMBB);
-  buildMI(MBB, MBBI, I8085::PUSH).addReg(I8085::DE);
+  buildMI(MBB, MBBI, I8085::PUSH).addReg(I8085::BC);
   buildMI(MBB, MBBI, I8085::PCHL);
 
   MI.eraseFromParent();
@@ -582,6 +582,53 @@ bool I8085ExpandPseudo::expand<I8085::STORE_16>(Block &MBB, BlockIt MBBI) {
   unsigned baseReg = MI.getOperand(0).getReg();
   int64_t offsetToStore = MI.getOperand(1).getImm();
   unsigned destReg = MI.getOperand(2).getReg();
+
+  auto addOffsetToHL = [&](int64_t Offset) {
+    if (Offset > 0) {
+      for (int64_t i = 0; i < Offset; ++i)
+        buildMI(MBB, MBBI, I8085::INX).addReg(I8085::HL, RegState::Define);
+    } else if (Offset < 0) {
+      for (int64_t i = 0; i < -Offset; ++i)
+        buildMI(MBB, MBBI, I8085::DCX).addReg(I8085::HL, RegState::Define);
+    }
+  };
+
+  if (destReg == I8085::HL) {
+    const bool SrcIsKill = MI.getOperand(2).isKill();
+    int64_t addrOffset = offsetToStore;
+    if (baseReg == I8085::SP)
+      addrOffset += 4;
+
+    buildMI(MBB, MBBI, I8085::PUSH).addReg(I8085::BC);
+    buildMI(MBB, MBBI, I8085::PUSH).addReg(I8085::HL);
+
+    if (baseReg == I8085::HL) {
+      addOffsetToHL(addrOffset);
+    } else {
+      buildMI(MBB, MBBI, I8085::LXI)
+          .addReg(I8085::HL, RegState::Define)
+          .addImm(addrOffset);
+      buildMI(MBB, MBBI, I8085::DAD).addReg(baseReg);
+    }
+
+    buildMI(MBB, MBBI, I8085::POP).addReg(I8085::BC, RegState::Define);
+    buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::C);
+    buildMI(MBB, MBBI, I8085::INX).addReg(I8085::HL, RegState::Define);
+    buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::B);
+
+    if (!SrcIsKill) {
+      buildMI(MBB, MBBI, I8085::MOV)
+          .addReg(I8085::H, RegState::Define)
+          .addReg(I8085::B);
+      buildMI(MBB, MBBI, I8085::MOV)
+          .addReg(I8085::L, RegState::Define)
+          .addReg(I8085::C);
+    }
+
+    buildMI(MBB, MBBI, I8085::POP).addReg(I8085::BC, RegState::Define);
+    MI.eraseFromParent();
+    return true;
+  }
   
   if (destReg == I8085::SP) {
     buildMI(MBB, MBBI, I8085::LXI)

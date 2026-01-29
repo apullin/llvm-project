@@ -227,18 +227,6 @@ void I8085InstrInfo::storeRegToStackSlot(MachineBasicBlock &MBB,
       SrcReg = Tmp;
       isKill = true;
     }
-  } else if (Opcode == I8085::STORE_16 && RC != &I8085::GR16BDRegClass) {
-    // STORE_16 only supports BC/DE as data sources.
-    if (SrcReg.isVirtual() &&
-        MRI.constrainRegClass(SrcReg, &I8085::GR16BDRegClass)) {
-      // Narrowed to a safe register class.
-    } else if (!I8085::GR16BDRegClass.contains(SrcReg)) {
-      Register Tmp = MRI.createVirtualRegister(&I8085::GR16BDRegClass);
-      BuildMI(MBB, MI, DL, get(TargetOpcode::COPY), Tmp)
-          .addReg(SrcReg, getKillRegState(isKill));
-      SrcReg = Tmp;
-      isKill = true;
-    }
   }
 
   BuildMI(MBB, MI, DL, get(Opcode))

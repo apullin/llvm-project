@@ -36,6 +36,10 @@ namespace llvm {
 
 I8085RegisterInfo::I8085RegisterInfo() : I8085GenRegisterInfo(0) {}
 
+static bool needsBasePointer(const MachineFunction &MF) {
+  return MF.getFrameInfo().hasVarSizedObjects();
+}
+
 const uint16_t *
 I8085RegisterInfo::getCalleeSavedRegs(const MachineFunction *MF) const {
   const I8085MachineFunctionInfo *AFI = MF->getInfo<I8085MachineFunctionInfo>();
@@ -58,9 +62,13 @@ BitVector I8085RegisterInfo::getReservedRegs(const MachineFunction &MF) const {
   Reserved.set(I8085::A);
   Reserved.set(I8085::H);
   Reserved.set(I8085::L);
-  Reserved.set(I8085::HL);
-  
   Reserved.set(I8085::M);
+
+  if (needsBasePointer(MF)) {
+    Reserved.set(I8085::DE);
+    Reserved.set(I8085::D);
+    Reserved.set(I8085::E);
+  }
 
   return Reserved;
 }
@@ -117,7 +125,8 @@ bool I8085RegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
   //: TODO: consider using only one adiw/sbiw chain for more than one frame
   //: index
 
-  MI.getOperand(FIOperandNum).ChangeToRegister(I8085::SP, false);
+  unsigned BaseReg = needsBasePointer(MF) ? I8085::DE : I8085::SP;
+  MI.getOperand(FIOperandNum).ChangeToRegister(BaseReg, false);
   assert(isInt<16>(Offset) && "Offset is out of range");
   MI.getOperand(FIOperandNum + 1).ChangeToImmediate(Offset);
 
@@ -125,7 +134,7 @@ bool I8085RegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
 }
 
 Register I8085RegisterInfo::getFrameRegister(const MachineFunction &MF) const {
-  return I8085::SP;
+  return needsBasePointer(MF) ? I8085::DE : I8085::SP;
 }
 
 // const TargetRegisterClass *

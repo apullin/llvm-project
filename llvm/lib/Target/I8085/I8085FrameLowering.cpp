@@ -73,18 +73,6 @@ static bool getPairRegs(unsigned Pair, unsigned &LowReg, unsigned &HighReg) {
   }
 }
 
-static unsigned getScratchPair(const MachineBasicBlock &MBB) {
-  bool BCFree = !MBB.isLiveIn(I8085::B) && !MBB.isLiveIn(I8085::C) &&
-                !MBB.isLiveIn(I8085::BC);
-  bool DEFree = !MBB.isLiveIn(I8085::D) && !MBB.isLiveIn(I8085::E) &&
-                !MBB.isLiveIn(I8085::DE);
-  if (DEFree)
-    return I8085::DE;
-  if (BCFree)
-    return I8085::BC;
-  return 0;
-}
-
 bool I8085FrameLowering::canSimplifyCallFramePseudos(
     const MachineFunction &MF) const {
   // Always simplify call frame pseudo instructions, even when
@@ -126,7 +114,7 @@ void I8085FrameLowering::emitPrologue(MachineFunction &MF,
   }
   
   /*Prologue sequence for 8085 processor */ 
-  unsigned ScratchPair = 0;
+  bool NeedsBasePtr = MFI.hasVarSizedObjects();
   if (AFI->hasStackRealign()) {
     Align Realign = getStackRealignAlignment(MF);
     unsigned AlignBytes = Realign.value();
@@ -134,9 +122,7 @@ void I8085FrameLowering::emitPrologue(MachineFunction &MF,
       report_fatal_error("Unsupported I8085 stack realignment");
 
     uint8_t Mask = static_cast<uint8_t>(~(AlignBytes - 1u));
-    ScratchPair = getScratchPair(MBB);
-    if (ScratchPair == 0)
-      report_fatal_error("I8085 stack realignment requires free BC/DE");
+    unsigned ScratchPair = I8085::BC;
     unsigned ScratchLow = 0, ScratchHigh = 0;
     if (!getPairRegs(ScratchPair, ScratchLow, ScratchHigh))
       report_fatal_error("I8085 stack realignment scratch pair invalid");
@@ -161,12 +147,20 @@ void I8085FrameLowering::emitPrologue(MachineFunction &MF,
       
   }
 
+  if (NeedsBasePtr) {
+    BuildMI(MBB, MBBI, DL, TII.get(I8085::LXI), I8085::HL).addImm(0);
+    BuildMI(MBB, MBBI, DL, TII.get(I8085::DAD)).addReg(I8085::SP);
+    BuildMI(MBB, MBBI, DL, TII.get(I8085::MOV), I8085::D)
+        .addReg(I8085::H);
+    BuildMI(MBB, MBBI, DL, TII.get(I8085::MOV), I8085::E)
+        .addReg(I8085::L);
+  }
+
   if (AFI->hasStackRealignSaveFI()) {
-    assert(ScratchPair && "missing scratch pair for stack realignment");
     BuildMI(MBB, MBBI, DL, TII.get(I8085::STORE_16))
         .addFrameIndex(AFI->getStackRealignSaveFI())
         .addImm(0)
-        .addReg(ScratchPair);
+        .addReg(I8085::BC);
   }
 }
 
@@ -201,6 +195,20 @@ void I8085FrameLowering::emitEpilogue(MachineFunction &MF,
   const I8085Subtarget &STI = MF.getSubtarget<I8085Subtarget>();
   const I8085InstrInfo &TII = *STI.getInstrInfo();
 
+  // Find the first callee-saved pop so we can insert adjustments before it.
+  MachineBasicBlock::iterator FirstCSPop = MBBI;
+  while (MBBI != MBB.begin()) {
+    MachineBasicBlock::iterator PI = std::prev(MBBI);
+    int Opc = PI->getOpcode();
+    if ((Opc != I8085::POP || !PI->getFlag(MachineInstr::FrameDestroy)) &&
+        !PI->isTerminator())
+      break;
+    FirstCSPop = PI;
+    --MBBI;
+  }
+  MBBI = FirstCSPop;
+  DL = MBBI->getDebugLoc();
+
   if (AFI->hasStackRealignSaveFI()) {
     BuildMI(MBB, MBBI, DL, TII.get(I8085::LOAD_16_WITH_ADDR), I8085::HL)
         .addFrameIndex(AFI->getStackRealignSaveFI())
@@ -210,30 +218,16 @@ void I8085FrameLowering::emitEpilogue(MachineFunction &MF,
     return;
   }
 
-  // Early exit if there is no need to restore the frame pointer.
-  if (!FrameSize && !MF.getFrameInfo().hasVarSizedObjects()) {
-    restoreStatusRegister(MF, MBB);
-    return;
+  if (MFI.hasVarSizedObjects()) {
+    BuildMI(MBB, MBBI, DL, TII.get(I8085::MOV), I8085::H).addReg(I8085::D);
+    BuildMI(MBB, MBBI, DL, TII.get(I8085::MOV), I8085::L).addReg(I8085::E);
+    BuildMI(MBB, MBBI, DL, TII.get(I8085::SPHL));
   }
 
-  // Skip the callee-saved pop instructions.
-  while (MBBI != MBB.begin()) {
-    MachineBasicBlock::iterator PI = std::prev(MBBI);
-    int Opc = PI->getOpcode();
-
-    if (!PI->isTerminator()) {
-      break;
-    }
-
-    --MBBI;
+  if (FrameSize) {
+    BuildMI(MBB, MBBI, DL, TII.get(I8085::SHRINK_STACK_BY))
+        .addImm(FrameSize);
   }
-
-
-if(FrameSize) {
-
-      BuildMI(MBB, MBBI, DL, TII.get(I8085::SHRINK_STACK_BY))
-          .addImm(FrameSize);
-}
 
 
   // Write back R29R28 to SP and temporarily disable interrupts.
@@ -249,8 +243,7 @@ void I8085FrameLowering::processFunctionBeforeFrameFinalized(
   I8085MachineFunctionInfo *FuncInfo = MF.getInfo<I8085MachineFunctionInfo>();
   MachineFrameInfo &MFI = MF.getFrameInfo();
 
-  if (needsStackRealign(MF) && !MFI.hasVarSizedObjects()) {
-    // Only realign fixed-size frames for now (no base pointer support).
+  if (needsStackRealign(MF)) {
     int FI = MFI.CreateStackObject(2, Align(1), false);
     FuncInfo->setStackRealignSaveFI(FI);
     FuncInfo->setHasStackRealign(true);
@@ -312,14 +305,15 @@ bool I8085FrameLowering::spillCalleeSavedRegisters(
     return false;
   }
 
-  unsigned CalleeFrameSize = 0;
   DebugLoc DL = MBB.findDebugLoc(MI);
   MachineFunction &MF = *MBB.getParent();
   const I8085Subtarget &STI = MF.getSubtarget<I8085Subtarget>();
   const TargetInstrInfo &TII = *STI.getInstrInfo();
   I8085MachineFunctionInfo *I8085FI = MF.getInfo<I8085MachineFunctionInfo>();
 
-  for (const CalleeSavedInfo &I : llvm::reverse(CSI)) {
+  I8085FI->setCalleeSavedFrameSize(CSI.size() * 2);
+
+  for (const CalleeSavedInfo &I : CSI) {
     Register Reg = I.getReg();
     bool IsNotLiveIn = !MBB.isLiveIn(Reg);
 
@@ -333,14 +327,10 @@ bool I8085FrameLowering::spillCalleeSavedRegisters(
       MBB.addLiveIn(Reg);
     }
 
-    // Do not kill the register when it is an input argument.
-    // BuildMI(MBB, MI, DL, TII.get(I8085::PUSHRr))
-    //     .addReg(Reg, getKillRegState(IsNotLiveIn))
-    //     .setMIFlag(MachineInstr::FrameSetup);
-    // No callee-saved spills are emitted yet, so keep frame size unchanged.
+    BuildMI(MBB, MI, DL, TII.get(I8085::PUSH))
+        .addReg(Reg, getKillRegState(IsNotLiveIn))
+        .setMIFlag(MachineInstr::FrameSetup);
   }
-
-  I8085FI->setCalleeSavedFrameSize(CalleeFrameSize);
 
   return true;
 }
@@ -357,13 +347,11 @@ bool I8085FrameLowering::restoreCalleeSavedRegisters(
   const I8085Subtarget &STI = MF.getSubtarget<I8085Subtarget>();
   const TargetInstrInfo &TII = *STI.getInstrInfo();
 
-  for (const CalleeSavedInfo &CCSI : CSI) {
+  for (const CalleeSavedInfo &CCSI : llvm::reverse(CSI)) {
     Register Reg = CCSI.getReg();
 
-    // assert(TRI->getRegSizeInBits(*TRI->getMinimalPhysRegClass(Reg)) == 8 &&
-    //        "Invalid register size");
-
-    // BuildMI(MBB, MI, DL, TII.get(I8085::POPRd), Reg);
+    BuildMI(MBB, MI, DL, TII.get(I8085::POP), Reg)
+        .setMIFlag(MachineInstr::FrameDestroy);
   }
 
   return true;
@@ -412,11 +400,9 @@ void I8085FrameLowering::determineCalleeSaves(MachineFunction &MF,
                                             RegScavenger *RS) const {
   TargetFrameLowering::determineCalleeSaves(MF, SavedRegs, RS);
 
-  // If we have a frame pointer, the Y register needs to be saved as well.
-  // if (hasFP(MF)) {
-  //   SavedRegs.set(I8085::H);
-  //   SavedRegs.set(I8085::L);
-  // }
+  if (MF.getFrameInfo().hasVarSizedObjects()) {
+    SavedRegs.set(I8085::DE);
+  }
 }
 /// The frame analyzer pass.
 ///

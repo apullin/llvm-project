@@ -34,14 +34,6 @@ public:
         int SrcIdx = -1;
         const TargetRegisterClass *RC = nullptr;
         switch (MI->getOpcode()) {
-        case I8085::STORE_16:
-          SrcIdx = 2;
-          RC = &I8085::GR16BDRegClass;
-          break;
-        case I8085::STORE_16_AT_OFFSET_WITH_SP:
-          SrcIdx = 0;
-          RC = &I8085::GR16BDRegClass;
-          break;
         case I8085::STORE_16_ADDR_CONTENT:
           SrcIdx = 1;
           RC = &I8085::GR16BDRegClass;

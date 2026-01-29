@@ -406,7 +406,7 @@ def MOV : FMOV<(outs GR8: $rd),
 
 
 def mspi : Operand<iPTR> { 
-  let MIOperandInfo = (ops GPRSP, I8085Imm16); 
+  let MIOperandInfo = (ops GR16, I8085Imm16); 
 }
 
 
@@ -459,7 +459,7 @@ def LOAD_16 : I8085Pseudo<(outs GR16: $dst),
                                              : $src)]>; 
 
 let Defs=[H,L] in def STORE_16 : I8085Pseudo<(outs),
-                            (ins mspi: $dst, GR16BD: $src),
+                            (ins mspi: $dst, GR16: $src),
                             "STORE_16 $dst, $src", [(store i16: $src, addr: $dst)]>;
 
 let Defs=[H,L] in def STORE_8 : I8085Pseudo<(outs),
@@ -482,7 +482,7 @@ let Defs=[H,L] in def STORE_8_AT_OFFSET_WITH_SP : I8085Pseudo<(outs),
                        "STORE_8_SP_AT_OFFSET\t$offset, $src", [(store i8: $src, imm: $offset)]>;
 
 let Defs=[H,L] in def STORE_16_AT_OFFSET_WITH_SP : I8085Pseudo<(outs),
-                       (ins GR16BD: $src, I8085Imm16: $offset),
+                       (ins GR16: $src, I8085Imm16: $offset),
                        "STORE_16_SP_AT_OFFSET\t$offset, $src", [(store i16: $src, imm: $offset)]>;                       
 
 }       

@@ -1,4 +1,32 @@
-  .text
+  .section .vectors, "ax"
+  .globl __vector_table
+__vector_table:
+  .org 0x0000
+  JMP _start
+  .org 0x0008
+  JMP isr_rst1
+  .org 0x0010
+  JMP isr_rst2
+  .org 0x0018
+  JMP isr_rst3
+  .org 0x0020
+  JMP isr_rst4
+  .org 0x0024
+  JMP isr_trap
+  .org 0x0028
+  JMP isr_rst5
+  .org 0x002C
+  JMP isr_rst55
+  .org 0x0030
+  JMP isr_rst6
+  .org 0x0034
+  JMP isr_rst65
+  .org 0x0038
+  JMP isr_rst7
+  .org 0x003C
+  JMP isr_rst75
+
+  .section .text.startup, "ax"
   .globl _start
   .type _start,@function
 _start:
@@ -54,3 +82,33 @@ bss_done:
 
 hang:
   JMP hang
+
+  .text
+  .globl default_isr
+default_isr:
+  HLT
+  JMP default_isr
+
+  .weak isr_rst1
+  .weak isr_rst2
+  .weak isr_rst3
+  .weak isr_rst4
+  .weak isr_rst5
+  .weak isr_rst6
+  .weak isr_rst7
+  .weak isr_trap
+  .weak isr_rst55
+  .weak isr_rst65
+  .weak isr_rst75
+
+  .set isr_rst1,  default_isr
+  .set isr_rst2,  default_isr
+  .set isr_rst3,  default_isr
+  .set isr_rst4,  default_isr
+  .set isr_rst5,  default_isr
+  .set isr_rst6,  default_isr
+  .set isr_rst7,  default_isr
+  .set isr_trap,  default_isr
+  .set isr_rst55, default_isr
+  .set isr_rst65, default_isr
+  .set isr_rst75, default_isr

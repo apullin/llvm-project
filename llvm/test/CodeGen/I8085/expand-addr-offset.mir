@@ -24,7 +24,7 @@ body:             |
     ; CHECK: $hl = LXI 2
     ; CHECK-NEXT: DAD $sp
     ; CHECK-NEXT: $c = MOV_FROM_M
-    $c = LOAD_8_WITH_ADDR $sp, 2, implicit-def $h, implicit-def $l, implicit $sp
+    $c = LOAD_8_WITH_ADDR $sp, 2, implicit-def $hl, implicit $sp
     RET
 ...
 
@@ -37,7 +37,7 @@ body:             |
     ; CHECK: $hl = LXI {{-?[0-9]+}}
     ; CHECK-NEXT: DAD $sp
     ; CHECK-NEXT: $c = MOV_FROM_M
-    $c = LOAD_8_WITH_ADDR $sp, -1, implicit-def $h, implicit-def $l, implicit $sp
+    $c = LOAD_8_WITH_ADDR $sp, -1, implicit-def $hl, implicit $sp
     RET
 ...
 
@@ -50,7 +50,7 @@ body:             |
     ; CHECK: $hl = LXI 1
     ; CHECK-NEXT: DAD $sp
     ; CHECK-NEXT: MOV_M $d
-    STORE_8 $sp, 1, $d, implicit-def $h, implicit-def $l, implicit $sp
+    STORE_8 $sp, 1, $d, implicit-def $hl, implicit $sp
     RET
 ...
 
@@ -63,7 +63,7 @@ body:             |
     ; CHECK: $hl = LXI {{-?[0-9]+}}
     ; CHECK-NEXT: DAD $sp
     ; CHECK-NEXT: MOV_M $b
-    STORE_8 $sp, -2, $b, implicit-def $h, implicit-def $l, implicit $sp
+    STORE_8 $sp, -2, $b, implicit-def $hl, implicit $sp
     RET
 ...
 
@@ -76,7 +76,7 @@ body:             |
     ; CHECK: $hl = LXI 3
     ; CHECK-NEXT: DAD $sp
     ; CHECK-NEXT: MOV_M $c
-    STORE_8_AT_OFFSET_WITH_SP $c, 3, implicit-def $h, implicit-def $l, implicit $sp
+    STORE_8_AT_OFFSET_WITH_SP $c, 3, implicit-def $hl, implicit $sp
     RET
 ...
 
@@ -89,7 +89,7 @@ body:             |
     ; CHECK: $hl = LXI {{-?[0-9]+}}
     ; CHECK-NEXT: DAD $sp
     ; CHECK-NEXT: MOV_M $e
-    STORE_8_AT_OFFSET_WITH_SP $e, -4, implicit-def $h, implicit-def $l, implicit $sp
+    STORE_8_AT_OFFSET_WITH_SP $e, -4, implicit-def $hl, implicit $sp
     RET
 ...
 
@@ -105,7 +105,7 @@ body:             |
     ; CHECK-NEXT: $hl = INX
     ; CHECK-NEXT: $h = MOV_FROM_M
     ; CHECK-NEXT: $l = MOV $a
-    $hl = LOAD_16_WITH_ADDR $sp, 1, implicit-def $h, implicit-def $l, implicit $sp
+    $hl = LOAD_16_WITH_ADDR $sp, 1, implicit-def $hl, implicit $sp
     RET
 ...
 
@@ -121,7 +121,7 @@ body:             |
     ; CHECK-NEXT: $hl = INX
     ; CHECK-NEXT: $h = MOV_FROM_M
     ; CHECK-NEXT: $l = MOV $a
-    $hl = LOAD_16_WITH_ADDR $sp, -3, implicit-def $h, implicit-def $l, implicit $sp
+    $hl = LOAD_16_WITH_ADDR $sp, -3, implicit-def $hl, implicit $sp
     RET
 ...
 
@@ -137,7 +137,7 @@ body:             |
     ; CHECK-NEXT: $hl = LXI 0
     ; CHECK-NEXT: DAD $sp
     ; CHECK-NEXT: $e = MOV_FROM_M
-    $de = LOAD_16_WITH_ADDR $sp, 0, implicit-def $h, implicit-def $l, implicit $sp
+    $de = LOAD_16_WITH_ADDR $sp, 0, implicit-def $hl, implicit $sp
     RET
 ...
 
@@ -153,7 +153,7 @@ body:             |
     ; CHECK-NEXT: $hl = LXI 4
     ; CHECK-NEXT: DAD $sp
     ; CHECK-NEXT: MOV_M $c
-    STORE_16_AT_OFFSET_WITH_SP $bc, 4, implicit-def $h, implicit-def $l, implicit $sp
+    STORE_16_AT_OFFSET_WITH_SP $bc, 4, implicit-def $hl, implicit $sp
     RET
 ...
 
@@ -169,6 +169,6 @@ body:             |
     ; CHECK: $hl = LXI {{-?[0-9]+}}
     ; CHECK-NEXT: DAD $sp
     ; CHECK-NEXT: MOV_M $e
-    STORE_16_AT_OFFSET_WITH_SP $de, -6, implicit-def $h, implicit-def $l, implicit $sp
+    STORE_16_AT_OFFSET_WITH_SP $de, -6, implicit-def $hl, implicit $sp
     RET
 ...

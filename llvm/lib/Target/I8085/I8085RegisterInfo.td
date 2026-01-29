@@ -43,32 +43,33 @@ def L : I8085Reg<5, "L">, DwarfRegNum<[5]>;
 
 def M : I8085Reg<6, "M">, DwarfRegNum<[6]>;
 
-def SP : I8085Reg<7, "SP">, DwarfRegNum<[7]>;
+def SP : I8085Reg<7, "SP">, DwarfRegNum<[8]>;
+def PC : I8085Reg<11, "PC">, DwarfRegNum<[11]>;
 
 let SubRegIndices = [sub_lo, sub_hi], CoveredBySubRegs = 1 in {
-def BC : I8085Reg<0, "BC", [B, C]>, DwarfRegNum<[0]>;
-def DE : I8085Reg<1, "DE", [D, E]>, DwarfRegNum<[1]>;
-def HL : I8085Reg<2, "HL", [H, L]>, DwarfRegNum<[2]>;
+def BC : I8085Reg<0, "BC", [B, C]>, DwarfRegNum<[12]>;
+def DE : I8085Reg<1, "DE", [D, E]>, DwarfRegNum<[13]>;
+def HL : I8085Reg<2, "HL", [H, L]>, DwarfRegNum<[14]>;
 }
 
 def GPRSP : RegisterClass<"I8085", [i16], 8, (add SP)>;
 
-def SREG : I8085Reg<8, "FLAGS">, DwarfRegNum<[8]>;
+def SREG : I8085Reg<8, "FLAGS">, DwarfRegNum<[9]>;
 
 def CCR : RegisterClass<"I8085", [i8], 8, (add SREG)> {
   let CopyCost = -1; // Don't allow copying of status registers
 }
 
 let SubRegIndices = [sub_lo, sub_hi], CoveredBySubRegs = 1 in {
-def PSW : I8085Reg<3, "PSW", [A, SREG]>, DwarfRegNum<[9]>;
+def PSW : I8085Reg<3, "PSW", [A, SREG]>, DwarfRegNum<[10]>;
 }
 
 //===----------------------------------------------------------------------===//
 // 32-bit imaginary registers, backed by per-function scratch storage.
 //===----------------------------------------------------------------------===//
 
-def IAX : I8085Reg<9, "IAX">, DwarfRegNum<[1]>;
-def IBX : I8085Reg<10, "IBX">, DwarfRegNum<[2]>;
+def IAX : I8085Reg<9, "IAX">, DwarfRegNum<[15]>;
+def IBX : I8085Reg<10, "IBX">, DwarfRegNum<[16]>;
 
 def GR8 : RegisterClass<"I8085", [i8], 8,
                         (

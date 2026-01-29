@@ -24,6 +24,7 @@
 #include "llvm/MC/MCInstrInfo.h"
 #include "llvm/MC/MCRegisterInfo.h"
 #include "llvm/MC/MCSubtargetInfo.h"
+#include "llvm/MC/MCDwarf.h"
 #include "llvm/MC/TargetRegistry.h"
 
 #define GET_INSTRINFO_MC_DESC
@@ -45,8 +46,25 @@ MCInstrInfo *llvm::createI8085MCInstrInfo() {
 
 static MCRegisterInfo *createI8085MCRegisterInfo(const Triple &TT) {
   MCRegisterInfo *X = new MCRegisterInfo();
-  InitI8085MCRegisterInfo(X, 0);
+  InitI8085MCRegisterInfo(X, I8085::PC);
   return X;
+}
+
+static MCAsmInfo *createI8085MCAsmInfo(const MCRegisterInfo &MRI,
+                                       const Triple &TT,
+                                       const MCTargetOptions &Options) {
+  MCAsmInfo *MAI = new I8085MCAsmInfo(TT, Options);
+
+  int StackGrowth = -2;
+  MCCFIInstruction DefCfa = MCCFIInstruction::cfiDefCfa(
+      nullptr, MRI.getDwarfRegNum(I8085::SP, true), -StackGrowth);
+  MAI->addInitialFrameState(DefCfa);
+
+  MCCFIInstruction RAOffset = MCCFIInstruction::createOffset(
+      nullptr, MRI.getDwarfRegNum(I8085::PC, true), StackGrowth);
+  MAI->addInitialFrameState(RAOffset);
+
+  return MAI;
 }
 
 static MCSubtargetInfo *createI8085MCSubtargetInfo(const Triple &TT,
@@ -86,38 +104,35 @@ static MCTargetStreamer *createMCAsmTargetStreamer(MCStreamer &S,
 }
 
 extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializeI8085TargetMC() {
+  Target &T = getTheI8085Target();
+
   // Register the MC asm info.
-  RegisterMCAsmInfo<I8085MCAsmInfo> X(getTheI8085Target());
+  TargetRegistry::RegisterMCAsmInfo(T, createI8085MCAsmInfo);
 
   // Register the MC instruction info.
-  TargetRegistry::RegisterMCInstrInfo(getTheI8085Target(), createI8085MCInstrInfo);
+  TargetRegistry::RegisterMCInstrInfo(T, createI8085MCInstrInfo);
 
   // Register the MC register info.
-  TargetRegistry::RegisterMCRegInfo(getTheI8085Target(), createI8085MCRegisterInfo);
+  TargetRegistry::RegisterMCRegInfo(T, createI8085MCRegisterInfo);
 
   // Register the MC subtarget info.
-  TargetRegistry::RegisterMCSubtargetInfo(getTheI8085Target(),
-                                          createI8085MCSubtargetInfo);
+  TargetRegistry::RegisterMCSubtargetInfo(T, createI8085MCSubtargetInfo);
 
   // Register the MCInstPrinter.
-  TargetRegistry::RegisterMCInstPrinter(getTheI8085Target(),
-                                        createI8085MCInstPrinter);
+  TargetRegistry::RegisterMCInstPrinter(T, createI8085MCInstPrinter);
 
   // Register the MC Code Emitter
-  TargetRegistry::RegisterMCCodeEmitter(getTheI8085Target(),
-                                        createI8085MCCodeEmitter);
+  TargetRegistry::RegisterMCCodeEmitter(T, createI8085MCCodeEmitter);
 
   // Register the obj streamer
-  TargetRegistry::RegisterELFStreamer(getTheI8085Target(), createMCStreamer);
+  TargetRegistry::RegisterELFStreamer(T, createMCStreamer);
 
   // Register the obj target streamer.
-  TargetRegistry::RegisterObjectTargetStreamer(getTheI8085Target(),
-                                               createI8085ObjectTargetStreamer);
+  TargetRegistry::RegisterObjectTargetStreamer(T, createI8085ObjectTargetStreamer);
 
   // Register the asm target streamer.
-  TargetRegistry::RegisterAsmTargetStreamer(getTheI8085Target(),
-                                            createMCAsmTargetStreamer);
+  TargetRegistry::RegisterAsmTargetStreamer(T, createMCAsmTargetStreamer);
 
   // Register the asm backend (as little endian).
-  TargetRegistry::RegisterMCAsmBackend(getTheI8085Target(), createI8085AsmBackend);
+  TargetRegistry::RegisterMCAsmBackend(T, createI8085AsmBackend);
 }

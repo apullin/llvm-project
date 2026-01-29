@@ -24,6 +24,8 @@
 #include "llvm/CodeGen/MachineInstrBuilder.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
 #include "llvm/IR/Function.h"
+#include "llvm/MC/MCContext.h"
+#include "llvm/MC/MCDwarf.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/MathExtras.h"
 
@@ -73,6 +75,42 @@ static bool getPairRegs(unsigned Pair, unsigned &LowReg, unsigned &HighReg) {
   }
 }
 
+static void buildCFI(MachineBasicBlock &MBB,
+                     MachineBasicBlock::iterator MBBI, const DebugLoc &DL,
+                     const MCCFIInstruction &CFIInst,
+                     MachineInstr::MIFlag Flag, const TargetInstrInfo &TII) {
+  MachineFunction &MF = *MBB.getParent();
+  unsigned CFIIndex = MF.addFrameInst(CFIInst);
+  BuildMI(MBB, MBBI, DL, TII.get(TargetOpcode::CFI_INSTRUCTION))
+      .addCFIIndex(CFIIndex)
+      .setMIFlag(Flag);
+}
+
+static void emitCalleeSavedFrameMoves(MachineBasicBlock &MBB,
+                                      MachineBasicBlock::iterator MBBI,
+                                      const DebugLoc &DL, bool IsPrologue,
+                                      const TargetInstrInfo &TII) {
+  MachineFunction &MF = *MBB.getParent();
+  MachineFrameInfo &MFI = MF.getFrameInfo();
+  const MCRegisterInfo *MRI = MF.getContext().getRegisterInfo();
+  const std::vector<CalleeSavedInfo> &CSI = MFI.getCalleeSavedInfo();
+
+  for (const CalleeSavedInfo &I : CSI) {
+    int64_t Offset = MFI.getObjectOffset(I.getFrameIdx());
+    unsigned Reg = I.getReg();
+    unsigned DwarfReg = MRI->getDwarfRegNum(Reg, true);
+    if (IsPrologue) {
+      buildCFI(MBB, MBBI, DL,
+               MCCFIInstruction::createOffset(nullptr, DwarfReg, Offset),
+               MachineInstr::FrameSetup, TII);
+    } else {
+      buildCFI(MBB, MBBI, DL,
+               MCCFIInstruction::createRestore(nullptr, DwarfReg),
+               MachineInstr::FrameDestroy, TII);
+    }
+  }
+}
+
 bool I8085FrameLowering::canSimplifyCallFramePseudos(
     const MachineFunction &MF) const {
   // Always simplify call frame pseudo instructions, even when
@@ -98,6 +136,7 @@ void I8085FrameLowering::emitPrologue(MachineFunction &MF,
   const I8085InstrInfo &TII = *STI.getInstrInfo();
   const I8085MachineFunctionInfo *AFI = MF.getInfo<I8085MachineFunctionInfo>();
   bool HasFP = hasFP(MF);
+  bool EmitCFI = MF.needsFrameMoves() && !AFI->hasStackRealign();
 
   // Early exit if the frame pointer is not needed in this function.
   if (!HasFP) {
@@ -144,6 +183,11 @@ void I8085FrameLowering::emitPrologue(MachineFunction &MF,
   if(FrameSize) {
       BuildMI(MBB, MBBI, DL, TII.get(I8085::GROW_STACK_BY))
           .addImm(FrameSize);
+      if (EmitCFI) {
+        buildCFI(MBB, MBBI, DL,
+                 MCCFIInstruction::createAdjustCfaOffset(nullptr, FrameSize),
+                 MachineInstr::FrameSetup, TII);
+      }
       
   }
 
@@ -162,6 +206,10 @@ void I8085FrameLowering::emitPrologue(MachineFunction &MF,
         .addImm(0)
         .addReg(I8085::BC);
   }
+
+  if (EmitCFI) {
+    emitCalleeSavedFrameMoves(MBB, MBBI, DL, true, TII);
+  }
 }
 
 static void restoreStatusRegister(MachineFunction &MF, MachineBasicBlock &MBB) {
@@ -178,6 +226,7 @@ static void restoreStatusRegister(MachineFunction &MF, MachineBasicBlock &MBB) {
 void I8085FrameLowering::emitEpilogue(MachineFunction &MF,
                                     MachineBasicBlock &MBB) const {
   const I8085MachineFunctionInfo *AFI = MF.getInfo<I8085MachineFunctionInfo>();
+  bool EmitCFI = MF.needsFrameMoves() && !AFI->hasStackRealign();
 
   // Early exit if the frame pointer is not needed in this function except for
   // signal/interrupt handlers where special code generation is required.
@@ -227,6 +276,11 @@ void I8085FrameLowering::emitEpilogue(MachineFunction &MF,
   if (FrameSize) {
     BuildMI(MBB, MBBI, DL, TII.get(I8085::SHRINK_STACK_BY))
         .addImm(FrameSize);
+    if (EmitCFI) {
+      buildCFI(MBB, MBBI, DL,
+               MCCFIInstruction::createAdjustCfaOffset(nullptr, -FrameSize),
+               MachineInstr::FrameDestroy, TII);
+    }
   }
 
 
@@ -235,6 +289,17 @@ void I8085FrameLowering::emitEpilogue(MachineFunction &MF,
   //     .addReg(I8085::D, RegState::Kill);
 
   restoreStatusRegister(MF, MBB);
+
+  if (!EmitCFI)
+    return;
+
+  MachineBasicBlock::iterator AfterPop = FirstCSPop;
+  while (AfterPop != MBB.end() && AfterPop->getFlag(MachineInstr::FrameDestroy) &&
+         AfterPop->getOpcode() == I8085::POP) {
+    ++AfterPop;
+  }
+
+  emitCalleeSavedFrameMoves(MBB, AfterPop, DL, false, TII);
 }
 
 void I8085FrameLowering::processFunctionBeforeFrameFinalized(
@@ -310,6 +375,7 @@ bool I8085FrameLowering::spillCalleeSavedRegisters(
   const I8085Subtarget &STI = MF.getSubtarget<I8085Subtarget>();
   const TargetInstrInfo &TII = *STI.getInstrInfo();
   I8085MachineFunctionInfo *I8085FI = MF.getInfo<I8085MachineFunctionInfo>();
+  bool EmitCFI = MF.needsFrameMoves() && !I8085FI->hasStackRealign();
 
   I8085FI->setCalleeSavedFrameSize(CSI.size() * 2);
 
@@ -330,6 +396,11 @@ bool I8085FrameLowering::spillCalleeSavedRegisters(
     BuildMI(MBB, MI, DL, TII.get(I8085::PUSH))
         .addReg(Reg, getKillRegState(IsNotLiveIn))
         .setMIFlag(MachineInstr::FrameSetup);
+    if (EmitCFI) {
+      buildCFI(MBB, MI, DL,
+               MCCFIInstruction::createAdjustCfaOffset(nullptr, 2),
+               MachineInstr::FrameSetup, TII);
+    }
   }
 
   return true;
@@ -346,12 +417,19 @@ bool I8085FrameLowering::restoreCalleeSavedRegisters(
   const MachineFunction &MF = *MBB.getParent();
   const I8085Subtarget &STI = MF.getSubtarget<I8085Subtarget>();
   const TargetInstrInfo &TII = *STI.getInstrInfo();
+  const I8085MachineFunctionInfo *I8085FI = MF.getInfo<I8085MachineFunctionInfo>();
+  bool EmitCFI = MF.needsFrameMoves() && !I8085FI->hasStackRealign();
 
   for (const CalleeSavedInfo &CCSI : llvm::reverse(CSI)) {
     Register Reg = CCSI.getReg();
 
     BuildMI(MBB, MI, DL, TII.get(I8085::POP), Reg)
         .setMIFlag(MachineInstr::FrameDestroy);
+    if (EmitCFI) {
+      buildCFI(MBB, MI, DL,
+               MCCFIInstruction::createAdjustCfaOffset(nullptr, -2),
+               MachineInstr::FrameDestroy, TII);
+    }
   }
 
   return true;
@@ -362,6 +440,8 @@ MachineBasicBlock::iterator I8085FrameLowering::eliminateCallFramePseudoInstr(
     MachineBasicBlock::iterator MI) const {
   const I8085Subtarget &STI = MF.getSubtarget<I8085Subtarget>();
   const I8085InstrInfo &TII = *STI.getInstrInfo();
+  const I8085MachineFunctionInfo *I8085FI = MF.getInfo<I8085MachineFunctionInfo>();
+  bool EmitCFI = MF.needsFrameMoves() && !I8085FI->hasStackRealign();
 
   // There is nothing to insert when the call frame memory is allocated during
   // function entry. Delete the call frame pseudo
@@ -382,12 +462,22 @@ MachineBasicBlock::iterator I8085FrameLowering::eliminateCallFramePseudoInstr(
 
         BuildMI(MBB, MI, DL, TII.get(I8085::GROW_STACK_BY))
             .addImm(Amount);
+        if (EmitCFI) {
+          buildCFI(MBB, MI, DL,
+                   MCCFIInstruction::createAdjustCfaOffset(nullptr, Amount),
+                   MachineInstr::FrameSetup, TII);
+        }
 
     } else {
       assert(Opcode == TII.getCallFrameDestroyOpcode());
 
         BuildMI(MBB, MI, DL, TII.get(I8085::SHRINK_STACK_BY))
             .addImm(Amount);
+        if (EmitCFI) {
+          buildCFI(MBB, MI, DL,
+                   MCCFIInstruction::createAdjustCfaOffset(nullptr, -Amount),
+                   MachineInstr::FrameDestroy, TII);
+        }
 
     }
   }

@@ -24,6 +24,7 @@ I8085MCAsmInfo::I8085MCAsmInfo(const Triple &TT, const MCTargetOptions &Options)
   PrivateLabelPrefix = "L";
   UsesELFSectionDirectiveForBSS = true;
   SupportsDebugInformation = true;
+  ExceptionsType = ExceptionHandling::DwarfCFI;
 }
 
 } // end of namespace llvm

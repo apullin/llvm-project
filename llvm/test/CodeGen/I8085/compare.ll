@@ -18,8 +18,6 @@ define i8 @cmp_eq_i8(i8 %a, i8 %b) {
 ; CHECK-NEXT:    MOV D, H
 ; CHECK-NEXT:    MOV E, L
 ; CHECK-NEXT:    LDAX D
-; CHECK-NEXT:    MOV C, A
-; CHECK-NEXT:    MOV A, C
 ; CHECK-NEXT:    SUB B
 ; CHECK-NEXT:    JZ LBB0_2
 ; CHECK-NEXT:  LBB0_1:
@@ -54,8 +52,6 @@ define i8 @cmp_ult_i8(i8 %a, i8 %b) {
 ; CHECK-NEXT:    MOV D, H
 ; CHECK-NEXT:    MOV E, L
 ; CHECK-NEXT:    LDAX D
-; CHECK-NEXT:    MOV C, A
-; CHECK-NEXT:    MOV A, C
 ; CHECK-NEXT:    SUB B
 ; CHECK-NEXT:    JC LBB1_2
 ; CHECK-NEXT:  LBB1_1:

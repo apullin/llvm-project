@@ -26,8 +26,6 @@ define i8 @functionone(i8,i8) {
 ; CHECK-NEXT:    MOV D, A
 ; CHECK-NEXT:    MOV A, D
 ; CHECK-NEXT:    ORA C
-; CHECK-NEXT:    MOV D, A
-; CHECK-NEXT:    MOV A, D
 ; CHECK-NEXT:    POP D
 ; CHECK-NEXT:    RET
 
@@ -134,8 +132,6 @@ define i8 @functionthree(i8,i8) {
 ; CHECK-NEXT:    MOV B, A
 ; CHECK-NEXT:    MOV A, B
 ; CHECK-NEXT:    XRI 111
-; CHECK-NEXT:    MOV B, A
-; CHECK-NEXT:    MOV A, B
 ; CHECK-NEXT:    POP D
 ; CHECK-NEXT:    RET
 

@@ -149,8 +149,6 @@ define i8 @add_sub_3(i8,i8) {
 ; CHECK-NEXT:    MVI B, 58
 ; CHECK-NEXT:    MOV A, C
 ; CHECK-NEXT:    ADD B
-; CHECK-NEXT:    MOV C, A
-; CHECK-NEXT:    MOV A, C
 ; CHECK-NEXT:    POP D
 ; CHECK-NEXT:    RET
 

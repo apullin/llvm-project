@@ -1,0 +1,23 @@
+# RUN: llc -run-pass=i8085-peephole %s -o - | FileCheck %s
+
+--- |
+  target triple = "i8085-unknown-elf"
+  define void @test() { ret void }
+...
+
+---
+name:            test
+registers:
+  - { id: 0, class: gr8 }
+  - { id: 1, class: gr8 }
+  - { id: 2, class: gr8 }
+body:             |
+  bb.0:
+    ; CHECK-LABEL: test
+    ; CHECK: %2{{.*}} = MOV %1
+    ; CHECK-NOT: %0{{.*}} = MOV
+    ; CHECK: RET
+    %0 = MOV %1
+    %2 = MOV %0
+    RET
+...

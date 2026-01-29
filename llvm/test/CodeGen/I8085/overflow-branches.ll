@@ -231,8 +231,6 @@ define i8 @br_usub_ov(i8 %a, i8 %b) {
 ; CHECK-NEXT:    MOV D, C
 ; CHECK-NEXT:    MOV A, D
 ; CHECK-NEXT:    SUB B
-; CHECK-NEXT:    MOV D, A
-; CHECK-NEXT:    MOV A, D
 ; CHECK-NEXT:    SUB C
 ; CHECK-NEXT:    MVI B, 1
 ; CHECK-NEXT:    JZ LBB2_2

@@ -221,8 +221,6 @@ define i8 @cmp_uge_i8(i8 %a, i8 %b) {
 ; CHECK-NEXT:    MOV D, H
 ; CHECK-NEXT:    MOV E, L
 ; CHECK-NEXT:    LDAX D
-; CHECK-NEXT:    MOV C, A
-; CHECK-NEXT:    MOV A, C
 ; CHECK-NEXT:    SUB B
 ; CHECK-NEXT:    JNC LBB4_2
 ; CHECK-NEXT:  LBB4_1:

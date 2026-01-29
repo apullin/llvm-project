@@ -38,10 +38,54 @@ public:
 
   bool runOnMachineFunction(MachineFunction &MF) override {
     bool Changed = false;
+    MachineRegisterInfo &MRI = MF.getRegInfo();
 
     for (MachineBasicBlock &MBB : MF) {
-      for (auto MI = MBB.begin(); MI != MBB.end(); ) {
+      for (auto MI = MBB.begin(); MI != MBB.end();) {
         auto Next = std::next(MI);
+        if (Next != MBB.end() && MI->getOpcode() == I8085::MOV &&
+            Next->getOpcode() == I8085::MOV) {
+          if (MI->getNumOperands() >= 2 && Next->getNumOperands() >= 2 &&
+              MI->getOperand(0).isReg() && MI->getOperand(1).isReg() &&
+              Next->getOperand(0).isReg() && Next->getOperand(1).isReg()) {
+            Register Tmp = MI->getOperand(0).getReg();
+            Register Src = MI->getOperand(1).getReg();
+            Register Dst = Next->getOperand(0).getReg();
+            Register Use = Next->getOperand(1).getReg();
+
+            bool CanFold = (Use == Tmp) && (Dst != Tmp);
+            if (CanFold) {
+              if (Tmp.isVirtual()) {
+                if (!MRI.hasOneUse(Tmp))
+                  CanFold = false;
+              } else if (!Next->getOperand(1).isKill()) {
+                CanFold = false;
+              }
+            }
+
+            if (CanFold && Src == I8085::M && Dst == I8085::M)
+              CanFold = false;
+
+            if (CanFold) {
+              if (Dst == Src) {
+                auto NextAfter = std::next(Next);
+                Next->eraseFromParent();
+                MI->eraseFromParent();
+                Changed = true;
+                MI = NextAfter;
+                continue;
+              }
+
+              Next->getOperand(1).setReg(Src);
+              Next->getOperand(1).setIsKill(false);
+              MI->eraseFromParent();
+              Changed = true;
+              MI = Next;
+              continue;
+            }
+          }
+        }
+
         if (Next == MBB.end()) {
           ++MI;
           continue;

@@ -56,6 +56,13 @@ public:
       : BaseT(TM, F.getDataLayout()), ST(TM->getSubtargetImpl(F)),
         TLI(ST->getTargetLowering()) {}
 
+  unsigned getNumberOfRegisters(unsigned ClassID) const {
+    bool Vector = (ClassID == 1);
+    if (Vector)
+      return 0;
+    return 5;
+  }
+
   TypeSize getRegisterBitWidth(TTI::RegisterKind K) const {
     switch (K) {
     case TTI::RGK_Scalar:

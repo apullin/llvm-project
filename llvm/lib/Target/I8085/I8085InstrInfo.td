@@ -519,11 +519,11 @@ let Defs=[HL] in def STORE_16_ADDR_CONTENT : I8085Pseudo<(outs),
                        "STORE_16_ADDR_CONTENT $addr, $src",
                        [(store i16: $src, i16: $addr)]>;
 
-let Defs=[HL] in def STORE_8_WITH_IMM_ADDR : I8085Pseudo<(outs),
+let Defs=[HL], mayStore = 1 in def STORE_8_WITH_IMM_ADDR : I8085Pseudo<(outs),
                        (ins imm16Addr: $addr, GR8NoHL: $src),
                        "STORE_8_ADDR $addr, $src", []>;
 
-let Defs=[HL] in def STORE_16_WITH_IMM_ADDR : I8085Pseudo<(outs),
+let Defs=[HL], mayStore = 1 in def STORE_16_WITH_IMM_ADDR : I8085Pseudo<(outs),
                        (ins imm16Addr: $addr, GR16BD: $src),
                        "STORE_16_ADDR $addr, $src", []>;
 }  

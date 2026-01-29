@@ -7,14 +7,16 @@ declare void @callee(ptr byval(%S) align 1)
 
 define void @caller(ptr %p) {
 ; CHECK-LABEL: caller:
-; CHECK:       LBB0_0:
+; CHECK:         .cfi_startproc
+; CHECK-NEXT:  LBB0_0:
 ; CHECK-NEXT:    PUSH D
 ; CHECK-NEXT:    .cfi_adjust_cfa_offset 2
-; CHECK:    LXI H, 65530
+; CHECK-NEXT:    LXI H, 65528
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    SPHL
-; CHECK-NEXT:    .cfi_adjust_cfa_offset {{[0-9]+}}
-; CHECK:    LXI H, 10
+; CHECK-NEXT:    .cfi_adjust_cfa_offset 8
+; CHECK-NEXT:    .cfi_offset 13, -4
+; CHECK-NEXT:    LXI H, 12
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV B, H
 ; CHECK-NEXT:    MOV C, L
@@ -23,11 +25,26 @@ define void @caller(ptr %p) {
 ; CHECK-NEXT:    MOV C, M
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    MOV B, M
+; CHECK-NEXT:    LXI H, 7
+; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    MOV M, B
+; CHECK-NEXT:    LXI H, 6
+; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    MOV M, C
 ; CHECK-NEXT:    LDAX B
-; CHECK-NEXT:    MOV D, A
+; CHECK-NEXT:    MOV B, A
 ; CHECK-NEXT:    LXI H, 0
 ; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, D
+; CHECK-NEXT:    MOV D, H
+; CHECK-NEXT:    MOV E, L
+; CHECK-NEXT:    MOV A, B
+; CHECK-NEXT:    STAX D
+; CHECK-NEXT:    LXI H, 7
+; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    MOV B, M
+; CHECK-NEXT:    LXI H, 6
+; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    MOV C, M
 ; CHECK-NEXT:    LXI D, 5
 ; CHECK-NEXT:    MOV H, B
 ; CHECK-NEXT:    MOV L, C
@@ -93,12 +110,14 @@ define void @caller(ptr %p) {
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV M, B
 ; CHECK-NEXT:    CALL callee
-; CHECK:    POP D
-; CHECK:    LXI H, 6
+; CHECK-NEXT:    POP D
+; CHECK-NEXT:    .cfi_adjust_cfa_offset -2
+; CHECK-NEXT:    LXI H, 8
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    SPHL
-; CHECK-NEXT:    .cfi_adjust_cfa_offset {{[0-9]+}}
-; CHECK:    RET
+; CHECK-NEXT:    .cfi_adjust_cfa_offset 4294967288
+; CHECK-NEXT:    .cfi_restore 13
+; CHECK-NEXT:    RET
 entry:
   call void @callee(ptr byval(%S) align 1 %p)
   ret void

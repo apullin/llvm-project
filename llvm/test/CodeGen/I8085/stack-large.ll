@@ -7,7 +7,10 @@ define void @stack_large() {
 ; CHECK: LXI H, 65456
 ; CHECK: DAD SP
 ; CHECK: SPHL
-; CHECK: STAX D
+; CHECK: MVI D, 1
+; CHECK: LXI H, 79
+; CHECK: DAD B
+; CHECK: MOV M, D
 ; CHECK: SPHL
 ; CHECK: RET
   %arr = alloca [80 x i8], align 1

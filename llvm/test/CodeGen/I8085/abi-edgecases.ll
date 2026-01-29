@@ -16,6 +16,29 @@ entry:
   ret void
 }
 
+%O = type { i8, i32 }
+declare void @callee_byval_odd(ptr byval(%O) align 1, i8, i16)
+
+define void @caller_byval_odd(ptr %p, i8 %a, i16 %b) {
+; CHECK-LABEL: caller_byval_odd:
+; CHECK: CALL callee_byval_odd
+; CHECK: RET
+entry:
+  call void @callee_byval_odd(ptr byval(%O) align 1 %p, i8 %a, i16 %b)
+  ret void
+}
+
+declare void @callee_byval_aligned(ptr byval(%O) align 2, i16)
+
+define void @caller_byval_aligned(ptr %p, i16 %a) {
+; CHECK-LABEL: caller_byval_aligned:
+; CHECK: CALL callee_byval_aligned
+; CHECK: RET
+entry:
+  call void @callee_byval_aligned(ptr byval(%O) align 2 %p, i16 %a)
+  ret void
+}
+
 define %L @ret_large(i32 %a, i16 %b, i8 %c) {
 ; CHECK-LABEL: ret_large:
 ; CHECK: RET
@@ -44,5 +67,16 @@ define void @caller_varargs_mix(i16 %a, i8 %b, i32 %c, i64 %d) {
 ; CHECK: RET
 entry:
   call void (i16, ...) @vfoo(i16 %a, i8 %b, i32 %c, i64 %d, i16 4660, i8 7)
+  ret void
+}
+
+declare void @vfoo_sret(ptr sret(%L), i16, ...)
+
+define void @caller_varargs_sret(ptr %out, i16 %a, i8 %b) {
+; CHECK-LABEL: caller_varargs_sret:
+; CHECK: CALL vfoo_sret
+; CHECK: RET
+entry:
+  call void (ptr, i16, ...) @vfoo_sret(ptr sret(%L) %out, i16 %a, i8 %b, i32 123, i16 456)
   ret void
 }

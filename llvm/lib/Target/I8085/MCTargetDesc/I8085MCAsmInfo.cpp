@@ -25,6 +25,7 @@ I8085MCAsmInfo::I8085MCAsmInfo(const Triple &TT, const MCTargetOptions &Options)
   UsesELFSectionDirectiveForBSS = true;
   SupportsDebugInformation = true;
   ExceptionsType = ExceptionHandling::DwarfCFI;
+  DwarfRegNumForCFI = true;
 }
 
 } // end of namespace llvm

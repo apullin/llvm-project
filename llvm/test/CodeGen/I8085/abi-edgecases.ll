@@ -80,3 +80,51 @@ entry:
   call void (ptr, i16, ...) @vfoo_sret(ptr sret(%L) %out, i16 %a, i8 %b, i32 123, i16 456)
   ret void
 }
+
+declare void @leaf_byval(ptr byval(%S) align 1, i16, i8)
+
+define void @mid_sret_byval(ptr sret(%L) %out, ptr byval(%S) align 1 %p, i16 %a, ...) #0 {
+; CHECK-LABEL: mid_sret_byval:
+; CHECK: CALL leaf_byval
+; CHECK: RET
+entry:
+  call void @leaf_byval(ptr byval(%S) align 1 %p, i16 %a, i8 5)
+  ret void
+}
+
+define void @caller_chain(ptr %out, ptr %p, i16 %a, i8 %b) #0 {
+; CHECK-LABEL: caller_chain:
+; CHECK: CALL mid_sret_byval
+; CHECK: RET
+entry:
+  call void (ptr, ptr, i16, ...) @mid_sret_byval(ptr sret(%L) %out,
+                                                 ptr byval(%S) align 1 %p,
+                                                 i16 %a, i8 %b, i32 1234)
+  ret void
+}
+
+declare i64 @vfoo_i64(ptr byval(%S) align 1, i64, ...)
+
+define i64 @caller_i64_mix(ptr %p, i64 %x, i16 %a) {
+; CHECK-LABEL: caller_i64_mix:
+; CHECK: CALL vfoo_i64
+; CHECK: RET
+entry:
+  %r = call i64 (ptr, i64, ...) @vfoo_i64(ptr byval(%S) align 1 %p,
+                                         i64 %x, i16 %a, i64 42)
+  ret i64 %r
+}
+
+declare void @vfoo_tail(i16, ...)
+
+define void @caller_tail_varargs(i16 %a, i8 %b) {
+; CHECK-LABEL: caller_tail_varargs:
+; CHECK: CALL vfoo_tail
+; CHECK-NOT: JMP vfoo_tail
+; CHECK: RET
+entry:
+  tail call void (i16, ...) @vfoo_tail(i16 %a, i8 %b, i16 7)
+  ret void
+}
+
+attributes #0 = { noinline }

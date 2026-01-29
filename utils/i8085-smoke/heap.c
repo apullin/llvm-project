@@ -1,9 +1,7 @@
 typedef unsigned char u8;
 typedef unsigned short u16;
 
-volatile u8 *out_lo = (volatile u8 *)0x0100;
-volatile u8 *out_hi = (volatile u8 *)0x0101;
-volatile u8 *out_off = (volatile u8 *)0x0102;
+volatile u8 *out = (volatile u8 *)0x0100;
 
 static u8 heap[64];
 static u8 heap_off;
@@ -27,7 +25,7 @@ int main(void) {
   heap_b = (u8 *)heap_alloc(12);
 
   if (!heap_a || !heap_b) {
-    *out_lo = 0xEE;
+    out[0] = 0xEE;
     for (;;)
       ;
   }
@@ -45,9 +43,9 @@ int main(void) {
     sum = (u16)(sum + heap_b[i]);
   }
 
-  *out_lo = (u8)(sum & 0xFF);
-  *out_hi = (u8)(sum >> 8);
-  *out_off = heap_off;
+  out[0] = (u8)(sum & 0xFF);
+  out[1] = (u8)(sum >> 8);
+  out[2] = heap_off;
   for (;;)
     ;
   return 0;

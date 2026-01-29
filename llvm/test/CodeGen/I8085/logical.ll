@@ -5,7 +5,8 @@ define i8 @functionone(i8,i8) {
 ; CHECK-LABEL: functionone:
 ; CHECK:       LBB0_0:
 ; CHECK-NEXT:    PUSH D
-; CHECK-NEXT:    LXI H, 5
+; CHECK-NEXT:    .cfi_adjust_cfa_offset 2
+; CHECK:    LXI H, 5
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV B, H
 ; CHECK-NEXT:    MOV C, L
@@ -27,7 +28,7 @@ define i8 @functionone(i8,i8) {
 ; CHECK-NEXT:    MOV A, D
 ; CHECK-NEXT:    ORA C
 ; CHECK-NEXT:    POP D
-; CHECK-NEXT:    RET
+; CHECK:    RET
 
   %3 = xor i8 %0, %1
   %4 = and i8 %3, %1
@@ -39,10 +40,12 @@ define i16 @functiontwo(i16,i16) {
 ; CHECK-LABEL: functiontwo:
 ; CHECK:       LBB1_0:
 ; CHECK-NEXT:    PUSH D
-; CHECK-NEXT:    LXI H, 65534
+; CHECK-NEXT:    .cfi_adjust_cfa_offset 2
+; CHECK:    LXI H, 65534
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    SPHL
-; CHECK-NEXT:    LXI H, 8
+; CHECK-NEXT:    .cfi_adjust_cfa_offset {{[0-9]+}}
+; CHECK:    LXI H, 8
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV B, H
 ; CHECK-NEXT:    MOV C, L
@@ -93,11 +96,12 @@ define i16 @functiontwo(i16,i16) {
 ; CHECK-NEXT:    MOV A, B
 ; CHECK-NEXT:    ORA D
 ; CHECK-NEXT:    MOV B, A
-; CHECK-NEXT:    LXI H, 2
+; CHECK:    POP D
+; CHECK:    LXI H, 2
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    SPHL
-; CHECK-NEXT:    POP D
-; CHECK-NEXT:    RET
+; CHECK-NEXT:    .cfi_adjust_cfa_offset {{[0-9]+}}
+; CHECK:    RET
 
   %3 = xor i16 %0, %1
   %4 = and i16 %3, %1
@@ -109,7 +113,8 @@ define i8 @functionthree(i8,i8) {
 ; CHECK-LABEL: functionthree:
 ; CHECK:       LBB2_0:
 ; CHECK-NEXT:    PUSH D
-; CHECK-NEXT:    LXI H, 5
+; CHECK-NEXT:    .cfi_adjust_cfa_offset 2
+; CHECK:    LXI H, 5
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV B, H
 ; CHECK-NEXT:    MOV C, L
@@ -133,7 +138,7 @@ define i8 @functionthree(i8,i8) {
 ; CHECK-NEXT:    MOV A, B
 ; CHECK-NEXT:    XRI 111
 ; CHECK-NEXT:    POP D
-; CHECK-NEXT:    RET
+; CHECK:    RET
 
   %3 = xor i8 %0, %1
   %4 = and i8 %3, 40
@@ -146,7 +151,8 @@ define i16 @functionfour(i16,i16) {
 ; CHECK-LABEL: functionfour:
 ; CHECK:       LBB3_0:
 ; CHECK-NEXT:    PUSH D
-; CHECK-NEXT:    LXI H, 6
+; CHECK-NEXT:    .cfi_adjust_cfa_offset 2
+; CHECK:    LXI H, 6
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV B, H
 ; CHECK-NEXT:    MOV C, L
@@ -193,7 +199,7 @@ define i16 @functionfour(i16,i16) {
 ; CHECK-NEXT:    XRA H
 ; CHECK-NEXT:    MOV B, A
 ; CHECK-NEXT:    POP D
-; CHECK-NEXT:    RET
+; CHECK:    RET
 
   %3 = xor i16 %0, %1
   %4 = and i16 %3, 40000

@@ -11,7 +11,8 @@ define i8 @br_uadd_ov(i16 %a, i16 %b) {
 ; CHECK-LABEL: br_uadd_ov:
 ; CHECK:       LBB0_0:
 ; CHECK-NEXT:    PUSH D
-; CHECK-NEXT:    LXI H, 6
+; CHECK-NEXT:    .cfi_adjust_cfa_offset 2
+; CHECK:    LXI H, 6
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV B, H
 ; CHECK-NEXT:    MOV C, L
@@ -58,11 +59,11 @@ define i8 @br_uadd_ov(i16 %a, i16 %b) {
 ; CHECK-NEXT:  LBB0_4:
 ; CHECK-NEXT:    MVI A, 1
 ; CHECK-NEXT:    POP D
-; CHECK-NEXT:    RET
+; CHECK:    RET
 ; CHECK-NEXT:  LBB0_5:
 ; CHECK-NEXT:    MVI A, 0
 ; CHECK-NEXT:    POP D
-; CHECK-NEXT:    RET
+; CHECK:    RET
 entry:
   %res = call { i16, i1 } @llvm.uadd.with.overflow.i16(i16 %a, i16 %b)
   %ov = extractvalue { i16, i1 } %res, 1
@@ -79,10 +80,12 @@ define i8 @br_sadd_ov(i16 %a, i16 %b) {
 ; CHECK-LABEL: br_sadd_ov:
 ; CHECK:       LBB1_0:
 ; CHECK-NEXT:    PUSH D
-; CHECK-NEXT:    LXI H, 65533
+; CHECK-NEXT:    .cfi_adjust_cfa_offset 2
+; CHECK:    LXI H, 65533
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    SPHL
-; CHECK-NEXT:    LXI H, 9
+; CHECK-NEXT:    .cfi_adjust_cfa_offset {{[0-9]+}}
+; CHECK:    LXI H, 9
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV B, H
 ; CHECK-NEXT:    MOV C, L
@@ -195,11 +198,12 @@ define i8 @br_sadd_ov(i16 %a, i16 %b) {
 ; CHECK-NEXT:  LBB1_14:
 ; CHECK-NEXT:    MVI A, 0
 ; CHECK-NEXT:  LBB1_15:
-; CHECK-NEXT:    LXI H, 3
+; CHECK:    POP D
+; CHECK:    LXI H, 3
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    SPHL
-; CHECK-NEXT:    POP D
-; CHECK-NEXT:    RET
+; CHECK-NEXT:    .cfi_adjust_cfa_offset {{[0-9]+}}
+; CHECK:    RET
 entry:
   %res = call { i16, i1 } @llvm.sadd.with.overflow.i16(i16 %a, i16 %b)
   %ov = extractvalue { i16, i1 } %res, 1
@@ -216,7 +220,8 @@ define i8 @br_usub_ov(i8 %a, i8 %b) {
 ; CHECK-LABEL: br_usub_ov:
 ; CHECK:       LBB2_0:
 ; CHECK-NEXT:    PUSH D
-; CHECK-NEXT:    LXI H, 5
+; CHECK-NEXT:    .cfi_adjust_cfa_offset 2
+; CHECK:    LXI H, 5
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV B, H
 ; CHECK-NEXT:    MOV C, L
@@ -244,11 +249,11 @@ define i8 @br_usub_ov(i8 %a, i8 %b) {
 ; CHECK-NEXT:  LBB2_3:
 ; CHECK-NEXT:    MVI A, 1
 ; CHECK-NEXT:    POP D
-; CHECK-NEXT:    RET
+; CHECK:    RET
 ; CHECK-NEXT:  LBB2_4:
 ; CHECK-NEXT:    MVI A, 0
 ; CHECK-NEXT:    POP D
-; CHECK-NEXT:    RET
+; CHECK:    RET
 entry:
   %res = call { i8, i1 } @llvm.usub.with.overflow.i8(i8 %a, i8 %b)
   %ov = extractvalue { i8, i1 } %res, 1

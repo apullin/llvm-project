@@ -42,6 +42,7 @@ define i16 @load_globals() {
 ; CHECK-LABEL: load_globals:
 ; CHECK:       LBB1_0:
 ; CHECK-NEXT:    PUSH D
+; CHECK-NEXT:    .cfi_adjust_cfa_offset 2
 ; CHECK-NEXT:    LXI H, g8
 ; CHECK-NEXT:    MOV B, M
 ; CHECK-NEXT:    MOV A, B
@@ -58,7 +59,7 @@ define i16 @load_globals() {
 ; CHECK-NEXT:    ADC D
 ; CHECK-NEXT:    MOV B, A
 ; CHECK-NEXT:    POP D
-; CHECK-NEXT:    RET
+; CHECK:    RET
 entry:
   %a = load i8, i8* @g8, align 1
   %b = load i16, i16* @g16, align 1

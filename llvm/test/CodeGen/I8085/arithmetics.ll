@@ -5,7 +5,8 @@ define i16 @add_sub_1(i16,i16) {
 ; CHECK-LABEL: add_sub_1:
 ; CHECK:       LBB0_0:
 ; CHECK-NEXT:    PUSH D
-; CHECK-NEXT:    LXI H, 6
+; CHECK-NEXT:    .cfi_adjust_cfa_offset 2
+; CHECK:    LXI H, 6
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV B, H
 ; CHECK-NEXT:    MOV C, L
@@ -56,7 +57,7 @@ define i16 @add_sub_1(i16,i16) {
 ; CHECK-NEXT:    SBB H
 ; CHECK-NEXT:    MOV B, A
 ; CHECK-NEXT:    POP D
-; CHECK-NEXT:    RET
+; CHECK:    RET
 
   %3 = add i16 %0, %1
   %4 = add i16 %3, %3
@@ -71,7 +72,8 @@ define i16 @add_sub_2(i16,i16) {
 ; CHECK-LABEL: add_sub_2:
 ; CHECK:       LBB1_0:
 ; CHECK-NEXT:    PUSH D
-; CHECK-NEXT:    LXI H, 6
+; CHECK-NEXT:    .cfi_adjust_cfa_offset 2
+; CHECK:    LXI H, 6
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV B, H
 ; CHECK-NEXT:    MOV C, L
@@ -118,7 +120,7 @@ define i16 @add_sub_2(i16,i16) {
 ; CHECK-NEXT:    ADC H
 ; CHECK-NEXT:    MOV B, A
 ; CHECK-NEXT:    POP D
-; CHECK-NEXT:    RET
+; CHECK:    RET
 
   %3 = add i16 %0, %1
   %4 = sub i16 %3, 10000
@@ -131,7 +133,8 @@ define i8 @add_sub_3(i8,i8) {
 ; CHECK-LABEL: add_sub_3:
 ; CHECK:       LBB2_0:
 ; CHECK-NEXT:    PUSH D
-; CHECK-NEXT:    LXI H, 5
+; CHECK-NEXT:    .cfi_adjust_cfa_offset 2
+; CHECK:    LXI H, 5
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV B, H
 ; CHECK-NEXT:    MOV C, L
@@ -150,7 +153,7 @@ define i8 @add_sub_3(i8,i8) {
 ; CHECK-NEXT:    MOV A, C
 ; CHECK-NEXT:    ADD B
 ; CHECK-NEXT:    POP D
-; CHECK-NEXT:    RET
+; CHECK:    RET
 
   %3 = add i8 %0, %1 ; 48
   %4 = sub i8 100, %3 ; 52
@@ -167,7 +170,8 @@ define i8 @add_sub_4(i8,i8) {
 ; CHECK-NEXT:    LXI H, 65534
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    SPHL
-; CHECK-NEXT:    MVI B, 100
+; CHECK-NEXT:    .cfi_adjust_cfa_offset {{[0-9]+}}
+; CHECK:    MVI B, 100
 ; CHECK-NEXT:    LXI H, 1
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV M, B
@@ -188,7 +192,8 @@ define i8 @add_sub_4(i8,i8) {
 ; CHECK-NEXT:    LXI H, 2
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    SPHL
-; CHECK-NEXT:    RET
+; CHECK-NEXT:    .cfi_adjust_cfa_offset {{[0-9]+}}
+; CHECK:    RET
 
   %3 = alloca i8, align 1
   store i8 100, i8* %3, align 1

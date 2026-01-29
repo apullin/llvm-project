@@ -11,7 +11,8 @@ define i8 @br_eq_i32(i32 %a, i32 %b) {
 ; CHECK-NEXT:    LXI H, 65528
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    SPHL
-; CHECK-NEXT:    LXI H, 14
+; CHECK-NEXT:    .cfi_adjust_cfa_offset {{[0-9]+}}
+; CHECK:    LXI H, 14
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV B, H
 ; CHECK-NEXT:    MOV C, L
@@ -123,10 +124,11 @@ define i8 @br_eq_i32(i32 %a, i32 %b) {
 ; CHECK-NEXT:  LBB0_7:
 ; CHECK-NEXT:    MVI A, 0
 ; CHECK-NEXT:  LBB0_8:
-; CHECK-NEXT:    LXI H, 8
+; CHECK:    LXI H, 8
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    SPHL
-; CHECK-NEXT:    RET
+; CHECK-NEXT:    .cfi_adjust_cfa_offset {{[0-9]+}}
+; CHECK:    RET
 entry:
   %cmp = icmp eq i32 %a, %b
   br i1 %cmp, label %t, label %f
@@ -146,7 +148,8 @@ define i8 @br_ult_i32(i32 %a, i32 %b) {
 ; CHECK-NEXT:    LXI H, 65528
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    SPHL
-; CHECK-NEXT:    LXI H, 14
+; CHECK-NEXT:    .cfi_adjust_cfa_offset {{[0-9]+}}
+; CHECK:    LXI H, 14
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV B, H
 ; CHECK-NEXT:    MOV C, L
@@ -266,10 +269,11 @@ define i8 @br_ult_i32(i32 %a, i32 %b) {
 ; CHECK-NEXT:  LBB1_5:
 ; CHECK-NEXT:    MVI A, 0
 ; CHECK-NEXT:  LBB1_6:
-; CHECK-NEXT:    LXI H, 8
+; CHECK:    LXI H, 8
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    SPHL
-; CHECK-NEXT:    RET
+; CHECK-NEXT:    .cfi_adjust_cfa_offset {{[0-9]+}}
+; CHECK:    RET
 entry:
   %cmp = icmp ult i32 %a, %b
   br i1 %cmp, label %t, label %f
@@ -289,7 +293,8 @@ define i8 @br_slt_i32(i32 %a, i32 %b) {
 ; CHECK-NEXT:    LXI H, 65528
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    SPHL
-; CHECK-NEXT:    LXI H, 14
+; CHECK-NEXT:    .cfi_adjust_cfa_offset {{[0-9]+}}
+; CHECK:    LXI H, 14
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV B, H
 ; CHECK-NEXT:    MOV C, L
@@ -424,10 +429,11 @@ define i8 @br_slt_i32(i32 %a, i32 %b) {
 ; CHECK-NEXT:  LBB2_7:
 ; CHECK-NEXT:    MVI A, 0
 ; CHECK-NEXT:  LBB2_8:
-; CHECK-NEXT:    LXI H, 8
+; CHECK:    LXI H, 8
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    SPHL
-; CHECK-NEXT:    RET
+; CHECK-NEXT:    .cfi_adjust_cfa_offset {{[0-9]+}}
+; CHECK:    RET
 entry:
   %cmp = icmp slt i32 %a, %b
   br i1 %cmp, label %t, label %f
@@ -445,10 +451,12 @@ define i8 @br_eq_i64(i64 %a, i64 %b) {
 ; CHECK-NEXT:    ; implicit-def: $iax
 ; CHECK-NEXT:    ; implicit-def: $ibx
 ; CHECK-NEXT:    PUSH D
-; CHECK-NEXT:    LXI H, 65516
+; CHECK-NEXT:    .cfi_adjust_cfa_offset 2
+; CHECK:    LXI H, 65516
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    SPHL
-; CHECK-NEXT:    LXI B, 4
+; CHECK-NEXT:    .cfi_adjust_cfa_offset {{[0-9]+}}
+; CHECK:    LXI B, 4
 ; CHECK-NEXT:    LXI H, 32
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV D, H
@@ -945,11 +953,12 @@ define i8 @br_eq_i64(i64 %a, i64 %b) {
 ; CHECK-NEXT:  LBB3_9:
 ; CHECK-NEXT:    MVI A, 0
 ; CHECK-NEXT:  LBB3_10:
-; CHECK-NEXT:    LXI H, 20
+; CHECK:    POP D
+; CHECK:    LXI H, 20
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    SPHL
-; CHECK-NEXT:    POP D
-; CHECK-NEXT:    RET
+; CHECK-NEXT:    .cfi_adjust_cfa_offset {{[0-9]+}}
+; CHECK:    RET
 entry:
   %cmp = icmp eq i64 %a, %b
   br i1 %cmp, label %t, label %f
@@ -967,10 +976,12 @@ define i8 @br_ult_i64(i64 %a, i64 %b) {
 ; CHECK-NEXT:    ; implicit-def: $iax
 ; CHECK-NEXT:    ; implicit-def: $ibx
 ; CHECK-NEXT:    PUSH D
-; CHECK-NEXT:    LXI H, 65518
+; CHECK-NEXT:    .cfi_adjust_cfa_offset 2
+; CHECK:    LXI H, 65518
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    SPHL
-; CHECK-NEXT:    LXI D, 4
+; CHECK-NEXT:    .cfi_adjust_cfa_offset {{[0-9]+}}
+; CHECK:    LXI D, 4
 ; CHECK-NEXT:    LXI H, 30
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV B, H
@@ -1357,11 +1368,12 @@ define i8 @br_ult_i64(i64 %a, i64 %b) {
 ; CHECK-NEXT:  LBB4_15:
 ; CHECK-NEXT:    MVI A, 0
 ; CHECK-NEXT:  LBB4_16:
-; CHECK-NEXT:    LXI H, 18
+; CHECK:    POP D
+; CHECK:    LXI H, 18
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    SPHL
-; CHECK-NEXT:    POP D
-; CHECK-NEXT:    RET
+; CHECK-NEXT:    .cfi_adjust_cfa_offset {{[0-9]+}}
+; CHECK:    RET
 entry:
   %cmp = icmp ult i64 %a, %b
   br i1 %cmp, label %t, label %f
@@ -1379,10 +1391,12 @@ define i8 @br_slt_i64(i64 %a, i64 %b) {
 ; CHECK-NEXT:    ; implicit-def: $iax
 ; CHECK-NEXT:    ; implicit-def: $ibx
 ; CHECK-NEXT:    PUSH D
-; CHECK-NEXT:    LXI H, 65522
+; CHECK-NEXT:    .cfi_adjust_cfa_offset 2
+; CHECK:    LXI H, 65522
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    SPHL
-; CHECK-NEXT:    LXI D, 4
+; CHECK-NEXT:    .cfi_adjust_cfa_offset {{[0-9]+}}
+; CHECK:    LXI D, 4
 ; CHECK-NEXT:    LXI H, 26
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV B, H
@@ -1743,11 +1757,12 @@ define i8 @br_slt_i64(i64 %a, i64 %b) {
 ; CHECK-NEXT:  LBB5_20:
 ; CHECK-NEXT:    MVI A, 0
 ; CHECK-NEXT:  LBB5_21:
-; CHECK-NEXT:    LXI H, 14
+; CHECK:    POP D
+; CHECK:    LXI H, 14
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    SPHL
-; CHECK-NEXT:    POP D
-; CHECK-NEXT:    RET
+; CHECK-NEXT:    .cfi_adjust_cfa_offset {{[0-9]+}}
+; CHECK:    RET
 entry:
   %cmp = icmp slt i64 %a, %b
   br i1 %cmp, label %t, label %f

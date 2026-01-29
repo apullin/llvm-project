@@ -7,10 +7,12 @@ define i8 @stack_large_i8() {
 ; CHECK-LABEL: stack_large_i8:
 ; CHECK:       LBB0_0:
 ; CHECK-NEXT:    PUSH D
-; CHECK-NEXT:    LXI H, 65024
+; CHECK-NEXT:    .cfi_adjust_cfa_offset 2
+; CHECK:    LXI H, 65024
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    SPHL
-; CHECK-NEXT:    LXI B, 300
+; CHECK-NEXT:    .cfi_adjust_cfa_offset {{[0-9]+}}
+; CHECK:    LXI B, 300
 ; CHECK-NEXT:    LXI H, 0
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV D, H
@@ -25,11 +27,12 @@ define i8 @stack_large_i8() {
 ; CHECK-NEXT:    MOV A, B
 ; CHECK-NEXT:    STAX D
 ; CHECK-NEXT:    MOV A, B
-; CHECK-NEXT:    LXI H, 512
+; CHECK:    POP D
+; CHECK:    LXI H, 512
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    SPHL
-; CHECK-NEXT:    POP D
-; CHECK-NEXT:    RET
+; CHECK-NEXT:    .cfi_adjust_cfa_offset {{[0-9]+}}
+; CHECK:    RET
 entry:
   %buf = alloca [512 x i8], align 1
   %p = getelementptr [512 x i8], ptr %buf, i16 0, i16 300
@@ -42,10 +45,12 @@ define i16 @stack_large_i16() {
 ; CHECK-LABEL: stack_large_i16:
 ; CHECK:       LBB1_0:
 ; CHECK-NEXT:    PUSH D
-; CHECK-NEXT:    LXI H, 65024
+; CHECK-NEXT:    .cfi_adjust_cfa_offset 2
+; CHECK:    LXI H, 65024
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    SPHL
-; CHECK-NEXT:    LXI B, 240
+; CHECK-NEXT:    .cfi_adjust_cfa_offset {{[0-9]+}}
+; CHECK:    LXI B, 240
 ; CHECK-NEXT:    LXI H, 0
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV D, H
@@ -63,11 +68,12 @@ define i16 @stack_large_i16() {
 ; CHECK-NEXT:    MOV A, B
 ; CHECK-NEXT:    STAX D
 ; CHECK-NEXT:    DCX D
-; CHECK-NEXT:    LXI H, 512
+; CHECK:    POP D
+; CHECK:    LXI H, 512
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    SPHL
-; CHECK-NEXT:    POP D
-; CHECK-NEXT:    RET
+; CHECK-NEXT:    .cfi_adjust_cfa_offset {{[0-9]+}}
+; CHECK:    RET
 entry:
   %buf = alloca [256 x i16], align 1
   %p = getelementptr [256 x i16], ptr %buf, i16 0, i16 120
@@ -83,10 +89,12 @@ define i8 @stack_global_mix(i8 %x) {
 ; CHECK-LABEL: stack_global_mix:
 ; CHECK:       LBB2_0:
 ; CHECK-NEXT:    PUSH D
-; CHECK-NEXT:    LXI H, 65134
+; CHECK-NEXT:    .cfi_adjust_cfa_offset 2
+; CHECK:    LXI H, 65134
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    SPHL
-; CHECK-NEXT:    LXI H, 406
+; CHECK-NEXT:    .cfi_adjust_cfa_offset {{[0-9]+}}
+; CHECK:    LXI H, 406
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV B, H
 ; CHECK-NEXT:    MOV C, L
@@ -123,11 +131,12 @@ define i8 @stack_global_mix(i8 %x) {
 ; CHECK-NEXT:    MOV A, B
 ; CHECK-NEXT:    STAX D
 ; CHECK-NEXT:    MOV A, B
-; CHECK-NEXT:    LXI H, 402
+; CHECK:    POP D
+; CHECK:    LXI H, 402
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    SPHL
-; CHECK-NEXT:    POP D
-; CHECK-NEXT:    RET
+; CHECK-NEXT:    .cfi_adjust_cfa_offset {{[0-9]+}}
+; CHECK:    RET
 entry:
   %buf = alloca [400 x i8], align 1
   %p = getelementptr [400 x i8], ptr %buf, i16 0, i16 255

@@ -7,7 +7,8 @@ define i8 @cmp_slt_i8(i8 %a, i8 %b) {
 ; CHECK-LABEL: cmp_slt_i8:
 ; CHECK:       LBB0_0:
 ; CHECK-NEXT:    PUSH D
-; CHECK-NEXT:    LXI H, 5
+; CHECK-NEXT:    .cfi_adjust_cfa_offset 2
+; CHECK:    LXI H, 5
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV B, H
 ; CHECK-NEXT:    MOV C, L
@@ -42,7 +43,7 @@ define i8 @cmp_slt_i8(i8 %a, i8 %b) {
 ; CHECK-NEXT:  LBB0_6:
 ; CHECK-NEXT:    MOV A, B
 ; CHECK-NEXT:    POP D
-; CHECK-NEXT:    RET
+; CHECK:    RET
 
   %cmp = icmp slt i8 %a, %b
   %z = zext i1 %cmp to i8
@@ -55,7 +56,8 @@ define i8 @cmp_sgt_i8(i8 %a, i8 %b) {
 ; CHECK-LABEL: cmp_sgt_i8:
 ; CHECK:       LBB1_0:
 ; CHECK-NEXT:    PUSH D
-; CHECK-NEXT:    LXI H, 5
+; CHECK-NEXT:    .cfi_adjust_cfa_offset 2
+; CHECK:    LXI H, 5
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV B, H
 ; CHECK-NEXT:    MOV C, L
@@ -92,7 +94,7 @@ define i8 @cmp_sgt_i8(i8 %a, i8 %b) {
 ; CHECK-NEXT:  LBB1_6:
 ; CHECK-NEXT:    MOV A, B
 ; CHECK-NEXT:    POP D
-; CHECK-NEXT:    RET
+; CHECK:    RET
 
   %cmp = icmp sgt i8 %a, %b
   %z = zext i1 %cmp to i8
@@ -105,7 +107,8 @@ define i8 @cmp_slt_i16(i16 %a, i16 %b) {
 ; CHECK-LABEL: cmp_slt_i16:
 ; CHECK:       LBB2_0:
 ; CHECK-NEXT:    PUSH D
-; CHECK-NEXT:    LXI H, 6
+; CHECK-NEXT:    .cfi_adjust_cfa_offset 2
+; CHECK:    LXI H, 6
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV B, H
 ; CHECK-NEXT:    MOV C, L
@@ -149,7 +152,7 @@ define i8 @cmp_slt_i16(i16 %a, i16 %b) {
 ; CHECK-NEXT:  LBB2_5:
 ; CHECK-NEXT:    MOV A, B
 ; CHECK-NEXT:    POP D
-; CHECK-NEXT:    RET
+; CHECK:    RET
 
   %cmp = icmp slt i16 %a, %b
   %z = zext i1 %cmp to i8
@@ -162,7 +165,8 @@ define i8 @cmp_uge_i16(i16 %a, i16 %b) {
 ; CHECK-LABEL: cmp_uge_i16:
 ; CHECK:       LBB3_0:
 ; CHECK-NEXT:    PUSH D
-; CHECK-NEXT:    LXI H, 6
+; CHECK-NEXT:    .cfi_adjust_cfa_offset 2
+; CHECK:    LXI H, 6
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV B, H
 ; CHECK-NEXT:    MOV C, L
@@ -197,7 +201,7 @@ define i8 @cmp_uge_i16(i16 %a, i16 %b) {
 ; CHECK-NEXT:  LBB3_3:
 ; CHECK-NEXT:    MOV A, B
 ; CHECK-NEXT:    POP D
-; CHECK-NEXT:    RET
+; CHECK:    RET
 
   %cmp = icmp uge i16 %a, %b
   %z = zext i1 %cmp to i8
@@ -210,7 +214,8 @@ define i8 @cmp_uge_i8(i8 %a, i8 %b) {
 ; CHECK-LABEL: cmp_uge_i8:
 ; CHECK:       LBB4_0:
 ; CHECK-NEXT:    PUSH D
-; CHECK-NEXT:    LXI H, 5
+; CHECK-NEXT:    .cfi_adjust_cfa_offset 2
+; CHECK:    LXI H, 5
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV B, H
 ; CHECK-NEXT:    MOV C, L
@@ -231,7 +236,7 @@ define i8 @cmp_uge_i8(i8 %a, i8 %b) {
 ; CHECK-NEXT:  LBB4_3:
 ; CHECK-NEXT:    MOV A, B
 ; CHECK-NEXT:    POP D
-; CHECK-NEXT:    RET
+; CHECK:    RET
 
   %cmp = icmp uge i8 %a, %b
   %z = zext i1 %cmp to i8

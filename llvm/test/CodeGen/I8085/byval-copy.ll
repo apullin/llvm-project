@@ -9,10 +9,12 @@ define void @caller(ptr %p) {
 ; CHECK-LABEL: caller:
 ; CHECK:       LBB0_0:
 ; CHECK-NEXT:    PUSH D
-; CHECK-NEXT:    LXI H, 65530
+; CHECK-NEXT:    .cfi_adjust_cfa_offset 2
+; CHECK:    LXI H, 65530
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    SPHL
-; CHECK-NEXT:    LXI H, 10
+; CHECK-NEXT:    .cfi_adjust_cfa_offset {{[0-9]+}}
+; CHECK:    LXI H, 10
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV B, H
 ; CHECK-NEXT:    MOV C, L
@@ -91,11 +93,12 @@ define void @caller(ptr %p) {
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV M, B
 ; CHECK-NEXT:    CALL callee
-; CHECK-NEXT:    LXI H, 6
+; CHECK:    POP D
+; CHECK:    LXI H, 6
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    SPHL
-; CHECK-NEXT:    POP D
-; CHECK-NEXT:    RET
+; CHECK-NEXT:    .cfi_adjust_cfa_offset {{[0-9]+}}
+; CHECK:    RET
 entry:
   call void @callee(ptr byval(%S) align 1 %p)
   ret void

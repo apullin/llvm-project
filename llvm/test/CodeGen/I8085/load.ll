@@ -7,6 +7,7 @@ define i16 @loadtest16() #0  {
 ; CHECK-NEXT:    LXI H, 65532
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    SPHL
+; CHECK-NEXT:    .cfi_adjust_cfa_offset {{[0-9]+}}
 ; CHECK-NEXT:    LXI B, 20000
 ; CHECK-NEXT:    LXI H, 1
 ; CHECK-NEXT:    DAD SP
@@ -27,6 +28,7 @@ define i16 @loadtest16() #0  {
 ; CHECK-NEXT:    LXI H, 4
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    SPHL
+; CHECK-NEXT:    .cfi_adjust_cfa_offset {{[0-9]+}}
 ; CHECK-NEXT:    RET
 
   %1 = alloca i16, align 1
@@ -47,6 +49,7 @@ define i8 @loadtest8()  {
 ; CHECK-NEXT:    LXI H, 65534
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    SPHL
+; CHECK-NEXT:    .cfi_adjust_cfa_offset {{[0-9]+}}
 ; CHECK-NEXT:    MVI B, 111
 ; CHECK-NEXT:    LXI H, 0
 ; CHECK-NEXT:    DAD SP
@@ -59,6 +62,7 @@ define i8 @loadtest8()  {
 ; CHECK-NEXT:    LXI H, 2
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    SPHL
+; CHECK-NEXT:    .cfi_adjust_cfa_offset {{[0-9]+}}
 ; CHECK-NEXT:    RET
 
   %1 = alloca i8, align 1

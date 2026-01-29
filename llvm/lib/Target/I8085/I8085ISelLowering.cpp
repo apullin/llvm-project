@@ -23,6 +23,7 @@
 #include "llvm/CodeGen/SelectionDAG.h"
 #include "llvm/CodeGen/TargetLoweringObjectFileImpl.h"
 #include "llvm/IR/Function.h"
+#include "llvm/Support/Alignment.h"
 #include "llvm/Support/ErrorHandling.h"
 
 #include <iostream>
@@ -855,8 +856,9 @@ SDValue I8085TargetLowering::LowerFormalArguments(
   CCInfo.AnalyzeFormalArguments(Ins, ArgCC_I8085_Vararg);
 
 
-  SDValue ArgValue;
-  for (CCValAssign &VA : ArgLocs) {
+  for (unsigned i = 0, e = ArgLocs.size(); i != e; ++i) {
+    CCValAssign &VA = ArgLocs[i];
+    const ISD::InputArg &Arg = Ins[i];
 
     // Arguments stored on registers.
     if (VA.isRegLoc()) {
@@ -867,6 +869,17 @@ SDValue I8085TargetLowering::LowerFormalArguments(
 
       EVT LocVT = VA.getLocVT();
 
+      if (Arg.Flags.isByVal() && Arg.Flags.getByValSize()) {
+        unsigned Size = Arg.Flags.getByValSize();
+        Align Alignment =
+            std::max(Align(1), Arg.Flags.getNonZeroByValAlign());
+        int FI = MFI.CreateFixedObject(Size, VA.getLocMemOffset(), true);
+        MFI.setObjectAlignment(FI, Alignment);
+        SDValue FIN = DAG.getFrameIndex(FI, getPointerTy(DL));
+        InVals.push_back(FIN);
+        continue;
+      }
+
       // Create the frame index object for this incoming parameter.
       int FI = MFI.CreateFixedObject(LocVT.getSizeInBits() / 8,
                                      VA.getLocMemOffset(), true);
@@ -875,8 +888,8 @@ SDValue I8085TargetLowering::LowerFormalArguments(
       // from this parameter.
       SDValue FIN = DAG.getFrameIndex(FI, getPointerTy(DL));
 
-      SDValue load=DAG.getLoad(LocVT, dl, Chain, FIN,
-                                   MachinePointerInfo::getFixedStack(MF, FI));
+      SDValue load = DAG.getLoad(LocVT, dl, Chain, FIN,
+                                 MachinePointerInfo::getFixedStack(MF, FI));
 
       InVals.push_back(load);
     }
@@ -1009,28 +1022,31 @@ SDValue I8085TargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
     SmallVector<SDValue, 8> MemOpChains;
     for (; AI != AE; AI++) {
 
-    CCValAssign &VA = ArgLocs[AI];
-    SDValue Arg = OutVals[AI];
+      CCValAssign &VA = ArgLocs[AI];
+      SDValue Arg = OutVals[AI];
+      ISD::ArgFlagsTy Flags = Outs[AI].Flags;
 
-    assert(VA.isMemLoc());
+      assert(VA.isMemLoc());
 
-    // if(VA.getLocMemOffset()>0){
-    //   SDValue PtrOff = DAG.getNode(
-    //         ISD::ADD, DL, getPointerTy(DAG.getDataLayout()),
-    //         DAG.getRegister(I8085::SP, getPointerTy(DAG.getDataLayout())),
-    //         DAG.getIntPtrConstant(VA.getLocMemOffset(), DL));
-    //   MemOpChains.push_back(
-    //       DAG.getStore(Chain, DL, Arg, PtrOff,MachinePointerInfo()));
-    // }
-    // else{
       SDValue PtrOff = DAG.getNode(
           ISD::ADD, DL, getPointerTy(DAG.getDataLayout()),
           DAG.getRegister(I8085::SP, getPointerTy(DAG.getDataLayout())),
           DAG.getIntPtrConstant(VA.getLocMemOffset(), DL));
-      MemOpChains.push_back(DAG.getStore(
-          Chain, DL, Arg, PtrOff,
-          MachinePointerInfo::getStack(MF, VA.getLocMemOffset())));
-    // }
+
+      if (Flags.isByVal() && Flags.getByValSize()) {
+        unsigned Size = Flags.getByValSize();
+        Align Alignment =
+            std::max(Align(1), Flags.getNonZeroByValAlign());
+        SDValue SizeVal = DAG.getConstant(Size, DL, getPointerTy(DAG.getDataLayout()));
+        MemOpChains.push_back(DAG.getMemcpy(
+            Chain, DL, PtrOff, Arg, SizeVal, Alignment,
+            /*isVolatile=*/false, /*AlwaysInline=*/false, /*CI=*/nullptr,
+            std::nullopt, MachinePointerInfo(), MachinePointerInfo()));
+      } else {
+        MemOpChains.push_back(DAG.getStore(
+            Chain, DL, Arg, PtrOff,
+            MachinePointerInfo::getStack(MF, VA.getLocMemOffset())));
+      }
 
     }
 

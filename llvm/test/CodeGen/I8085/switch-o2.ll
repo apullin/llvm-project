@@ -1,10 +1,13 @@
-; RUN: llc -O2 -mattr=i8085,sram < %s -march=i8085 -verify-machineinstrs | FileCheck %s
+; RUN: llc -O2 -mattr=i8085,sram < %s -march=i8085 -verify-machineinstrs | FileCheck %s --check-prefix=O2
+; RUN: llc -O3 -mattr=i8085,sram < %s -march=i8085 -verify-machineinstrs | FileCheck %s --check-prefix=O3
 
-; Ensure large switches stay as compare chains at -O2 (no jump table crashes).
+; Ensure large switches stay as compare chains at -O2/-O3 (no jump table crashes).
 
 define i8 @switch_o2(i8 %x) {
-; CHECK-LABEL: switch_o2:
-; CHECK: RET
+; O2-LABEL: switch_o2:
+; O2: RET
+; O3-LABEL: switch_o2:
+; O3: RET
 entry:
   switch i8 %x, label %default [
     i8 0, label %c0

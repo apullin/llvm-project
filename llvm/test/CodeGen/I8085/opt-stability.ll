@@ -1,13 +1,19 @@
 ; RUN: llc -mattr=i8085,sram -O0 < %s -march=i8085 -verify-machineinstrs | FileCheck %s --check-prefix=O0
+; RUN: llc -mattr=i8085,sram -O1 < %s -march=i8085 -verify-machineinstrs | FileCheck %s --check-prefix=O1
 ; RUN: llc -mattr=i8085,sram -O2 < %s -march=i8085 -verify-machineinstrs | FileCheck %s --check-prefix=O2
+; RUN: llc -mattr=i8085,sram -O3 < %s -march=i8085 -verify-machineinstrs | FileCheck %s --check-prefix=O3
 
 ; Ensure the pipeline is stable across optimization levels.
 
 define i16 @opt_mix(i16 %a, i16 %b, i8 %c) {
 ; O0-LABEL: opt_mix:
 ; O0: RET
+; O1-LABEL: opt_mix:
+; O1: RET
 ; O2-LABEL: opt_mix:
 ; O2: RET
+; O3-LABEL: opt_mix:
+; O3: RET
 entry:
   %cond = icmp ult i8 %c, 10
   %sel = select i1 %cond, i16 %a, i16 %b

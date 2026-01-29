@@ -1,0 +1,31 @@
+# RUN: llc -mtriple=i8085-unknown-elf -run-pass=prologepilog -verify-machineinstrs -o - %s | FileCheck %s
+
+--- |
+  target triple = "i8085-unknown-elf"
+  define void @cfi_callee_saved(i16 %x) {
+  entry:
+    ret void
+  }
+...
+
+---
+name:            cfi_callee_saved
+tracksRegLiveness: true
+liveins:
+  - { reg: '$de' }
+frameInfo:
+  hasCalls:        true
+  maxAlignment:    1
+  adjustsStack:    true
+stack:
+  - { id: 0, type: variable-sized, alignment: 1 }
+body:             |
+  bb.0.entry:
+    liveins: $de
+    ; CHECK-LABEL: name: cfi_callee_saved
+    ; CHECK: frame-setup CFI_INSTRUCTION adjust_cfa_offset 2
+    ; CHECK: frame-setup CFI_INSTRUCTION offset $de, -{{[0-9]+}}
+    ; CHECK: frame-destroy CFI_INSTRUCTION adjust_cfa_offset -2
+    ; CHECK: frame-destroy CFI_INSTRUCTION restore $de
+    RET
+...

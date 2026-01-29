@@ -1,28 +1,31 @@
 ; RUN: llc -mattr=i8085,sram < %s -march=i8085  -verify-machineinstrs  | FileCheck %s
 
 define i16 @loadtest16() #0  {
-; CHECK-LABEL:   loadtest16:     
-; CHECK:	LXI H, 65532
-; CHECK:	DAD	SP
-; CHECK:	SPHL
-; CHECK:	LXI B, 20000
-; CHECK:	LXI H, 1
-; CHECK:	DAD	SP
-; CHECK:	MOV M, B
-; CHECK:	LXI H, 0
-; CHECK:	DAD	SP
-; CHECK:	MOV M, C
-; CHECK:	LXI D, 105
-; CHECK:	LXI H, 3
-; CHECK:	DAD	SP
-; CHECK:	MOV M, D
-; CHECK:	LXI H, 2
-; CHECK:	DAD	SP
-; CHECK:	MOV M, E
-; CHECK:	LXI H, 4
-; CHECK:	DAD	SP
-; CHECK:	SPHL
-; CHECK:	RET
+; CHECK-LABEL: loadtest16:
+; CHECK: LXI H, 65532
+; CHECK: DAD SP
+; CHECK: SPHL
+; CHECK: LXI B, 20000
+; CHECK: LXI H, 1
+; CHECK: DAD SP
+; CHECK: MOV M, B
+; CHECK: LXI H, 0
+; CHECK: DAD SP
+; CHECK: MOV M, C
+; CHECK: LXI H, 105
+; CHECK: PUSH B
+; CHECK: PUSH H
+; CHECK: LXI H, 6
+; CHECK: DAD SP
+; CHECK: POP B
+; CHECK: MOV M, C
+; CHECK: INX H
+; CHECK: MOV M, B
+; CHECK: POP B
+; CHECK: LXI H, 4
+; CHECK: DAD SP
+; CHECK: SPHL
+; CHECK: RET
 
   %1 = alloca i16, align 1
   store i16 105, i16* %1, align 1
@@ -37,23 +40,23 @@ define i16 @loadtest16() #0  {
 
 
 define i8 @loadtest8()  {
-; CHECK-LABEL:   loadtest8:     
-; CHECK:	LXI H, 65534
-; CHECK:	DAD	SP
-; CHECK:	SPHL
-; CHECK:	MVI	B, 111
-; CHECK:	LXI H, 0
-; CHECK:	DAD	SP
-; CHECK:	MOV M, B
-; CHECK:	MVI	C, 55
-; CHECK:	LXI H, 1
-; CHECK:	DAD	SP
-; CHECK:	MOV M, C
-; CHECK:	MOV	A, B
-; CHECK:	LXI H, 2
-; CHECK:	DAD	SP
-; CHECK:	SPHL
-; CHECK:	RET
+; CHECK-LABEL: loadtest8:
+; CHECK: LXI H, 65534
+; CHECK: DAD SP
+; CHECK: SPHL
+; CHECK: MVI B, 111
+; CHECK: LXI H, 0
+; CHECK: DAD SP
+; CHECK: MOV M, B
+; CHECK: MVI C, 55
+; CHECK: LXI H, 1
+; CHECK: DAD SP
+; CHECK: MOV M, C
+; CHECK: MOV A, B
+; CHECK: LXI H, 2
+; CHECK: DAD SP
+; CHECK: SPHL
+; CHECK: RET
 
   %1 = alloca i8, align 1
   store i8 55, i8* %1, align 1

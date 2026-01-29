@@ -92,6 +92,7 @@ def I8085Imm16AsmOperand : I8085ImmAsmOperand<"Imm16">;
 def I8085Imm8 : Operand<i8>,
                 ImmLeaf<i8, [{ return Imm >= -128 && Imm <= 255; }] > {
   let ParserMatchClass = I8085Imm8AsmOperand;
+  let EncoderMethod = "encodeImm<I8085::fixup_lo8, 1>";
 }
 
 def I8085Imm16 : Operand<i16>,

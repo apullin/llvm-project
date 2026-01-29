@@ -71,19 +71,19 @@ void I8085::relocate(uint8_t *loc, const Relocation &rel, uint64_t val) const {
     write16le(loc, val);
     return;
   case R_I8085_LO8:
-    checkIntUInt(loc, val, 8, rel);
+    checkUInt(loc, val, 32, rel);
     *loc = static_cast<uint8_t>(val & 0xff);
     return;
   case R_I8085_HI8:
-    checkIntUInt(loc, val >> 8, 8, rel);
+    checkUInt(loc, val, 32, rel);
     *loc = static_cast<uint8_t>((val >> 8) & 0xff);
     return;
   case R_I8085_HH8:
-    checkIntUInt(loc, val >> 16, 8, rel);
+    checkUInt(loc, val, 32, rel);
     *loc = static_cast<uint8_t>((val >> 16) & 0xff);
     return;
   case R_I8085_HHI8:
-    checkIntUInt(loc, val >> 24, 8, rel);
+    checkUInt(loc, val, 32, rel);
     *loc = static_cast<uint8_t>((val >> 24) & 0xff);
     return;
   case R_I8085_PM:
@@ -96,20 +96,20 @@ void I8085::relocate(uint8_t *loc, const Relocation &rel, uint64_t val) const {
   case R_I8085_PM_LO8:
   case R_I8085_LO8_GS: {
     uint64_t Adj = val >> 1;
-    checkIntUInt(loc, Adj, 8, rel);
+    checkUInt(loc, Adj, 32, rel);
     *loc = static_cast<uint8_t>(Adj & 0xff);
     return;
   }
   case R_I8085_PM_HI8:
   case R_I8085_HI8_GS: {
     uint64_t Adj = val >> 9;
-    checkIntUInt(loc, Adj, 8, rel);
+    checkUInt(loc, Adj, 32, rel);
     *loc = static_cast<uint8_t>(Adj & 0xff);
     return;
   }
   case R_I8085_PM_HH8: {
     uint64_t Adj = val >> 17;
-    checkIntUInt(loc, Adj, 8, rel);
+    checkUInt(loc, Adj, 32, rel);
     *loc = static_cast<uint8_t>(Adj & 0xff);
     return;
   }

@@ -72,7 +72,7 @@ unsigned I8085MCCodeEmitter::encodeImm(const MCInst &MI, unsigned OpNo,
       // we shouldn't perform any more fixups. Without this check, we would
       // instead create a fixup to the symbol named 'lo8(symbol)' which
       // is not correct.
-      return getExprOpValue(MO.getExpr(), Fixups, STI);
+      return getExprOpValue(MO.getExpr(), Fixups, STI, Offset);
     }
 
     MCFixupKind FixupKind = static_cast<MCFixupKind>(Fixup);
@@ -87,7 +87,8 @@ unsigned I8085MCCodeEmitter::encodeImm(const MCInst &MI, unsigned OpNo,
 
 unsigned I8085MCCodeEmitter::getExprOpValue(const MCExpr *Expr,
                                           SmallVectorImpl<MCFixup> &Fixups,
-                                          const MCSubtargetInfo &STI) const {
+                                          const MCSubtargetInfo &STI,
+                                          unsigned Offset) const {
 
   MCExpr::ExprKind Kind = Expr->getKind();
 
@@ -104,7 +105,7 @@ unsigned I8085MCCodeEmitter::getExprOpValue(const MCExpr *Expr,
     }
 
     MCFixupKind FixupKind = static_cast<MCFixupKind>(I8085Expr->getFixupKind());
-    Fixups.push_back(MCFixup::create(0, I8085Expr, FixupKind));
+    Fixups.push_back(MCFixup::create(Offset, I8085Expr, FixupKind));
     return 0;
   }
 
@@ -128,7 +129,7 @@ unsigned I8085MCCodeEmitter::getMachineOpValue(const MCInst &MI,
   // MO must be an Expr.
   assert(MO.isExpr());
 
-  return getExprOpValue(MO.getExpr(), Fixups, STI);
+  return getExprOpValue(MO.getExpr(), Fixups, STI, 0);
 }
 
 void I8085MCCodeEmitter::emitInstruction(uint64_t Val, unsigned Size,

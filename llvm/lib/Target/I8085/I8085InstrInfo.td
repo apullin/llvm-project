@@ -459,30 +459,30 @@ def LOAD_16 : I8085Pseudo<(outs GR16: $dst),
                                              : $dst, imm
                                              : $src)]>; 
 
-let Defs=[H,L] in def STORE_16 : I8085Pseudo<(outs),
+let Defs=[HL] in def STORE_16 : I8085Pseudo<(outs),
                             (ins mspi: $dst, GR16: $src),
                             "STORE_16 $dst, $src", [(store i16: $src, addr: $dst)]>;
 
-let Defs=[H,L] in def STORE_8 : I8085Pseudo<(outs),
+let Defs=[HL] in def STORE_8 : I8085Pseudo<(outs),
                         (ins mspi: $memri,
                          GR8NoHL: $reg),
                         "STORE $memri, $reg", [(store i8: $reg, addr: $memri)]>;
 
 
-let Defs=[H,L] in def LOAD_16_WITH_ADDR : I8085Pseudo<(outs GR16: $dst),
+let Defs=[HL] in def LOAD_16_WITH_ADDR : I8085Pseudo<(outs GR16: $dst),
                        (ins mspi: $src),
                        "LOAD $dst, $src", [(set i16: $dst, (load addr: $src))]>;    
 
-let Defs=[H,L] in def LOAD_8_WITH_ADDR : I8085Pseudo<(outs GR8: $dst),
+let Defs=[HL] in def LOAD_8_WITH_ADDR : I8085Pseudo<(outs GR8: $dst),
                        (ins mspi: $src),
                        "LOAD $dst, $src", [(set i8: $dst, (load addr: $src))]>;
 
 
-let Defs=[H,L] in def STORE_8_AT_OFFSET_WITH_SP : I8085Pseudo<(outs),
+let Defs=[HL] in def STORE_8_AT_OFFSET_WITH_SP : I8085Pseudo<(outs),
                        (ins GR8NoHL: $src, I8085Imm16: $offset),
                        "STORE_8_SP_AT_OFFSET\t$offset, $src", [(store i8: $src, imm: $offset)]>;
 
-let Defs=[H,L] in def STORE_16_AT_OFFSET_WITH_SP : I8085Pseudo<(outs),
+let Defs=[HL] in def STORE_16_AT_OFFSET_WITH_SP : I8085Pseudo<(outs),
                        (ins GR16: $src, I8085Imm16: $offset),
                        "STORE_16_SP_AT_OFFSET\t$offset, $src", [(store i16: $src, imm: $offset)]>;                       
 
@@ -493,31 +493,39 @@ def PUSH : F10<0b0101,(outs), (ins GR16PP: $rd), "PUSH $rd", []>;
 
 let Uses=[SP] in {
 
-let Defs=[H,L] in def LOAD_8_WITH_IMM_ADDR : I8085Pseudo<(outs GR8: $dst),
+let Defs=[HL] in def LOAD_8_WITH_IMM_ADDR : I8085Pseudo<(outs GR8: $dst),
                        (ins imm16Addr: $src),
                        "LOAD_8_ADDR $dst, $src", []>;  
 
-let Defs=[H,L] in def LOAD_16_WITH_IMM_ADDR : I8085Pseudo<(outs GR16: $dst),
+let Defs=[HL] in def LOAD_16_WITH_IMM_ADDR : I8085Pseudo<(outs GR16: $dst),
                        (ins imm16Addr: $src),
                        "LOAD_16_ADDR $dst, $src", []>;
 
-let Defs=[H,L] in def LOAD_8_ADDR_CONTENT : I8085Pseudo<(outs GR8: $dst),
+let Defs=[HL] in def LOAD_8_ADDR_CONTENT : I8085Pseudo<(outs GR8: $dst),
                        (ins GR16: $src),
                        "LOAD_8_ADDR_CONTENT $dst, $src", [(set i8: $dst, (load i16: $src))]>;
 
-let Defs=[H,L] in def LOAD_16_ADDR_CONTENT : I8085Pseudo<(outs GR16: $dst),
+let Defs=[HL] in def LOAD_16_ADDR_CONTENT : I8085Pseudo<(outs GR16: $dst),
                        (ins GR16: $src),
                        "LOAD_16_ADDR_CONTENT $dst, $src", [(set i16: $dst, (load i16: $src))]>;
 
-let Defs=[H,L] in def STORE_8_ADDR_CONTENT : I8085Pseudo<(outs),
+let Defs=[HL] in def STORE_8_ADDR_CONTENT : I8085Pseudo<(outs),
                        (ins GR16: $addr, GR8NoHL: $src),
                        "STORE_8_ADDR_CONTENT $addr, $src",
                        [(store i8: $src, i16: $addr)]>;
 
-let Defs=[H,L] in def STORE_16_ADDR_CONTENT : I8085Pseudo<(outs),
+let Defs=[HL] in def STORE_16_ADDR_CONTENT : I8085Pseudo<(outs),
                        (ins GR16: $addr, GR16BD: $src),
                        "STORE_16_ADDR_CONTENT $addr, $src",
                        [(store i16: $src, i16: $addr)]>;
+
+let Defs=[HL] in def STORE_8_WITH_IMM_ADDR : I8085Pseudo<(outs),
+                       (ins imm16Addr: $addr, GR8NoHL: $src),
+                       "STORE_8_ADDR $addr, $src", []>;
+
+let Defs=[HL] in def STORE_16_WITH_IMM_ADDR : I8085Pseudo<(outs),
+                       (ins imm16Addr: $addr, GR16BD: $src),
+                       "STORE_16_ADDR $addr, $src", []>;
 }  
 
 

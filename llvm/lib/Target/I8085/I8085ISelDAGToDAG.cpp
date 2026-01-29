@@ -558,6 +558,53 @@ template <> bool I8085DAGToDAGISel::select<ISD::STORE>(SDNode *N) {
     CurDAG->RemoveDeadNode(N);
     return true;
   }
+  {
+    unsigned BaseOpc = BasePtr.getOpcode();
+    SDValue Addr = BasePtr;
+    if (BaseOpc == I8085ISD::WRAPPER) {
+      Addr = BasePtr.getOperand(0);
+      BaseOpc = Addr.getOpcode();
+    }
+
+    if (BaseOpc == ISD::TargetGlobalAddress ||
+        BaseOpc == ISD::TargetExternalSymbol ||
+        BaseOpc == ISD::TargetBlockAddress ||
+        BaseOpc == ISD::TargetConstantPool ||
+        BaseOpc == ISD::GlobalAddress ||
+        BaseOpc == ISD::ExternalSymbol) {
+      SDLoc DL(N);
+      SDValue Chain = ST->getChain();
+      SDValue StoreVal = ST->getValue();
+      if (MemVT == MVT::i16) {
+        SDValue RC = CurDAG->getTargetConstant(I8085::GR16BDRegClassID, DL, MVT::i32);
+        StoreVal = SDValue(CurDAG->getMachineNode(TargetOpcode::COPY_TO_REGCLASS,
+                                                  DL, MemVT, StoreVal, RC),
+                           0);
+      }
+
+      if (BaseOpc == ISD::GlobalAddress) {
+        const auto *GA = cast<GlobalAddressSDNode>(Addr);
+        Addr = CurDAG->getTargetGlobalAddress(GA->getGlobal(), DL,
+                                              getTargetLowering()->getPointerTy(CurDAG->getDataLayout()),
+                                              GA->getOffset());
+      } else if (BaseOpc == ISD::ExternalSymbol) {
+        const auto *ES = cast<ExternalSymbolSDNode>(Addr);
+        Addr = CurDAG->getTargetExternalSymbol(ES->getSymbol(), getTargetLowering()->getPointerTy(CurDAG->getDataLayout()));
+      }
+
+      if (MemVT == MVT::i32)
+        return false;
+
+      unsigned Opc = (MemVT == MVT::i8) ? I8085::STORE_8_WITH_IMM_ADDR
+                                        : I8085::STORE_16_WITH_IMM_ADDR;
+      SDValue Ops[] = {Addr, StoreVal, Chain};
+      SDNode *ResNode = CurDAG->getMachineNode(Opc, DL, MVT::Other, Ops);
+      CurDAG->setNodeMemRefs(cast<MachineSDNode>(ResNode), {ST->getMemOperand()});
+      ReplaceUses(SDValue(N, 0), SDValue(ResNode, 0));
+      CurDAG->RemoveDeadNode(N);
+      return true;
+    }
+  }
   if (BasePtr.getOpcode() == ISD::ADD || BasePtr.getOpcode() == ISD::SUB) {
     const RegisterSDNode *RN = dyn_cast<RegisterSDNode>(BasePtr.getOperand(0));
     if (RN && RN->getReg() == I8085::SP) {

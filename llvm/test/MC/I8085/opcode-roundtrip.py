@@ -24,7 +24,7 @@ TWO_BYTE = {
 
 EXPECTED_INVALID = {
     0x08, 0x10, 0x18, 0x28, 0x38,  # 8080 unused opcodes
-    0xCB, 0xD9, 0xDD, 0xED, 0xFD,  # 8080/Z80 unused opcodes
+    0xCB, 0xDD, 0xED, 0xFD,  # 8080/Z80 unused opcodes
 }
 
 ENC_RE = re.compile(r"encoding: \[(.*?)\]")

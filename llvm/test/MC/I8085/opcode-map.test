@@ -1,0 +1,2 @@
+# RUN: python3 %S/opcode-map.py llvm-mc > %t
+# RUN: diff -u %S/opcode-map.txt %t

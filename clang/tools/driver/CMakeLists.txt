@@ -77,6 +77,10 @@ set(I8085_CRT_SOURCES
   "${CLANG_SOURCE_DIR}/lib/Driver/ToolChains/i8085-libc.s"
 )
 
+set(I8085_LIBC_C_SOURCE
+  "${CLANG_SOURCE_DIR}/lib/Driver/ToolChains/i8085-libc.c"
+)
+
 set(I8085_CRT_OBJECTS
   "${I8085_SYSROOT_LIB_DIR}/crt1.o"
   "${I8085_SYSROOT_LIB_DIR}/crti.o"
@@ -122,6 +126,15 @@ set(I8085_LIBGCC_CFLAGS
   -fno-builtin
   -fno-stack-protector
   -I${I8085_BUILTINS_DIR}
+)
+
+set(I8085_LIBC_CFLAGS
+  --target=i8085-unknown-elf
+  -Os
+  -ffreestanding
+  -fno-builtin
+  -fno-stack-protector
+  -nostdinc
 )
 
 add_custom_command(
@@ -206,6 +219,23 @@ add_custom_target(clang-i8085-sysroot
     ${I8085_CRT_OBJECTS})
 
 add_dependencies(clang clang-i8085-sysroot)
+
+add_custom_command(
+  TARGET clang POST_BUILD
+  COMMAND ${CMAKE_COMMAND} -E make_directory ${I8085_SYSROOT_LIB_DIR}
+  COMMAND $<TARGET_FILE:clang> ${I8085_LIBC_CFLAGS} -c ${I8085_LIBC_C_SOURCE}
+          -o ${I8085_SYSROOT_LIB_DIR}/libc-min.o
+  COMMENT "Building i8085 minimal libc helpers"
+  VERBATIM)
+
+add_custom_command(
+  TARGET clang POST_BUILD
+  COMMAND ${LLVM_RUNTIME_OUTPUT_INTDIR}/llvm-ar rcs
+          ${I8085_SYSROOT_LIB_DIR}/libc.a
+          ${I8085_SYSROOT_LIB_DIR}/libc.o
+          ${I8085_SYSROOT_LIB_DIR}/libc-min.o
+  COMMENT "Refreshing i8085 libc with helpers"
+  VERBATIM)
 
 add_custom_command(
   TARGET clang POST_BUILD

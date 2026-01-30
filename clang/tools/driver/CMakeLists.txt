@@ -67,6 +67,20 @@ get_clang_resource_dir(I8085_RESOURCE_DIR PREFIX ${LLVM_LIBRARY_OUTPUT_INTDIR}/.
 set(I8085_SYSROOT_DIR "${I8085_RESOURCE_DIR}/i8085")
 set(I8085_SYSROOT_LIB_DIR "${I8085_SYSROOT_DIR}/lib")
 set(I8085_SYSROOT_INC_DIR "${I8085_SYSROOT_DIR}/include")
+set(I8085_SYSROOT_INCLUDE_SRC "${CLANG_SOURCE_DIR}/lib/Driver/ToolChains/i8085-include")
+
+set(I8085_SYSROOT_HEADERS
+  "${I8085_SYSROOT_INCLUDE_SRC}/assert.h"
+  "${I8085_SYSROOT_INCLUDE_SRC}/float.h"
+  "${I8085_SYSROOT_INCLUDE_SRC}/limits.h"
+  "${I8085_SYSROOT_INCLUDE_SRC}/stdalign.h"
+  "${I8085_SYSROOT_INCLUDE_SRC}/stdarg.h"
+  "${I8085_SYSROOT_INCLUDE_SRC}/stdbool.h"
+  "${I8085_SYSROOT_INCLUDE_SRC}/stddef.h"
+  "${I8085_SYSROOT_INCLUDE_SRC}/stdint.h"
+  "${I8085_SYSROOT_INCLUDE_SRC}/stdlib.h"
+  "${I8085_SYSROOT_INCLUDE_SRC}/string.h"
+)
 
 set(I8085_CRT_SOURCES
   "${CLANG_SOURCE_DIR}/lib/Driver/ToolChains/i8085-crt1.s"
@@ -138,9 +152,13 @@ set(I8085_LIBC_CFLAGS
 )
 
 add_custom_command(
-  OUTPUT ${I8085_SYSROOT_INC_DIR}
+  OUTPUT ${I8085_SYSROOT_INC_DIR}/.stamp
   COMMAND ${CMAKE_COMMAND} -E make_directory ${I8085_SYSROOT_INC_DIR}
-  COMMENT "Creating i8085 sysroot include directory"
+  COMMAND ${CMAKE_COMMAND} -E copy_directory
+          ${I8085_SYSROOT_INCLUDE_SRC} ${I8085_SYSROOT_INC_DIR}
+  COMMAND ${CMAKE_COMMAND} -E touch ${I8085_SYSROOT_INC_DIR}/.stamp
+  DEPENDS ${I8085_SYSROOT_HEADERS}
+  COMMENT "Syncing i8085 sysroot headers"
   VERBATIM)
 
 add_custom_command(
@@ -213,7 +231,7 @@ add_custom_command(
 
 add_custom_target(clang-i8085-sysroot
   DEPENDS
-    ${I8085_SYSROOT_INC_DIR}
+    ${I8085_SYSROOT_INC_DIR}/.stamp
     ${I8085_SYSROOT_LIB_DIR}/libc.a
     ${I8085_SYSROOT_LIB_DIR}/libgcc.a
     ${I8085_CRT_OBJECTS})

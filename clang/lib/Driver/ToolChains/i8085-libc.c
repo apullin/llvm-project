@@ -7,6 +7,8 @@ typedef unsigned char u8;
 
 typedef void (*atexit_fn)(void *);
 
+extern void *__dso_handle;
+
 void *memcpy(void *dst, const void *src, size_t n) {
   u8 *d = (u8 *)dst;
   const u8 *s = (const u8 *)src;
@@ -73,6 +75,16 @@ __attribute__((weak)) int __cxa_atexit(atexit_fn func, void *arg, void *dso) {
 
 __attribute__((weak)) void __cxa_finalize(void *f) {
   (void)f;
+}
+
+__attribute__((weak)) int atexit(void (*func)(void)) {
+  return __cxa_atexit((atexit_fn)func, 0, __dso_handle);
+}
+
+__attribute__((weak)) void _Exit(int status) {
+  (void)status;
+  extern void _exit(int);
+  _exit(status);
 }
 
 __attribute__((weak)) void __assert_fail(const char *expr, const char *file,

@@ -15,7 +15,7 @@ body:             |
     ; CHECK-LABEL: name:            trunc16to8_bc
     ; CHECK: $d = MOV $c
     $d = TRUNC16TO8 $bc
-    RET
+    RET implicit $sp, implicit-def $sp
 ...
 
 ---
@@ -29,8 +29,8 @@ body:             |
     ; CHECK-NEXT: ADI 128
     ; CHECK-NEXT: SBB $a
     ; CHECK-NEXT: $b = MOV $a
-    $bc = SEXT8TO16 $e
-    RET
+    $bc = SEXT8TO16 $e, implicit-def $sreg, implicit-def $a
+    RET implicit $sp, implicit-def $sp
 ...
 
 ---
@@ -42,6 +42,6 @@ body:             |
     ; CHECK: $a = MOV $c
     ; CHECK-NEXT: $e = MOV $a
     ; CHECK-NEXT: $d = MVI 0
-    $de = ZEXT8TO16 $c
-    RET
+    $de = ZEXT8TO16 $c, implicit-def $a
+    RET implicit $sp, implicit-def $sp
 ...

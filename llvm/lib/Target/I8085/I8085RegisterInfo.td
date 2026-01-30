@@ -47,9 +47,9 @@ def SP : I8085Reg<7, "SP">, DwarfRegNum<[8]>;
 def PC : I8085Reg<11, "PC">, DwarfRegNum<[11]>;
 
 let SubRegIndices = [sub_lo, sub_hi], CoveredBySubRegs = 1 in {
-def BC : I8085Reg<0, "BC", [B, C]>, DwarfRegNum<[12]>;
-def DE : I8085Reg<1, "DE", [D, E]>, DwarfRegNum<[13]>;
-def HL : I8085Reg<2, "HL", [H, L]>, DwarfRegNum<[14]>;
+def BC : I8085Reg<0, "BC", [C, B]>, DwarfRegNum<[12]>;
+def DE : I8085Reg<1, "DE", [E, D]>, DwarfRegNum<[13]>;
+def HL : I8085Reg<2, "HL", [L, H]>, DwarfRegNum<[14]>;
 }
 
 def GPRSP : RegisterClass<"I8085", [i16], 8, (add SP)>;
@@ -61,7 +61,7 @@ def CCR : RegisterClass<"I8085", [i8], 8, (add SREG)> {
 }
 
 let SubRegIndices = [sub_lo, sub_hi], CoveredBySubRegs = 1 in {
-def PSW : I8085Reg<3, "PSW", [A, SREG]>, DwarfRegNum<[10]>;
+def PSW : I8085Reg<3, "PSW", [SREG, A]>, DwarfRegNum<[10]>;
 }
 
 //===----------------------------------------------------------------------===//

@@ -23,5 +23,5 @@ body:             |
     ; CHECK-LABEL: name: cfi_large_frame
     ; CHECK: frame-setup CFI_INSTRUCTION adjust_cfa_offset 260
     ; CHECK: frame-destroy CFI_INSTRUCTION adjust_cfa_offset {{(-260|4294967036)}}
-    RET
+    RET implicit $sp, implicit-def $sp
 ...

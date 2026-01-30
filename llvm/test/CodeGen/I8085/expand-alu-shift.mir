@@ -32,8 +32,8 @@ body:             |
     ; CHECK: $a = MOV $c
     ; CHECK-NEXT: ADD $d
     ; CHECK-NEXT: $c = MOV $a
-    $c = ADD_8 $c, $d, implicit-def $sreg
-    RET
+    $c = ADD_8 $c, $d, implicit-def $sreg, implicit-def $a
+    RET implicit $sp, implicit-def $sp
 ...
 
 ---
@@ -45,8 +45,8 @@ body:             |
     ; CHECK: $a = MOV $e
     ; CHECK-NEXT: SUB $b
     ; CHECK-NEXT: $e = MOV $a
-    $e = SUB_8 $e, $b, implicit-def $sreg
-    RET
+    $e = SUB_8 $e, $b, implicit-def $sreg, implicit-def $a
+    RET implicit $sp, implicit-def $sp
 ...
 
 ---
@@ -58,8 +58,8 @@ body:             |
     ; CHECK: $a = MOV $d
     ; CHECK-NEXT: ANA $e
     ; CHECK-NEXT: $d = MOV $a
-    $d = AND_8 $d, $e, implicit-def $sreg
-    RET
+    $d = AND_8 $d, $e, implicit-def $sreg, implicit-def $a
+    RET implicit $sp, implicit-def $sp
 ...
 
 ---
@@ -71,8 +71,8 @@ body:             |
     ; CHECK: $a = MOV $b
     ; CHECK-NEXT: ORA $c
     ; CHECK-NEXT: $b = MOV $a
-    $b = OR_8 $b, $c, implicit-def $sreg
-    RET
+    $b = OR_8 $b, $c, implicit-def $sreg, implicit-def $a
+    RET implicit $sp, implicit-def $sp
 ...
 
 ---
@@ -84,8 +84,8 @@ body:             |
     ; CHECK: $a = MOV $e
     ; CHECK-NEXT: XRA $b
     ; CHECK-NEXT: $e = MOV $a
-    $e = XOR_8 $e, $b, implicit-def $sreg
-    RET
+    $e = XOR_8 $e, $b, implicit-def $sreg, implicit-def $a
+    RET implicit $sp, implicit-def $sp
 ...
 
 ---
@@ -97,8 +97,8 @@ body:             |
     ; CHECK: $a = MOV $c
     ; CHECK-NEXT: ANI 90
     ; CHECK-NEXT: $c = MOV $a
-    $c = ANDI_8 $c, 90, implicit-def $sreg
-    RET
+    $c = ANDI_8 $c, 90, implicit-def $sreg, implicit-def $a
+    RET implicit $sp, implicit-def $sp
 ...
 
 ---
@@ -110,8 +110,8 @@ body:             |
     ; CHECK: $a = MOV $d
     ; CHECK-NEXT: ORI 15
     ; CHECK-NEXT: $d = MOV $a
-    $d = ORI_8 $d, 15, implicit-def $sreg
-    RET
+    $d = ORI_8 $d, 15, implicit-def $sreg, implicit-def $a
+    RET implicit $sp, implicit-def $sp
 ...
 
 ---
@@ -123,8 +123,8 @@ body:             |
     ; CHECK: $a = MOV $e
     ; CHECK-NEXT: XRI 240
     ; CHECK-NEXT: $e = MOV $a
-    $e = XORI_8 $e, 240, implicit-def $sreg
-    RET
+    $e = XORI_8 $e, 240, implicit-def $sreg, implicit-def $a
+    RET implicit $sp, implicit-def $sp
 ...
 
 ---
@@ -139,8 +139,8 @@ body:             |
     ; CHECK-NEXT: $a = MOV $b
     ; CHECK-NEXT: ADC $d
     ; CHECK-NEXT: $b = MOV $a
-    $bc = ADD_16 $bc, $de, implicit-def $sreg
-    RET
+    $bc = ADD_16 $bc, $de, implicit-def $sreg, implicit-def $a
+    RET implicit $sp, implicit-def $sp
 ...
 
 ---
@@ -155,8 +155,8 @@ body:             |
     ; CHECK-NEXT: $a = MOV $d
     ; CHECK-NEXT: SBB $b
     ; CHECK-NEXT: $d = MOV $a
-    $de = SUB_16 $de, $bc, implicit-def $sreg
-    RET
+    $de = SUB_16 $de, $bc, implicit-def $sreg, implicit-def $a
+    RET implicit $sp, implicit-def $sp
 ...
 
 ---
@@ -171,8 +171,8 @@ body:             |
     ; CHECK-NEXT: $a = MOV $b
     ; CHECK-NEXT: ANA $d
     ; CHECK-NEXT: $b = MOV $a
-    $bc = AND_16 $bc, $de, implicit-def $sreg
-    RET
+    $bc = AND_16 $bc, $de, implicit-def $sreg, implicit-def $a
+    RET implicit $sp, implicit-def $sp
 ...
 
 ---
@@ -187,8 +187,8 @@ body:             |
     ; CHECK-NEXT: $a = MOV $d
     ; CHECK-NEXT: ORA $b
     ; CHECK-NEXT: $d = MOV $a
-    $de = OR_16 $de, $bc, implicit-def $sreg
-    RET
+    $de = OR_16 $de, $bc, implicit-def $sreg, implicit-def $a
+    RET implicit $sp, implicit-def $sp
 ...
 
 ---
@@ -203,8 +203,8 @@ body:             |
     ; CHECK-NEXT: $a = MOV $b
     ; CHECK-NEXT: XRA $d
     ; CHECK-NEXT: $b = MOV $a
-    $bc = XOR_16 $bc, $de, implicit-def $sreg
-    RET
+    $bc = XOR_16 $bc, $de, implicit-def $sreg, implicit-def $a
+    RET implicit $sp, implicit-def $sp
 ...
 
 ---
@@ -217,7 +217,7 @@ body:             |
     ; CHECK-NEXT: ADD $a
     ; CHECK-NEXT: $c = MOV $a
     $c = RL_8 $c, implicit-def $sreg, implicit-def $a, implicit $a
-    RET
+    RET implicit $sp, implicit-def $sp
 ...
 
 ---
@@ -231,7 +231,7 @@ body:             |
     ; CHECK-NEXT: ANI 127
     ; CHECK-NEXT: $c = MOV $a
     $c = RR_8 $c, implicit-def $sreg, implicit-def $a, implicit $a
-    RET
+    RET implicit $sp, implicit-def $sp
 ...
 
 ---
@@ -246,7 +246,7 @@ body:             |
     ; CHECK-NEXT: RAR
     ; CHECK-NEXT: $c = MOV $a
     $c = ASR_8 $c, implicit-def $sreg, implicit-def $a, implicit $a
-    RET
+    RET implicit $sp, implicit-def $sp
 ...
 
 ---
@@ -267,7 +267,7 @@ body:             |
     ; CHECK-NEXT: ANI 254
     ; CHECK-NEXT: $c = MOV $a
     $bc = RL_16 $bc, implicit-def $sreg, implicit-def $a, implicit $a
-    RET
+    RET implicit $sp, implicit-def $sp
 ...
 
 ---
@@ -288,7 +288,7 @@ body:             |
     ; CHECK-NEXT: ANI 127
     ; CHECK-NEXT: $d = MOV $a
     $de = RR_16 $de, implicit-def $sreg, implicit-def $a, implicit $a
-    RET
+    RET implicit $sp, implicit-def $sp
 ...
 
 ---
@@ -306,5 +306,5 @@ body:             |
     ; CHECK-NEXT: RAR
     ; CHECK-NEXT: $l = MOV $a
     $hl = ASR_16 $hl, implicit-def $sreg, implicit-def $a, implicit $a
-    RET
+    RET implicit $sp, implicit-def $sp
 ...

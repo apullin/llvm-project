@@ -2,13 +2,12 @@
 
 define i16 @argpass16(i16,i16,i16) #0  {
 ; CHECK-LABEL:   argpass16:     
-; CHECK: LXI H, 6
-; CHECK: DAD	SP
-; CHECK: MOV B, H
-; CHECK: MOV C, L
-; CHECK: MOV C, M
-; CHECK: INX H
+; CHECK: LXI H, 7
+; CHECK: DAD SP
 ; CHECK: MOV B, M
+; CHECK: LXI H, 6
+; CHECK: DAD SP
+; CHECK: MOV C, M
 ; CHECK: RET
 
   %4 = alloca i16, align 1
@@ -21,10 +20,8 @@ define i16 @argpass16(i16,i16,i16) #0  {
 define i8 @argpass8(i8,i8,i8)  {
 ; CHECK-LABEL:   argpass8:     
 ; CHECK: LXI H, 4
-; CHECK: DAD	SP
-; CHECK: MOV B, H
-; CHECK: MOV C, L
-; CHECK: LDAX B
+; CHECK: DAD SP
+; CHECK: MOV A, M
 ; CHECK: RET
 
   %4 = alloca i8, align 1

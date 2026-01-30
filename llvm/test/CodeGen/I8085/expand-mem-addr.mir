@@ -26,8 +26,8 @@ body:             |
     ; CHECK-NEXT: LDAX $bc
     ; CHECK-NEXT: $d = MOV $a
     ; CHECK-NEXT: $bc = DCX
-    $de = LOAD_16_ADDR_CONTENT $bc, implicit-def $h, implicit-def $l, implicit $sp
-    RET
+    $de = LOAD_16_ADDR_CONTENT $bc, implicit-def $hl, implicit-def $a, implicit $sp
+    RET implicit $sp, implicit-def $sp
 ...
 
 ---
@@ -38,8 +38,8 @@ body:             |
     ; CHECK-LABEL: name:            load8_de
     ; CHECK: LDAX $de
     ; CHECK-NEXT: $c = MOV $a
-    $c = LOAD_8_ADDR_CONTENT $de, implicit-def $h, implicit-def $l, implicit $sp
-    RET
+    $c = LOAD_8_ADDR_CONTENT $de, implicit-def $hl, implicit-def $a, implicit $sp
+    RET implicit $sp, implicit-def $sp
 ...
 
 ---
@@ -55,8 +55,8 @@ body:             |
     ; CHECK-NEXT: LDAX $bc
     ; CHECK-NEXT: $h = MOV $a
     ; CHECK-NEXT: $bc = DCX
-    $hl = LOAD_16_ADDR_CONTENT $bc, implicit-def $h, implicit-def $l, implicit $sp
-    RET
+    $hl = LOAD_16_ADDR_CONTENT $bc, implicit-def $hl, implicit-def $a, implicit $sp
+    RET implicit $sp, implicit-def $sp
 ...
 
 ---
@@ -71,8 +71,8 @@ body:             |
     ; CHECK-NEXT: $c = MOV_FROM_M
     ; CHECK-NEXT: $hl = INX
     ; CHECK-NEXT: $b = MOV_FROM_M
-    $bc = LOAD_16_ADDR_CONTENT $bc, implicit-def $h, implicit-def $l, implicit $sp
-    RET
+    $bc = LOAD_16_ADDR_CONTENT $bc, implicit-def $hl, implicit-def $a, implicit $sp
+    RET implicit $sp, implicit-def $sp
 ...
 
 ---
@@ -83,8 +83,8 @@ body:             |
     ; CHECK-LABEL: name:            store8_bc
     ; CHECK: $a = MOV $c
     ; CHECK-NEXT: STAX $bc
-    STORE_8_ADDR_CONTENT $bc, $c, implicit-def $h, implicit-def $l, implicit $sp
-    RET
+    STORE_8_ADDR_CONTENT $bc, $c, implicit-def $hl, implicit-def $a, implicit $sp
+    RET implicit $sp, implicit-def $sp
 ...
 
 ---
@@ -99,8 +99,8 @@ body:             |
     ; CHECK-NEXT: $a = MOV $d
     ; CHECK-NEXT: STAX $bc
     ; CHECK-NEXT: $bc = DCX
-    STORE_16_ADDR_CONTENT $bc, $de, implicit-def $h, implicit-def $l, implicit $sp
-    RET
+    STORE_16_ADDR_CONTENT $bc, $de, implicit-def $hl, implicit-def $a, implicit $sp
+    RET implicit $sp, implicit-def $sp
 ...
 
 ---
@@ -114,8 +114,8 @@ body:             |
     ; CHECK-NEXT: $hl = INX
     ; CHECK-NEXT: MOV_M $d, implicit $h, implicit $l
     ; CHECK-NEXT: $hl = DCX
-    STORE_16_ADDR_CONTENT $hl, $de, implicit-def $h, implicit-def $l, implicit $sp
-    RET
+    STORE_16_ADDR_CONTENT $hl, $de, implicit-def $hl, implicit-def $a, implicit $sp
+    RET implicit $sp, implicit-def $sp
 ...
 
 ---
@@ -126,8 +126,8 @@ body:             |
 
     ; CHECK-LABEL: name:            store8_hl
     ; CHECK: MOV_M $c, implicit $h, implicit $l
-    STORE_8_ADDR_CONTENT $hl, $c, implicit-def $h, implicit-def $l, implicit $sp
-    RET
+    STORE_8_ADDR_CONTENT $hl, $c, implicit-def $hl, implicit-def $a, implicit $sp
+    RET implicit $sp, implicit-def $sp
 ...
 
 ---
@@ -141,7 +141,7 @@ body:             |
     ; CHECK: $b = MOV $h
     ; CHECK: $c = MOV $l
     $bc = FRMIDX $sp, 6, implicit-def $sreg, implicit-def $h, implicit-def $l
-    RET
+    RET implicit $sp, implicit-def $sp
 ...
 
 ---
@@ -154,5 +154,5 @@ body:             |
     ; CHECK: $hl = LXI 8
     ; CHECK: DAD $sp
     $hl = FRMIDX $sp, 8, implicit-def $sreg, implicit-def $h, implicit-def $l
-    RET
+    RET implicit $sp, implicit-def $sp
 ...

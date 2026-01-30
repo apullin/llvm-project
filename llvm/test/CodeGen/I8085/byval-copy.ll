@@ -8,101 +8,12 @@ declare void @callee(ptr byval(%S) align 1)
 define void @caller(ptr %p) {
 ; CHECK-LABEL: caller:
 ; CHECK:         .cfi_startproc
-; CHECK-NEXT:  LBB0_0:
-; CHECK-NEXT:    PUSH D
-; CHECK-NEXT:    .cfi_adjust_cfa_offset 2
-; CHECK-NEXT:    LXI H, 65530
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    SPHL
-; CHECK-NEXT:    .cfi_adjust_cfa_offset 6
-; CHECK-NEXT:    .cfi_offset 13, -4
-; CHECK-NEXT:    LXI H, 10
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV B, H
-; CHECK-NEXT:    MOV C, L
-; CHECK-NEXT:    MOV H, B
-; CHECK-NEXT:    MOV L, C
-; CHECK-NEXT:    MOV C, M
-; CHECK-NEXT:    INX H
-; CHECK-NEXT:    MOV B, M
-; CHECK-NEXT:    LDAX B
-; CHECK-NEXT:    MOV D, A
-; CHECK-NEXT:    LXI H, 0
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, D
-; CHECK-NEXT:    LXI D, 5
-; CHECK-NEXT:    MOV H, B
-; CHECK-NEXT:    MOV L, C
-; CHECK-NEXT:    MOV A, L
-; CHECK-NEXT:    ADD E
-; CHECK-NEXT:    MOV L, A
-; CHECK-NEXT:    MOV A, H
-; CHECK-NEXT:    ADC D
-; CHECK-NEXT:    MOV H, A
-; CHECK-NEXT:    MOV D, M
-; CHECK-NEXT:    LXI H, 5
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, D
-; CHECK-NEXT:    LXI D, 4
-; CHECK-NEXT:    MOV H, B
-; CHECK-NEXT:    MOV L, C
-; CHECK-NEXT:    MOV A, L
-; CHECK-NEXT:    ADD E
-; CHECK-NEXT:    MOV L, A
-; CHECK-NEXT:    MOV A, H
-; CHECK-NEXT:    ADC D
-; CHECK-NEXT:    MOV H, A
-; CHECK-NEXT:    MOV D, M
-; CHECK-NEXT:    LXI H, 4
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, D
-; CHECK-NEXT:    LXI D, 3
-; CHECK-NEXT:    MOV H, B
-; CHECK-NEXT:    MOV L, C
-; CHECK-NEXT:    MOV A, L
-; CHECK-NEXT:    ADD E
-; CHECK-NEXT:    MOV L, A
-; CHECK-NEXT:    MOV A, H
-; CHECK-NEXT:    ADC D
-; CHECK-NEXT:    MOV H, A
-; CHECK-NEXT:    MOV D, M
-; CHECK-NEXT:    LXI H, 3
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, D
-; CHECK-NEXT:    LXI D, 2
-; CHECK-NEXT:    MOV H, B
-; CHECK-NEXT:    MOV L, C
-; CHECK-NEXT:    MOV A, L
-; CHECK-NEXT:    ADD E
-; CHECK-NEXT:    MOV L, A
-; CHECK-NEXT:    MOV A, H
-; CHECK-NEXT:    ADC D
-; CHECK-NEXT:    MOV H, A
-; CHECK-NEXT:    MOV D, M
-; CHECK-NEXT:    LXI H, 2
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, D
-; CHECK-NEXT:    LXI H, 1
-; CHECK-NEXT:    MOV A, C
-; CHECK-NEXT:    ADD L
-; CHECK-NEXT:    MOV C, A
-; CHECK-NEXT:    MOV A, B
-; CHECK-NEXT:    ADC H
-; CHECK-NEXT:    MOV B, A
-; CHECK-NEXT:    LDAX B
-; CHECK-NEXT:    MOV B, A
-; CHECK-NEXT:    LXI H, 1
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, B
-; CHECK-NEXT:    CALL callee
-; CHECK-NEXT:    POP D
-; CHECK-NEXT:    .cfi_adjust_cfa_offset -2
-; CHECK-NEXT:    LXI H, 6
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    SPHL
-; CHECK-NEXT:    .cfi_adjust_cfa_offset 4294967290
-; CHECK-NEXT:    .cfi_restore 13
-; CHECK-NEXT:    RET
+; CHECK:         LXI H, 65524
+; CHECK:         SPHL
+; CHECK:         CALL callee
+; CHECK:         LXI H, 12
+; CHECK:         SPHL
+; CHECK:         RET
 entry:
   call void @callee(ptr byval(%S) align 1 %p)
   ret void

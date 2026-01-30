@@ -20,6 +20,18 @@ namespace llvm {
 /// Holds information about the I8085 instruction selection DAG.
 class I8085SelectionDAGInfo : public SelectionDAGTargetInfo {
 public:
+  SDValue EmitTargetCodeForMemcpy(SelectionDAG &DAG, const SDLoc &dl,
+                                  SDValue Chain, SDValue Dst, SDValue Src,
+                                  SDValue Size, Align Alignment,
+                                  bool isVolatile, bool AlwaysInline,
+                                  MachinePointerInfo DstPtrInfo,
+                                  MachinePointerInfo SrcPtrInfo) const override;
+
+  SDValue EmitTargetCodeForMemset(SelectionDAG &DAG, const SDLoc &dl,
+                                  SDValue Chain, SDValue Dst, SDValue Value,
+                                  SDValue Size, Align Alignment,
+                                  bool isVolatile, bool AlwaysInline,
+                                  MachinePointerInfo DstPtrInfo) const override;
 };
 
 } // end namespace llvm

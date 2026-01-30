@@ -24,13 +24,11 @@ body:             |
   bb.0.entry:
     liveins: $de
     ; CHECK-LABEL: name: cfi_callee_saved_fixed
-    ; CHECK: frame-setup CFI_INSTRUCTION adjust_cfa_offset 2
-    ; CHECK: frame-setup CFI_INSTRUCTION adjust_cfa_offset 4
-    ; CHECK: frame-setup CFI_INSTRUCTION offset $de, -{{[0-9]+}}
-    ; CHECK: frame-destroy CFI_INSTRUCTION adjust_cfa_offset -2
-    ; CHECK: frame-destroy CFI_INSTRUCTION adjust_cfa_offset {{(-4|4294967292)}}
-    ; CHECK: frame-destroy CFI_INSTRUCTION restore $de
+    ; CHECK: GROW_STACK_BY 4
+    ; CHECK-NEXT: frame-setup CFI_INSTRUCTION adjust_cfa_offset 4
+    ; CHECK: SHRINK_STACK_BY 4
+    ; CHECK-NEXT: frame-destroy CFI_INSTRUCTION adjust_cfa_offset 4294967292
     $hl = COPY $de
     $de = IMPLICIT_DEF
-    RET
+    RET implicit $sp, implicit-def $sp
 ...

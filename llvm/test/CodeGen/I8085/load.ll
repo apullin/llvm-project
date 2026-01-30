@@ -3,11 +3,12 @@
 
 define i16 @loadtest16() #0  {
 ; CHECK-LABEL: loadtest16:
-; CHECK:       LBB0_0:
+; CHECK:         .cfi_startproc
+; CHECK-NEXT:  LBB0_0:
 ; CHECK-NEXT:    LXI H, 65532
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    SPHL
-; CHECK-NEXT:    .cfi_adjust_cfa_offset {{[0-9]+}}
+; CHECK-NEXT:    .cfi_adjust_cfa_offset 4
 ; CHECK-NEXT:    LXI B, 20000
 ; CHECK-NEXT:    LXI H, 1
 ; CHECK-NEXT:    DAD SP
@@ -15,20 +16,17 @@ define i16 @loadtest16() #0  {
 ; CHECK-NEXT:    LXI H, 0
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV M, C
-; CHECK-NEXT:    LXI H, 105
-; CHECK-NEXT:    PUSH B
-; CHECK-NEXT:    PUSH H
-; CHECK-NEXT:    LXI H, 6
+; CHECK-NEXT:    LXI D, 105
+; CHECK-NEXT:    LXI H, 3
 ; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    POP B
-; CHECK-NEXT:    MOV M, C
-; CHECK-NEXT:    INX H
-; CHECK-NEXT:    MOV M, B
-; CHECK-NEXT:    POP B
+; CHECK-NEXT:    MOV M, D
+; CHECK-NEXT:    LXI H, 2
+; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    MOV M, E
 ; CHECK-NEXT:    LXI H, 4
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    SPHL
-; CHECK-NEXT:    .cfi_adjust_cfa_offset {{[0-9]+}}
+; CHECK-NEXT:    .cfi_adjust_cfa_offset 4294967292
 ; CHECK-NEXT:    RET
 
   %1 = alloca i16, align 1
@@ -45,24 +43,24 @@ define i16 @loadtest16() #0  {
 
 define i8 @loadtest8()  {
 ; CHECK-LABEL: loadtest8:
-; CHECK:       LBB1_0:
+; CHECK:         .cfi_startproc
+; CHECK-NEXT:  LBB1_0:
 ; CHECK-NEXT:    LXI H, 65534
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    SPHL
-; CHECK-NEXT:    .cfi_adjust_cfa_offset {{[0-9]+}}
-; CHECK-NEXT:    MVI B, 111
+; CHECK-NEXT:    .cfi_adjust_cfa_offset 2
+; CHECK-NEXT:    MVI A, 111
 ; CHECK-NEXT:    LXI H, 0
 ; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, B
-; CHECK-NEXT:    MVI C, 55
+; CHECK-NEXT:    MOV M, A
+; CHECK-NEXT:    MVI B, 55
 ; CHECK-NEXT:    LXI H, 1
 ; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, C
-; CHECK-NEXT:    MOV A, B
+; CHECK-NEXT:    MOV M, B
 ; CHECK-NEXT:    LXI H, 2
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    SPHL
-; CHECK-NEXT:    .cfi_adjust_cfa_offset {{[0-9]+}}
+; CHECK-NEXT:    .cfi_adjust_cfa_offset 4294967294
 ; CHECK-NEXT:    RET
 
   %1 = alloca i8, align 1

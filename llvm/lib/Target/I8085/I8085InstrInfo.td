@@ -132,7 +132,7 @@ def addr : ComplexPattern<iPTR, 2, "SelectAddr", [], [SDNPWantRoot]>;
 // pointer before prolog-epilog rewriting occurs.
 // Pessimistically assume ADJCALLSTACKDOWN / ADJCALLSTACKUP will become
 // sub / add which can clobber SREG.
-let Defs = [SP], Uses = [SP] in {
+let Defs = [SP, HL, SREG], Uses = [SP] in {
   def ADJCALLSTACKDOWN : I8085Pseudo<(outs),
                                 (ins I8085Imm16
                                  : $amt, I8085Imm16
@@ -161,7 +161,7 @@ let Defs = [SP], Uses = [SP] in {
 //===----------------------------------------------------------------------===//
 //===----------------------------------------------------------------------===//
 
-let Constraints = "$src = $rd", Defs=[SREG]  in {
+let Constraints = "$src = $rd", Defs=[SREG, A]  in {
 
   def SUB_8
       : I8085Pseudo<(outs GR8: $rd),
@@ -271,7 +271,7 @@ def INR : F3<0b0,(outs GR8: $rd), (ins GR8: $rs), "INR $rs", []>;
 //===----------------------------------------------------------------------===//
 
 
-let Constraints = "$src = $rd", Defs=[SREG]  in {
+let Constraints = "$src = $rd", Defs=[SREG, A]  in {
 
   def AND_8
       : I8085Pseudo<(outs GR8: $rd),
@@ -351,13 +351,13 @@ def OUT : F5<0b11010011,(outs), (ins I8085Imm8: $k), "OUT $k", []>;
 
 
 let Constraints = "$rs = $rd", Defs=[SREG]  in {
-  let Defs=[SREG,A], Uses=[A] in def RL_8 : I8085Pseudo<(outs GR8: $rd), (ins GR8: $rs), "RL_8 $rs", []>;
-  let Defs=[SREG,A], Uses=[A] in def RR_8 : I8085Pseudo<(outs GR8: $rd), (ins GR8: $rs), "RR_8 $rs", []>;
-  let Defs=[SREG,A], Uses=[A] in def ASR_8 : I8085Pseudo<(outs GR8: $rd), (ins GR8: $rs), "ASR_8 $rs", []>;
+  let Defs=[SREG,A] in def RL_8 : I8085Pseudo<(outs GR8: $rd), (ins GR8: $rs), "RL_8 $rs", []>;
+  let Defs=[SREG,A] in def RR_8 : I8085Pseudo<(outs GR8: $rd), (ins GR8: $rs), "RR_8 $rs", []>;
+  let Defs=[SREG,A] in def ASR_8 : I8085Pseudo<(outs GR8: $rd), (ins GR8: $rs), "ASR_8 $rs", []>;
 
-  let Defs=[SREG,A], Uses=[A] in def RL_16 : I8085Pseudo<(outs GR16: $rd), (ins GR16: $rs), "RL_16 $rs", []>;
-  let Defs=[SREG,A], Uses=[A] in def RR_16 : I8085Pseudo<(outs GR16: $rd), (ins GR16: $rs), "RR_16 $rs", []>;
-  let Defs=[SREG,A], Uses=[A] in def ASR_16 : I8085Pseudo<(outs GR16: $rd), (ins GR16: $rs), "ASR_16 $rs", []>;
+  let Defs=[SREG,A] in def RL_16 : I8085Pseudo<(outs GR16: $rd), (ins GR16: $rs), "RL_16 $rs", []>;
+  let Defs=[SREG,A] in def RR_16 : I8085Pseudo<(outs GR16: $rd), (ins GR16: $rs), "RR_16 $rs", []>;
+  let Defs=[SREG,A] in def ASR_16 : I8085Pseudo<(outs GR16: $rd), (ins GR16: $rs), "ASR_16 $rs", []>;
 }
 
 let Defs=[SREG,A], Uses=[A] in def RLC : F1<0b00000111,(outs), (ins), "RLC", []>;
@@ -437,7 +437,7 @@ let Uses = [H,L] in {
 let Uses=[A] in def STA : F6<0b00110010,(outs), (ins imm16Addr: $k), "STA $k", []>;
 let Defs=[A] in def LDA : F6<0b00111010,(outs), (ins imm16Addr: $k), "LDA $k", []>;
 
-let Defs=[SP], Uses=[SP] in {
+let Defs=[SP, HL, SREG], Uses=[SP] in {
 
 def GROW_STACK_BY 
     : I8085Pseudo<(outs),
@@ -469,11 +469,11 @@ let Defs=[HL] in def STORE_8 : I8085Pseudo<(outs),
                         "STORE $memri, $reg", [(store i8: $reg, addr: $memri)]>;
 
 
-let Defs=[HL] in def LOAD_16_WITH_ADDR : I8085Pseudo<(outs GR16: $dst),
+let Defs=[A] in def LOAD_16_WITH_ADDR : I8085Pseudo<(outs GR16: $dst),
                        (ins mspi: $src),
                        "LOAD $dst, $src", [(set i16: $dst, (load addr: $src))]>;    
 
-let Defs=[HL] in def LOAD_8_WITH_ADDR : I8085Pseudo<(outs GR8: $dst),
+def LOAD_8_WITH_ADDR : I8085Pseudo<(outs GR8: $dst),
                        (ins mspi: $src),
                        "LOAD $dst, $src", [(set i8: $dst, (load addr: $src))]>;
 
@@ -488,8 +488,10 @@ let Defs=[HL] in def STORE_16_AT_OFFSET_WITH_SP : I8085Pseudo<(outs),
 
 }       
 
-def POP : F10<0b0001,(outs GR16PP: $rd), (ins), "POP $rd", []>;
-def PUSH : F10<0b0101,(outs), (ins GR16PP: $rd), "PUSH $rd", []>;
+let Uses = [SP], Defs = [SP] in {
+  def POP : F10<0b0001,(outs GR16PP: $rd), (ins), "POP $rd", []>;
+  def PUSH : F10<0b0101,(outs), (ins GR16PP: $rd), "PUSH $rd", []>;
+}
 
 let Uses=[SP] in {
 
@@ -497,24 +499,24 @@ let Defs=[HL] in def LOAD_8_WITH_IMM_ADDR : I8085Pseudo<(outs GR8: $dst),
                        (ins imm16Addr: $src),
                        "LOAD_8_ADDR $dst, $src", []>;  
 
-let Defs=[HL] in def LOAD_16_WITH_IMM_ADDR : I8085Pseudo<(outs GR16: $dst),
+let Defs=[HL, A] in def LOAD_16_WITH_IMM_ADDR : I8085Pseudo<(outs GR16: $dst),
                        (ins imm16Addr: $src),
                        "LOAD_16_ADDR $dst, $src", []>;
 
-let Defs=[HL] in def LOAD_8_ADDR_CONTENT : I8085Pseudo<(outs GR8: $dst),
+let Defs=[HL, A] in def LOAD_8_ADDR_CONTENT : I8085Pseudo<(outs GR8: $dst),
                        (ins GR16: $src),
                        "LOAD_8_ADDR_CONTENT $dst, $src", [(set i8: $dst, (load i16: $src))]>;
 
-let Defs=[HL] in def LOAD_16_ADDR_CONTENT : I8085Pseudo<(outs GR16: $dst),
+let Defs=[HL, A] in def LOAD_16_ADDR_CONTENT : I8085Pseudo<(outs GR16: $dst),
                        (ins GR16: $src),
                        "LOAD_16_ADDR_CONTENT $dst, $src", [(set i16: $dst, (load i16: $src))]>;
 
-let Defs=[HL] in def STORE_8_ADDR_CONTENT : I8085Pseudo<(outs),
+let Defs=[HL, A] in def STORE_8_ADDR_CONTENT : I8085Pseudo<(outs),
                        (ins GR16: $addr, GR8NoHL: $src),
                        "STORE_8_ADDR_CONTENT $addr, $src",
                        [(store i8: $src, i16: $addr)]>;
 
-let Defs=[HL] in def STORE_16_ADDR_CONTENT : I8085Pseudo<(outs),
+let Defs=[HL, A] in def STORE_16_ADDR_CONTENT : I8085Pseudo<(outs),
                        (ins GR16: $addr, GR16BD: $src),
                        "STORE_16_ADDR_CONTENT $addr, $src",
                        [(store i16: $src, i16: $addr)]>;
@@ -534,13 +536,13 @@ def addressTarget : Operand<OtherVT> {
   let EncoderMethod = "encodeCallTarget<I8085::fixup_16, 1>";
 }
 
-let isCall = 1 in {                                                                                                 
-let Uses = [SP] in def CALL : F6<0b11001101,(outs), (ins imm16Addr:$k),
+let isCall = 1 in {
+let Uses = [SP], Defs = [SP, A, B, C, D, E, H, L] in def CALL : F6<0b11001101,(outs), (ins imm16Addr:$k),
                                        "CALL $k", [(I8085call imm:$k)]>;
 }
 
 let isCall = 1 in {
-let Uses = [SP, HL] in def CALL_INDIRECT : I8085Pseudo<(outs), (ins),
+let Uses = [SP, HL], Defs = [SP, A, B, C, D, E, H, L] in def CALL_INDIRECT : I8085Pseudo<(outs), (ins),
                                        "CALL_INDIRECT", []>;
 }
 
@@ -550,8 +552,10 @@ let isCall = 1, isTerminator = 1, isReturn = 1, isBarrier = 1, Uses = [SP] in {
 }
 
 let isTerminator = 1, isReturn = 1, isBarrier = 1 in {
-  def RET : F1<0b11001001, (outs), (ins), "RET", [(I8085retflag)]>;
-  def RETI : F1<0b11011001, (outs), (ins), "RETI", [(I8085retiflag)]>;
+  let Uses = [SP], Defs = [SP] in {
+    def RET : F1<0b11001001, (outs), (ins), "RET", [(I8085retflag)]>;
+    def RETI : F1<0b11011001, (outs), (ins), "RETI", [(I8085retiflag)]>;
+  }
 }
 
 def RST : FRST<(outs), (ins I8085Imm8: $k), "RST $k", []>;
@@ -593,7 +597,7 @@ def : Pat<(add i8: $src1, (imm :$src2)),(ADD_8 i8: $src1, (MVI imm: $src2))>;
 def : Pat<(add i16: $src1, (imm :$src2)),(ADD_16 i16: $src1, (LOAD_16 imm: $src2))>;
 
 
-def SEXT8TO16
+let Defs=[SREG, A] in def SEXT8TO16
     : I8085Pseudo<(outs GR16
                        : $dst),
                       (ins GR8
@@ -603,7 +607,7 @@ def SEXT8TO16
                         : $dst, (sext i8
                                  : $src))]>;
 
-def ZEXT8TO16
+let Defs=[A] in def ZEXT8TO16
     : I8085Pseudo<(outs GR16
                        : $dst),
                       (ins GR8
@@ -611,9 +615,9 @@ def ZEXT8TO16
                       "zext8to16 $dst, $src",
                       [(set i16
                         : $dst, (zext i8
-                                 : $src))]>;                               
+                                 : $src))]>;
 
-def AEXT8TO16
+let Defs=[A] in def AEXT8TO16
     : I8085Pseudo<(outs GR16
                        : $dst),
                       (ins GR8

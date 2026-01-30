@@ -23,9 +23,8 @@ body:             |
   bb.0.entry:
     liveins: $de
     ; CHECK-LABEL: name: cfi_callee_saved
-    ; CHECK: frame-setup CFI_INSTRUCTION adjust_cfa_offset 2
-    ; CHECK: frame-setup CFI_INSTRUCTION offset $de, -{{[0-9]+}}
-    ; CHECK: frame-destroy CFI_INSTRUCTION adjust_cfa_offset -2
-    ; CHECK: frame-destroy CFI_INSTRUCTION restore $de
-    RET
+    ; CHECK-NOT: CFI_INSTRUCTION
+    ; CHECK: SPHL
+    ; CHECK: RET
+    RET implicit $sp, implicit-def $sp
 ...

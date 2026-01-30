@@ -60,9 +60,6 @@ BitVector I8085RegisterInfo::getReservedRegs(const MachineFunction &MF) const {
   Reserved.set(I8085::SP);
   Reserved.set(I8085::PC);
 
-  Reserved.set(I8085::A);
-  Reserved.set(I8085::H);
-  Reserved.set(I8085::L);
   Reserved.set(I8085::M);
 
   if (needsBasePointer(MF)) {

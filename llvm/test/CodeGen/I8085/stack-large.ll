@@ -7,34 +7,22 @@ define void @stack_large() {
 ; CHECK-LABEL: stack_large:
 ; CHECK:         .cfi_startproc
 ; CHECK-NEXT:  LBB0_0:
-; CHECK-NEXT:    PUSH D
-; CHECK-NEXT:    .cfi_adjust_cfa_offset 2
 ; CHECK-NEXT:    LXI H, 65456
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    SPHL
 ; CHECK-NEXT:    .cfi_adjust_cfa_offset 80
-; CHECK-NEXT:    .cfi_offset 13, -4
-; CHECK-NEXT:    LXI B, 79
 ; CHECK-NEXT:    LXI H, 0
 ; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV D, H
-; CHECK-NEXT:    MOV E, L
-; CHECK-NEXT:    MOV A, E
-; CHECK-NEXT:    ADD C
-; CHECK-NEXT:    MOV E, A
-; CHECK-NEXT:    MOV A, D
-; CHECK-NEXT:    ADC B
-; CHECK-NEXT:    MOV D, A
-; CHECK-NEXT:    MVI B, 1
-; CHECK-NEXT:    MOV A, B
-; CHECK-NEXT:    STAX D
-; CHECK-NEXT:    POP D
-; CHECK-NEXT:    .cfi_adjust_cfa_offset -2
+; CHECK-NEXT:    MOV B, H
+; CHECK-NEXT:    MOV C, L
+; CHECK-NEXT:    MVI A, 1
+; CHECK-NEXT:    LXI H, 79
+; CHECK-NEXT:    DAD B
+; CHECK-NEXT:    MOV M, A
 ; CHECK-NEXT:    LXI H, 80
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    SPHL
 ; CHECK-NEXT:    .cfi_adjust_cfa_offset 4294967216
-; CHECK-NEXT:    .cfi_restore 13
 ; CHECK-NEXT:    RET
   %arr = alloca [80 x i8], align 1
   %p = getelementptr inbounds [80 x i8], ptr %arr, i16 0, i16 79

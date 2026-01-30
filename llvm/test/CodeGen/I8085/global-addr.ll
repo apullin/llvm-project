@@ -10,27 +10,20 @@ define void @store_globals(i8 %a, i16 %b) {
 ; CHECK-LABEL: store_globals:
 ; CHECK:         .cfi_startproc
 ; CHECK-NEXT:  LBB0_0:
+; CHECK-NEXT:    LXI H, 2
+; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    MOV A, M
+; CHECK-NEXT:    LXI H, g8
+; CHECK-NEXT:    MOV M, A
+; CHECK-NEXT:    LXI H, 4
+; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    MOV B, M
 ; CHECK-NEXT:    LXI H, 3
 ; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV B, H
-; CHECK-NEXT:    MOV C, L
-; CHECK-NEXT:    MOV H, B
-; CHECK-NEXT:    MOV L, C
 ; CHECK-NEXT:    MOV C, M
-; CHECK-NEXT:    INX H
-; CHECK-NEXT:    MOV B, M
 ; CHECK-NEXT:    LXI H, g16
 ; CHECK-NEXT:    MOV M, C
 ; CHECK-NEXT:    INX H
-; CHECK-NEXT:    MOV M, B
-; CHECK-NEXT:    DCX H
-; CHECK-NEXT:    LXI H, 2
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV B, H
-; CHECK-NEXT:    MOV C, L
-; CHECK-NEXT:    LDAX B
-; CHECK-NEXT:    MOV B, A
-; CHECK-NEXT:    LXI H, g8
 ; CHECK-NEXT:    MOV M, B
 ; CHECK-NEXT:    RET
 entry:
@@ -43,12 +36,8 @@ define i16 @load_globals() {
 ; CHECK-LABEL: load_globals:
 ; CHECK:         .cfi_startproc
 ; CHECK-NEXT:  LBB1_0:
-; CHECK-NEXT:    PUSH D
-; CHECK-NEXT:    .cfi_adjust_cfa_offset 2
-; CHECK-NEXT:    .cfi_offset 13, -4
 ; CHECK-NEXT:    LXI H, g8
-; CHECK-NEXT:    MOV B, M
-; CHECK-NEXT:    MOV A, B
+; CHECK-NEXT:    MOV A, M
 ; CHECK-NEXT:    MOV C, A
 ; CHECK-NEXT:    MVI B, 0
 ; CHECK-NEXT:    LXI H, g16+1
@@ -61,9 +50,6 @@ define i16 @load_globals() {
 ; CHECK-NEXT:    MOV A, B
 ; CHECK-NEXT:    ADC D
 ; CHECK-NEXT:    MOV B, A
-; CHECK-NEXT:    POP D
-; CHECK-NEXT:    .cfi_adjust_cfa_offset -2
-; CHECK-NEXT:    .cfi_restore 13
 ; CHECK-NEXT:    RET
 entry:
   %a = load i8, i8* @g8, align 1

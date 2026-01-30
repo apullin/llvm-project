@@ -31,7 +31,7 @@ body:             |
     ; CHECK-NEXT: $hl = INX
     ; CHECK-NEXT: MVI_M 1
     $iax = LOAD_32 16909060, implicit $sp
-    RET
+    RET implicit $sp, implicit-def $sp
 ...
 
 ---
@@ -44,7 +44,7 @@ body:             |
     ; CHECK: ADI 1
     ; CHECK: ACI 0
     $iax = ADDI_32 $iax, 1, implicit-def $sreg
-    RET
+    RET implicit $sp, implicit-def $sp
 ...
 
 ---
@@ -57,7 +57,7 @@ body:             |
     ; CHECK: SUI 1
     ; CHECK: SBI 0
     $iax = SUBI_32 $iax, 1, implicit-def $sreg
-    RET
+    RET implicit $sp, implicit-def $sp
 ...
 
 ---
@@ -70,7 +70,7 @@ body:             |
     ; CHECK: MOV_FROM_M
     ; CHECK: MOV_M
     $ibx = MOV_32 $iax
-    RET
+    RET implicit $sp, implicit-def $sp
 ...
 
 ---
@@ -83,7 +83,7 @@ body:             |
     ; CHECK: DAD $sp
     ; CHECK: MOV_FROM_M
     $iax = LOAD_32_WITH_ADDR $sp, 6, implicit $sp
-    RET
+    RET implicit $sp, implicit-def $sp
 ...
 
 ---
@@ -99,7 +99,7 @@ body:             |
     ; CHECK: DAD $sp
     ; CHECK: MOV_M
     STORE_32 $sp, 8, $iax, implicit $sp
-    RET
+    RET implicit $sp, implicit-def $sp
 ...
 
 ---
@@ -111,7 +111,7 @@ body:             |
     ; CHECK: DAD $sp
     ; CHECK: MOV_FROM_M
     $iax = LOAD_32_WITH_IMM_ADDR @g32, implicit $sp
-    RET
+    RET implicit $sp, implicit-def $sp
 ...
 
 ---
@@ -124,7 +124,7 @@ body:             |
     ; CHECK: DAD $sp
     ; CHECK: MOV_FROM_M
     $iax = LOAD_32_ADDR_CONTENT $sp, implicit $sp
-    RET
+    RET implicit $sp, implicit-def $sp
 ...
 
 ---
@@ -137,7 +137,7 @@ body:             |
     ; CHECK: INX
     ; CHECK: MOV_FROM_M
     $iax = LOAD_32_ADDR_CONTENT $hl, implicit $sp
-    RET
+    RET implicit $sp, implicit-def $sp
 ...
 
 ---
@@ -149,5 +149,5 @@ body:             |
     ; CHECK: MOV_FROM_M
     ; CHECK: MOV_M
     STORE_32_ADDR_CONTENT $bc, $iax, implicit $sp
-    RET
+    RET implicit $sp, implicit-def $sp
 ...

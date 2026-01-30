@@ -23,6 +23,7 @@ add_llvm_target(I8085CodeGen
   I8085InstrInfo.cpp
   I8085ISelDAGToDAG.cpp
   I8085ISelLowering.cpp
+  I8085SelectionDAGInfo.cpp
   I8085CompareLowering.cpp
   I8085MCInstLower.cpp
   I8085Peephole.cpp

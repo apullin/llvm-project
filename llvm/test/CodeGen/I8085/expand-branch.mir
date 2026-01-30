@@ -20,9 +20,9 @@ body:             |
     ; CHECK-NEXT: ORI 0
     ; CHECK-NEXT: JNZ %bb.1
     JMP_8_IF $c, %bb.1, implicit-def $sreg
-    RET
+    RET implicit $sp, implicit-def $sp
   bb.1:
-    RET
+    RET implicit $sp, implicit-def $sp
 ...
 
 ---
@@ -38,9 +38,9 @@ body:             |
     ; CHECK-NEXT: ANI 255
     ; CHECK-NEXT: JNZ %bb.1
     JMP_16_IF $bc, %bb.1, implicit-def $sreg
-    RET
+    RET implicit $sp, implicit-def $sp
   bb.1:
-    RET
+    RET implicit $sp, implicit-def $sp
 ...
 
 ---
@@ -56,9 +56,9 @@ body:             |
     ; CHECK: CMP $e
     ; CHECK: JNZ %bb.
     JMP_16_IF_NOT_EQUAL $bc, $de, %bb.1, implicit-def $sreg
-    RET
+    RET implicit $sp, implicit-def $sp
   bb.1:
-    RET
+    RET implicit $sp, implicit-def $sp
 ...
 
 ---
@@ -71,11 +71,11 @@ body:             |
     ; CHECK-COUNT-4: JNZ %bb.
     JMP_16_IF_NOT_EQUAL $bc, $de, %bb.1, implicit-def $sreg
     JMP_16_IF_NOT_EQUAL $bc, $de, %bb.2, implicit-def $sreg
-    RET
+    RET implicit $sp, implicit-def $sp
   bb.1:
-    RET
+    RET implicit $sp, implicit-def $sp
   bb.2:
-    RET
+    RET implicit $sp, implicit-def $sp
 ...
 
 ---
@@ -89,9 +89,9 @@ body:             |
     ; CHECK-NEXT: ANI 128
     ; CHECK-NEXT: JZ %bb.1
     JMP_16_IF_SAME_SIGN $bc, $de, %bb.1, implicit-def $sreg
-    RET
+    RET implicit $sp, implicit-def $sp
   bb.1:
-    RET
+    RET implicit $sp, implicit-def $sp
 ...
 
 ---
@@ -104,7 +104,7 @@ body:             |
     ; CHECK-NEXT: ANI 128
     ; CHECK-NEXT: JZ %bb.1
     JMP_16_IF_POSITIVE $de, %bb.1, implicit-def $sreg
-    RET
+    RET implicit $sp, implicit-def $sp
   bb.1:
-    RET
+    RET implicit $sp, implicit-def $sp
 ...

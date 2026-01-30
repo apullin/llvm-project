@@ -42,6 +42,11 @@ public:
           SrcIdx = 1;
           RC = &I8085::GR16BDRegClass;
           break;
+        case I8085::STORE_8:
+        case I8085::STORE_16:
+          SrcIdx = 0;
+          RC = &I8085::GR16BDRegClass;
+          break;
         default:
           break;
         }
@@ -54,6 +59,9 @@ public:
           continue;
 
         Register Src = MO.getReg();
+        if (Src == I8085::SP && (MI->getOpcode() == I8085::STORE_8 ||
+                                 MI->getOpcode() == I8085::STORE_16))
+          continue;
         bool IsKill = MO.isKill();
 
         if (Src.isVirtual()) {

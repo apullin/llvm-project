@@ -466,6 +466,132 @@ template <> bool I8085DAGToDAGISel::select<ISD::LOAD>(SDNode *N) {
     return false;
 
   SDValue BasePtr = LD->getBasePtr();
+  if (const auto *FI = dyn_cast<FrameIndexSDNode>(BasePtr)) {
+    SDLoc DL(N);
+    auto PtrVT = getTargetLowering()->getPointerTy(CurDAG->getDataLayout());
+    SDValue Base = CurDAG->getTargetFrameIndex(FI->getIndex(), PtrVT);
+    SDValue Offset = CurDAG->getTargetConstant(0, DL, MVT::i16);
+    SDValue Chain = LD->getChain();
+
+    if (MemVT == MVT::i32)
+      return false;
+
+    unsigned Opc = (MemVT == MVT::i8) ? I8085::LOAD_8_WITH_ADDR
+                                      : I8085::LOAD_16_WITH_ADDR;
+    SDValue Ops[] = {Base, Offset, Chain};
+    SDNode *ResNode = CurDAG->getMachineNode(Opc, DL, MemVT, MVT::Other, Ops);
+    CurDAG->setNodeMemRefs(cast<MachineSDNode>(ResNode), {LD->getMemOperand()});
+    ReplaceUses(SDValue(N, 0), SDValue(ResNode, 0));
+    ReplaceUses(SDValue(N, 1), SDValue(ResNode, 1));
+    CurDAG->RemoveDeadNode(N);
+    return true;
+  }
+  if (BasePtr.getOpcode() == ISD::ADD || BasePtr.getOpcode() == ISD::SUB) {
+    SDValue Base = BasePtr.getOperand(0);
+    SDValue OffOp = BasePtr.getOperand(1);
+    int64_t Off = 0;
+    const FrameIndexSDNode *FI = dyn_cast<FrameIndexSDNode>(Base);
+    if (!FI && BasePtr.getOpcode() == ISD::ADD) {
+      FI = dyn_cast<FrameIndexSDNode>(OffOp);
+      if (FI)
+        OffOp = Base;
+    }
+    if (FI) {
+      if (const auto *C = dyn_cast<ConstantSDNode>(OffOp)) {
+        Off = C->getSExtValue();
+        if (BasePtr.getOpcode() == ISD::SUB)
+          Off = -Off;
+
+        if (MemVT == MVT::i32)
+          return false;
+
+        SDLoc DL(N);
+        auto PtrVT = getTargetLowering()->getPointerTy(CurDAG->getDataLayout());
+        SDValue BaseFI = CurDAG->getTargetFrameIndex(FI->getIndex(), PtrVT);
+        SDValue Offset = CurDAG->getTargetConstant(Off, DL, MVT::i16);
+        SDValue Chain = LD->getChain();
+        unsigned Opc = (MemVT == MVT::i8) ? I8085::LOAD_8_WITH_ADDR
+                                          : I8085::LOAD_16_WITH_ADDR;
+        SDValue Ops[] = {BaseFI, Offset, Chain};
+        SDNode *ResNode = CurDAG->getMachineNode(Opc, DL, MemVT, MVT::Other, Ops);
+        CurDAG->setNodeMemRefs(cast<MachineSDNode>(ResNode), {LD->getMemOperand()});
+        ReplaceUses(SDValue(N, 0), SDValue(ResNode, 0));
+        ReplaceUses(SDValue(N, 1), SDValue(ResNode, 1));
+        CurDAG->RemoveDeadNode(N);
+        return true;
+      }
+    }
+  }
+  // Global address + constant offset.
+  if (BasePtr.getOpcode() == ISD::ADD || BasePtr.getOpcode() == ISD::SUB) {
+    SDValue Base = BasePtr.getOperand(0);
+    SDValue OffOp = BasePtr.getOperand(1);
+    if (auto *C = dyn_cast<ConstantSDNode>(OffOp)) {
+      int64_t Off = C->getSExtValue();
+      if (BasePtr.getOpcode() == ISD::SUB)
+        Off = -Off;
+
+      unsigned BaseOpc = Base.getOpcode();
+      if (BaseOpc == I8085ISD::WRAPPER) {
+        Base = Base.getOperand(0);
+        BaseOpc = Base.getOpcode();
+      }
+
+      if (BaseOpc == ISD::TargetGlobalAddress ||
+          BaseOpc == ISD::TargetExternalSymbol ||
+          BaseOpc == ISD::TargetBlockAddress ||
+          BaseOpc == ISD::TargetConstantPool ||
+          BaseOpc == ISD::GlobalAddress ||
+          BaseOpc == ISD::ExternalSymbol) {
+        SDLoc DL(N);
+        SDValue Chain = LD->getChain();
+        if (BaseOpc == ISD::GlobalAddress) {
+          const auto *GA = cast<GlobalAddressSDNode>(Base);
+          Base = CurDAG->getTargetGlobalAddress(
+              GA->getGlobal(), DL,
+              getTargetLowering()->getPointerTy(CurDAG->getDataLayout()),
+              GA->getOffset() + Off);
+        } else if (BaseOpc == ISD::ExternalSymbol) {
+          const auto *ES = cast<ExternalSymbolSDNode>(Base);
+          Base = CurDAG->getTargetExternalSymbol(
+              ES->getSymbol(),
+              getTargetLowering()->getPointerTy(CurDAG->getDataLayout()));
+          // Apply constant offset to external symbols via an immediate add.
+          if (Off != 0) {
+            SDValue AddrImm =
+                CurDAG->getTargetConstant(static_cast<uint16_t>(Off), DL,
+                                          MVT::i16);
+            unsigned Opc = (MemVT == MVT::i8) ? I8085::LOAD_8_WITH_IMM_ADDR
+                                              : I8085::LOAD_16_WITH_IMM_ADDR;
+            SDValue Ops[] = {AddrImm, Chain};
+            SDNode *ResNode =
+                CurDAG->getMachineNode(Opc, DL, MemVT, MVT::Other, Ops);
+            CurDAG->setNodeMemRefs(cast<MachineSDNode>(ResNode),
+                                   {LD->getMemOperand()});
+            ReplaceUses(SDValue(N, 0), SDValue(ResNode, 0));
+            ReplaceUses(SDValue(N, 1), SDValue(ResNode, 1));
+            CurDAG->RemoveDeadNode(N);
+            return true;
+          }
+        }
+
+        if (MemVT == MVT::i32)
+          return false;
+
+        unsigned Opc = (MemVT == MVT::i8) ? I8085::LOAD_8_WITH_IMM_ADDR
+                                          : I8085::LOAD_16_WITH_IMM_ADDR;
+        SDValue Ops[] = {Base, Chain};
+        SDNode *ResNode =
+            CurDAG->getMachineNode(Opc, DL, MemVT, MVT::Other, Ops);
+        CurDAG->setNodeMemRefs(cast<MachineSDNode>(ResNode),
+                               {LD->getMemOperand()});
+        ReplaceUses(SDValue(N, 0), SDValue(ResNode, 0));
+        ReplaceUses(SDValue(N, 1), SDValue(ResNode, 1));
+        CurDAG->RemoveDeadNode(N);
+        return true;
+      }
+    }
+  }
   if (BasePtr.getOpcode() == ISD::ADD || BasePtr.getOpcode() == ISD::SUB) {
     const RegisterSDNode *RN = dyn_cast<RegisterSDNode>(BasePtr.getOperand(0));
     if (RN && RN->getReg() == I8085::SP) {
@@ -476,6 +602,30 @@ template <> bool I8085DAGToDAGISel::select<ISD::LOAD>(SDNode *N) {
       int64_t Off = C->getSExtValue();
       if (BasePtr.getOpcode() == ISD::SUB)
         Off = -Off;
+
+      // If this looks like an absolute address folded into SP+imm, treat it
+      // as an absolute load instead of a stack access.
+      if (Off > 0x1000 || Off < -0x1000) {
+        SDLoc DL(N);
+        SDValue Chain = LD->getChain();
+        uint16_t AddrImm = static_cast<uint16_t>(Off);
+        SDValue Addr = CurDAG->getTargetConstant(AddrImm, DL, MVT::i16);
+
+        if (MemVT == MVT::i32)
+          return false;
+
+        unsigned Opc = (MemVT == MVT::i8) ? I8085::LOAD_8_WITH_IMM_ADDR
+                                          : I8085::LOAD_16_WITH_IMM_ADDR;
+        SDValue Ops[] = {Addr, Chain};
+        SDNode *ResNode =
+            CurDAG->getMachineNode(Opc, DL, MemVT, MVT::Other, Ops);
+        CurDAG->setNodeMemRefs(cast<MachineSDNode>(ResNode),
+                               {LD->getMemOperand()});
+        ReplaceUses(SDValue(N, 0), SDValue(ResNode, 0));
+        ReplaceUses(SDValue(N, 1), SDValue(ResNode, 1));
+        CurDAG->RemoveDeadNode(N);
+        return true;
+      }
 
       SDLoc DL(N);
       SDValue Offset = CurDAG->getTargetConstant(Off, DL, MVT::i16);
@@ -498,6 +648,54 @@ template <> bool I8085DAGToDAGISel::select<ISD::LOAD>(SDNode *N) {
       SDValue Ops[] = {BaseReg, Offset, Chain};
       SDNode *ResNode = CurDAG->getMachineNode(Opc, DL, MemVT, MVT::Other, Ops);
       CurDAG->setNodeMemRefs(cast<MachineSDNode>(ResNode), {LD->getMemOperand()});
+      ReplaceUses(SDValue(N, 0), SDValue(ResNode, 0));
+      ReplaceUses(SDValue(N, 1), SDValue(ResNode, 1));
+      CurDAG->RemoveDeadNode(N);
+      return true;
+    }
+  }
+
+  // Absolute address loads.
+  {
+    unsigned BaseOpc = BasePtr.getOpcode();
+    SDValue Addr = BasePtr;
+    if (BaseOpc == I8085ISD::WRAPPER) {
+      Addr = BasePtr.getOperand(0);
+      BaseOpc = Addr.getOpcode();
+    }
+
+    if (BaseOpc == ISD::TargetGlobalAddress ||
+        BaseOpc == ISD::TargetExternalSymbol ||
+        BaseOpc == ISD::TargetBlockAddress ||
+        BaseOpc == ISD::TargetConstantPool ||
+        BaseOpc == ISD::GlobalAddress ||
+        BaseOpc == ISD::ExternalSymbol) {
+      SDLoc DL(N);
+      SDValue Chain = LD->getChain();
+
+      if (BaseOpc == ISD::GlobalAddress) {
+        const auto *GA = cast<GlobalAddressSDNode>(Addr);
+        Addr = CurDAG->getTargetGlobalAddress(
+            GA->getGlobal(), DL,
+            getTargetLowering()->getPointerTy(CurDAG->getDataLayout()),
+            GA->getOffset());
+      } else if (BaseOpc == ISD::ExternalSymbol) {
+        const auto *ES = cast<ExternalSymbolSDNode>(Addr);
+        Addr = CurDAG->getTargetExternalSymbol(
+            ES->getSymbol(),
+            getTargetLowering()->getPointerTy(CurDAG->getDataLayout()));
+      }
+
+      if (MemVT == MVT::i32)
+        return false;
+
+      unsigned Opc = (MemVT == MVT::i8) ? I8085::LOAD_8_WITH_IMM_ADDR
+                                        : I8085::LOAD_16_WITH_IMM_ADDR;
+      SDValue Ops[] = {Addr, Chain};
+      SDNode *ResNode =
+          CurDAG->getMachineNode(Opc, DL, MemVT, MVT::Other, Ops);
+      CurDAG->setNodeMemRefs(cast<MachineSDNode>(ResNode),
+                             {LD->getMemOperand()});
       ReplaceUses(SDValue(N, 0), SDValue(ResNode, 0));
       ReplaceUses(SDValue(N, 1), SDValue(ResNode, 1));
       CurDAG->RemoveDeadNode(N);

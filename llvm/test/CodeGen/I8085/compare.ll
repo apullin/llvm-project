@@ -5,31 +5,22 @@
 
 define i8 @cmp_eq_i8(i8 %a, i8 %b) {
 ; CHECK-LABEL: cmp_eq_i8:
-; CHECK:       LBB0_0:
-; CHECK-NEXT:    PUSH D
-; CHECK-NEXT:    .cfi_adjust_cfa_offset 2
-; CHECK:    LXI H, 5
+; CHECK:         .cfi_startproc
+; CHECK-NEXT:  LBB0_0:
+; CHECK-NEXT:    LXI H, 3
 ; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV B, H
-; CHECK-NEXT:    MOV C, L
-; CHECK-NEXT:    LDAX B
-; CHECK-NEXT:    MOV B, A
-; CHECK-NEXT:    LXI H, 4
+; CHECK-NEXT:    MOV B, M
+; CHECK-NEXT:    LXI H, 2
 ; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV D, H
-; CHECK-NEXT:    MOV E, L
-; CHECK-NEXT:    LDAX D
+; CHECK-NEXT:    MOV A, M
 ; CHECK-NEXT:    SUB B
 ; CHECK-NEXT:    JZ LBB0_2
 ; CHECK-NEXT:  LBB0_1:
-; CHECK-NEXT:    MVI B, 0
-; CHECK-NEXT:    JMP LBB0_3
+; CHECK-NEXT:    MVI A, 0
+; CHECK-NEXT:    RET
 ; CHECK-NEXT:  LBB0_2:
-; CHECK-NEXT:    MVI B, 1
-; CHECK-NEXT:  LBB0_3:
-; CHECK-NEXT:    MOV A, B
-; CHECK-NEXT:    POP D
-; CHECK:    RET
+; CHECK-NEXT:    MVI A, 1
+; CHECK-NEXT:    RET
 
   %cmp = icmp eq i8 %a, %b
   %sel = select i1 %cmp, i8 1, i8 0
@@ -40,31 +31,22 @@ define i8 @cmp_eq_i8(i8 %a, i8 %b) {
 
 define i8 @cmp_ult_i8(i8 %a, i8 %b) {
 ; CHECK-LABEL: cmp_ult_i8:
-; CHECK:       LBB1_0:
-; CHECK-NEXT:    PUSH D
-; CHECK-NEXT:    .cfi_adjust_cfa_offset 2
-; CHECK:    LXI H, 5
+; CHECK:         .cfi_startproc
+; CHECK-NEXT:  LBB1_0:
+; CHECK-NEXT:    LXI H, 3
 ; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV B, H
-; CHECK-NEXT:    MOV C, L
-; CHECK-NEXT:    LDAX B
-; CHECK-NEXT:    MOV B, A
-; CHECK-NEXT:    LXI H, 4
+; CHECK-NEXT:    MOV B, M
+; CHECK-NEXT:    LXI H, 2
 ; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV D, H
-; CHECK-NEXT:    MOV E, L
-; CHECK-NEXT:    LDAX D
+; CHECK-NEXT:    MOV A, M
 ; CHECK-NEXT:    SUB B
 ; CHECK-NEXT:    JC LBB1_2
 ; CHECK-NEXT:  LBB1_1:
-; CHECK-NEXT:    MVI B, 0
-; CHECK-NEXT:    JMP LBB1_3
+; CHECK-NEXT:    MVI A, 0
+; CHECK-NEXT:    RET
 ; CHECK-NEXT:  LBB1_2:
-; CHECK-NEXT:    MVI B, 1
-; CHECK-NEXT:  LBB1_3:
-; CHECK-NEXT:    MOV A, B
-; CHECK-NEXT:    POP D
-; CHECK:    RET
+; CHECK-NEXT:    MVI A, 1
+; CHECK-NEXT:    RET
 
   %cmp = icmp ult i8 %a, %b
   %sel = select i1 %cmp, i8 1, i8 0
@@ -75,76 +57,35 @@ define i8 @cmp_ult_i8(i8 %a, i8 %b) {
 
 define i8 @cmp_eq_i16(i16 %a, i16 %b) {
 ; CHECK-LABEL: cmp_eq_i16:
-; CHECK:       LBB2_0:
-; CHECK-NEXT:    PUSH D
-; CHECK-NEXT:    .cfi_adjust_cfa_offset 2
-; CHECK:    LXI H, 65532
+; CHECK:         .cfi_startproc
+; CHECK-NEXT:  LBB2_0:
+; CHECK-NEXT:    LXI H, 5
 ; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    SPHL
-; CHECK-NEXT:    .cfi_adjust_cfa_offset {{[0-9]+}}
-; CHECK:    LXI H, 10
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV B, H
-; CHECK-NEXT:    MOV C, L
-; CHECK-NEXT:    MOV H, B
-; CHECK-NEXT:    MOV L, C
-; CHECK-NEXT:    MOV C, M
-; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    MOV B, M
-; CHECK-NEXT:    LXI H, 3
+; CHECK-NEXT:    LXI H, 4
 ; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, B
-; CHECK-NEXT:    LXI H, 2
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, C
-; CHECK-NEXT:    LXI H, 8
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV B, H
-; CHECK-NEXT:    MOV C, L
-; CHECK-NEXT:    MOV H, B
-; CHECK-NEXT:    MOV L, C
 ; CHECK-NEXT:    MOV C, M
-; CHECK-NEXT:    INX H
-; CHECK-NEXT:    MOV B, M
-; CHECK-NEXT:    LXI H, 1
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, B
-; CHECK-NEXT:    LXI H, 0
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, C
-; CHECK-NEXT:    MVI B, 1
 ; CHECK-NEXT:    LXI H, 3
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV D, M
 ; CHECK-NEXT:    LXI H, 2
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV E, M
-; CHECK-NEXT:    LXI H, 0
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
-; CHECK-NEXT:    INX H
-; CHECK-NEXT:    MOV H, M
-; CHECK-NEXT:    MOV L, A
-; CHECK-NEXT:    MOV A, H
-; CHECK-NEXT:    CMP D
-; CHECK-NEXT:    JNZ LBB2_3
+; CHECK-NEXT:    MVI A, 1
+; CHECK-NEXT:    MOV A, D
+; CHECK-NEXT:    CMP B
+; CHECK-NEXT:    JNZ LBB2_4
 ; CHECK-NEXT:  LBB2_1:
-; CHECK-NEXT:    MOV A, L
-; CHECK-NEXT:    CMP E
-; CHECK-NEXT:    JNZ LBB2_3
+; CHECK-NEXT:    MOV A, E
+; CHECK-NEXT:    CMP C
+; CHECK-NEXT:    JNZ LBB2_4
 ; CHECK-NEXT:  LBB2_2:
-; CHECK-NEXT:    JMP LBB2_5
 ; CHECK-NEXT:  LBB2_3:
+; CHECK-NEXT:    RET
 ; CHECK-NEXT:  LBB2_4:
-; CHECK-NEXT:    MVI B, 0
 ; CHECK-NEXT:  LBB2_5:
-; CHECK-NEXT:    MOV A, B
-; CHECK:    POP D
-; CHECK:    LXI H, 4
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    SPHL
-; CHECK-NEXT:    .cfi_adjust_cfa_offset {{[0-9]+}}
-; CHECK:    RET
+; CHECK-NEXT:    MVI A, 0
+; CHECK-NEXT:    RET
 
   %cmp = icmp eq i16 %a, %b
   %sel = select i1 %cmp, i8 1, i8 0
@@ -155,27 +96,20 @@ define i8 @cmp_eq_i16(i16 %a, i16 %b) {
 
 define i8 @cmp_ult_i16(i16 %a, i16 %b) {
 ; CHECK-LABEL: cmp_ult_i16:
-; CHECK:       LBB3_0:
-; CHECK-NEXT:    PUSH D
-; CHECK-NEXT:    .cfi_adjust_cfa_offset 2
-; CHECK:    LXI H, 6
+; CHECK:         .cfi_startproc
+; CHECK-NEXT:  LBB3_0:
+; CHECK-NEXT:    LXI H, 5
 ; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV B, H
-; CHECK-NEXT:    MOV C, L
-; CHECK-NEXT:    MOV H, B
-; CHECK-NEXT:    MOV L, C
-; CHECK-NEXT:    MOV C, M
-; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    MOV B, M
 ; CHECK-NEXT:    LXI H, 4
 ; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV D, H
-; CHECK-NEXT:    MOV E, L
-; CHECK-NEXT:    MOV H, D
-; CHECK-NEXT:    MOV L, E
-; CHECK-NEXT:    MOV E, M
-; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV C, M
+; CHECK-NEXT:    LXI H, 3
+; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV D, M
+; CHECK-NEXT:    LXI H, 2
+; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    MOV E, M
 ; CHECK-NEXT:    MOV A, E
 ; CHECK-NEXT:    SUB C
 ; CHECK-NEXT:    MOV E, A
@@ -186,14 +120,11 @@ define i8 @cmp_ult_i16(i16 %a, i16 %b) {
 ; CHECK-NEXT:    MOV C, E
 ; CHECK-NEXT:    JNC LBB3_2
 ; CHECK-NEXT:  LBB3_1:
-; CHECK-NEXT:    MVI B, 1
-; CHECK-NEXT:    JMP LBB3_3
+; CHECK-NEXT:    MVI A, 1
+; CHECK-NEXT:    RET
 ; CHECK-NEXT:  LBB3_2:
-; CHECK-NEXT:    MVI B, 0
-; CHECK-NEXT:  LBB3_3:
-; CHECK-NEXT:    MOV A, B
-; CHECK-NEXT:    POP D
-; CHECK:    RET
+; CHECK-NEXT:    MVI A, 0
+; CHECK-NEXT:    RET
 
   %cmp = icmp ult i16 %a, %b
   %sel = select i1 %cmp, i8 1, i8 0

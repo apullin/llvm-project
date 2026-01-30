@@ -370,7 +370,8 @@ template <> bool I8085ExpandPseudo32::expand<I8085::RR_32>(Block &MBB, BlockIt M
   unsigned srcReg = MI.getOperand(0).getReg();
 
   // Clear carry before rotate-through-carry sequence.
-  buildMI(MBB, MBBI, I8085::XRA).addReg(I8085::A);
+  buildMI(MBB, MBBI, I8085::STC);
+  buildMI(MBB, MBBI, I8085::CMC);
 
   emitScratchAddr(MBB, MBBI, srcReg, 3);
   for(int i=3;i>-1;i--){
@@ -488,7 +489,8 @@ template <> bool I8085ExpandPseudo32::expand<I8085::RL_32>(Block &MBB, BlockIt M
   unsigned srcReg = MI.getOperand(0).getReg();
 
   // Clear carry before rotate-through-carry sequence.
-  buildMI(MBB, MBBI, I8085::XRA).addReg(I8085::A);
+  buildMI(MBB, MBBI, I8085::STC);
+  buildMI(MBB, MBBI, I8085::CMC);
 
   emitScratchAddr(MBB, MBBI, srcReg, 0);
   for(int i=0;i<4;i++){

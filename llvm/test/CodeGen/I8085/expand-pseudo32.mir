@@ -23,7 +23,7 @@ body:             |
     ; CHECK-NEXT: $hl = INX
     ; CHECK-NEXT: MVI_M 1
     $iax = MVI_32 16909060
-    RET
+    RET implicit $sp, implicit-def $sp
 ...
 
 ---
@@ -36,7 +36,7 @@ body:             |
     ; CHECK: ADD_M
     ; CHECK: ADC_M
     $iax = ADD_32 $iax, $ibx, implicit-def $sreg
-    RET
+    RET implicit $sp, implicit-def $sp
 ...
 
 ---
@@ -49,5 +49,5 @@ body:             |
     ; CHECK: SUB_M
     ; CHECK: SBB_M
     $iax = SUB_32 $iax, $ibx, implicit-def $sreg
-    RET
+    RET implicit $sp, implicit-def $sp
 ...

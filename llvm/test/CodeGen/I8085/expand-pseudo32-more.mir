@@ -35,7 +35,7 @@ body:             |
     ; CHECK-NEXT: $hl = INX
     ; CHECK-NEXT: $b = MOV_FROM_M
     $bc = TRUNC32TO16 $iax
-    RET
+    RET implicit $sp, implicit-def $sp
 ...
 
 ---
@@ -48,7 +48,7 @@ body:             |
     ; CHECK-NEXT: DAD $sp
     ; CHECK-NEXT: $c = MOV_FROM_M
     $c = TRUNC32TO8 $iax
-    RET
+    RET implicit $sp, implicit-def $sp
 ...
 
 ---
@@ -67,7 +67,7 @@ body:             |
     ; CHECK-NEXT: $hl = INX
     ; CHECK-NEXT: MVI_M 0
     $iax = ZEXT16TO32 $bc
-    RET
+    RET implicit $sp, implicit-def $sp
 ...
 
 ---
@@ -89,7 +89,7 @@ body:             |
     ; CHECK-NEXT: $hl = INX
     ; CHECK-NEXT: MOV_M $a
     $iax = SEXT16TO32 $bc
-    RET
+    RET implicit $sp, implicit-def $sp
 ...
 
 ---
@@ -108,7 +108,7 @@ body:             |
     ; CHECK-NEXT: $hl = INX
     ; CHECK-NEXT: MVI_M 0
     $iax = ZEXT8TO32 $c
-    RET
+    RET implicit $sp, implicit-def $sp
 ...
 
 ---
@@ -130,7 +130,7 @@ body:             |
     ; CHECK-NEXT: $hl = INX
     ; CHECK-NEXT: MOV_M $a
     $iax = SEXT8TO32 $c
-    RET
+    RET implicit $sp, implicit-def $sp
 ...
 
 ---
@@ -146,7 +146,7 @@ body:             |
     ; CHECK: SBB $a
     ; CHECK: MOV_M $a
     $iax = SEXT32_INREG_8 $iax, implicit-def $sreg
-    RET
+    RET implicit $sp, implicit-def $sp
 ...
 
 ---
@@ -162,7 +162,7 @@ body:             |
     ; CHECK: SBB $a
     ; CHECK: MOV_M $a
     $iax = SEXT32_INREG_16 $iax, implicit-def $sreg
-    RET
+    RET implicit $sp, implicit-def $sp
 ...
 
 ---
@@ -178,7 +178,7 @@ body:             |
     ; CHECK-NEXT: DAD $sp
     ; CHECK-NEXT: MOV_M $a
     $iax = LOAD_32_ADDR_CONTENT $bc, implicit $sp
-    RET
+    RET implicit $sp, implicit-def $sp
 ...
 
 ---
@@ -191,7 +191,7 @@ body:             |
     ; CHECK-NEXT: $l = MOV $l
     ; CHECK-NEXT: $a = MOV_FROM_M
     $iax = LOAD_32_ADDR_CONTENT $hl, implicit $sp
-    RET
+    RET implicit $sp, implicit-def $sp
 ...
 
 ---
@@ -204,7 +204,7 @@ body:             |
     ; CHECK-NEXT: DAD $sp
     ; CHECK-NEXT: $a = MOV_FROM_M
     $iax = LOAD_32_ADDR_CONTENT $sp, implicit $sp
-    RET
+    RET implicit $sp, implicit-def $sp
 ...
 
 ---
@@ -220,7 +220,7 @@ body:             |
     ; CHECK-NEXT: $l = MOV $c
     ; CHECK-NEXT: MOV_M $a
     STORE_32_ADDR_CONTENT $bc, $iax, implicit $sp
-    RET
+    RET implicit $sp, implicit-def $sp
 ...
 
 ---
@@ -233,7 +233,7 @@ body:             |
     ; CHECK: POP $hl
     ; CHECK: MOV_M $a
     STORE_32_ADDR_CONTENT $hl, $iax, implicit $sp
-    RET
+    RET implicit $sp, implicit-def $sp
 ...
 
 ---
@@ -249,7 +249,7 @@ body:             |
     ; CHECK: DAD $sp
     ; CHECK: MOV_M $a
     STORE_32_ADDR_CONTENT $sp, $iax, implicit $sp
-    RET
+    RET implicit $sp, implicit-def $sp
 ...
 
 ---
@@ -258,11 +258,15 @@ body:             |
   bb.0:
     liveins: $iax
     ; CHECK-LABEL: name:            rl32_iax
-    ; CHECK: XRA $a
+    ; CHECK: STC
+    ; CHECK-NEXT: CMC
+    ; CHECK: RAL
+    ; CHECK: RAL
+    ; CHECK: RAL
     ; CHECK: RAL
     ; CHECK: ANI 254
     $iax = RL_32 $iax, implicit-def $sreg, implicit-def $a, implicit $a
-    RET
+    RET implicit $sp, implicit-def $sp
 ...
 
 ---
@@ -271,11 +275,15 @@ body:             |
   bb.0:
     liveins: $iax
     ; CHECK-LABEL: name:            rr32_iax
-    ; CHECK: XRA $a
+    ; CHECK: STC
+    ; CHECK-NEXT: CMC
+    ; CHECK: RAR
+    ; CHECK: RAR
+    ; CHECK: RAR
     ; CHECK: RAR
     ; CHECK: ANI 127
     $iax = RR_32 $iax, implicit-def $sreg, implicit-def $a, implicit $a
-    RET
+    RET implicit $sp, implicit-def $sp
 ...
 
 ---
@@ -287,7 +295,7 @@ body:             |
     ; CHECK: RLC
     ; CHECK: RAR
     $iax = ASR_32 $iax, implicit-def $sreg, implicit-def $a, implicit $a
-    RET
+    RET implicit $sp, implicit-def $sp
 ...
 
 ---
@@ -303,7 +311,7 @@ body:             |
     ; CHECK-NEXT: DAD $sp
     ; CHECK-NEXT: MOV_M $a
     $iax = LOAD_32_OFFSET_WITH_SP 8, implicit $sp
-    RET
+    RET implicit $sp, implicit-def $sp
 ...
 
 ---
@@ -337,5 +345,5 @@ body:             |
     ; CHECK-NEXT: DAD $sp
     ; CHECK-NEXT: MOV_M $a
     STORE_32_AT_OFFSET_WITH_SP $iax, 12, implicit $sp
-    RET
+    RET implicit $sp, implicit-def $sp
 ...

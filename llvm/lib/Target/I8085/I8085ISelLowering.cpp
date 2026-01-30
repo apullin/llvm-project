@@ -52,6 +52,13 @@ I8085TargetLowering::I8085TargetLowering(const I8085TargetMachine &TM,
   setSchedulingPreference(Sched::RegPressure);
   setStackPointerRegisterToSaveRestore(I8085::SP);
   setSupportsUnalignedAtomics(true);
+  // Force custom memcpy/memset expansion in SelectionDAGInfo.
+  MaxStoresPerMemcpy = 0;
+  MaxStoresPerMemcpyOptSize = 0;
+  MaxStoresPerMemmove = 0;
+  MaxStoresPerMemmoveOptSize = 0;
+  MaxStoresPerMemset = 0;
+  MaxStoresPerMemsetOptSize = 0;
 
   setTruncStoreAction(MVT::i16, MVT::i8, Expand);
   setTruncStoreAction(MVT::i32, MVT::i8, Expand);

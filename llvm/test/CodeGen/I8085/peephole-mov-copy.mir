@@ -19,5 +19,5 @@ body:             |
     ; CHECK: RET
     %0 = MOV %1
     %2 = MOV %0
-    RET
+    RET implicit $sp, implicit-def $sp
 ...

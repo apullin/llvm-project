@@ -52,12 +52,11 @@ void I8085InstPrinter::printInst(const MCInst *MI, uint64_t Address,
 
 const char *I8085InstPrinter::getPrettyRegisterName(unsigned RegNum,
                                                   MCRegisterInfo const &MRI) {
-  // GCC prints register pairs by just printing the lower register
-  // If the register contains a subregister, print it instead.
+  // Print register pairs by using the high register name (B/D/H).
   if (RegNum == I8085::BC || RegNum == I8085::DE || RegNum == I8085::HL) {
     if (MRI.getNumSubRegIndices() > 0) {
-      unsigned RegLoNum = MRI.getSubReg(RegNum, I8085::sub_lo);
-      RegNum = (RegLoNum != I8085::NoRegister) ? RegLoNum : RegNum;
+      unsigned RegHiNum = MRI.getSubReg(RegNum, I8085::sub_hi);
+      RegNum = (RegHiNum != I8085::NoRegister) ? RegHiNum : RegNum;
     }
   }
 

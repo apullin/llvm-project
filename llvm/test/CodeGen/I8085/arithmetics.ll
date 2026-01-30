@@ -3,28 +3,20 @@
 
 define i16 @add_sub_1(i16,i16) {
 ; CHECK-LABEL: add_sub_1:
-; CHECK:       LBB0_0:
-; CHECK-NEXT:    PUSH D
-; CHECK-NEXT:    .cfi_adjust_cfa_offset 2
-; CHECK:    LXI H, 6
+; CHECK:         .cfi_startproc
+; CHECK-NEXT:  LBB0_0:
+; CHECK-NEXT:    LXI H, 5
 ; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV B, H
-; CHECK-NEXT:    MOV C, L
-; CHECK-NEXT:    LDAX B
-; CHECK-NEXT:    MOV E, A
-; CHECK-NEXT:    INX B
-; CHECK-NEXT:    LDAX B
-; CHECK-NEXT:    MOV D, A
-; CHECK-NEXT:    DCX B
+; CHECK-NEXT:    MOV D, M
 ; CHECK-NEXT:    LXI H, 4
 ; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV B, H
-; CHECK-NEXT:    MOV C, L
-; CHECK-NEXT:    MOV H, B
-; CHECK-NEXT:    MOV L, C
-; CHECK-NEXT:    MOV C, M
-; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV E, M
+; CHECK-NEXT:    LXI H, 3
+; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV B, M
+; CHECK-NEXT:    LXI H, 2
+; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    MOV C, M
 ; CHECK-NEXT:    MOV A, C
 ; CHECK-NEXT:    ADD E
 ; CHECK-NEXT:    MOV C, A
@@ -49,15 +41,14 @@ define i16 @add_sub_1(i16,i16) {
 ; CHECK-NEXT:    MOV A, B
 ; CHECK-NEXT:    ADC B
 ; CHECK-NEXT:    MOV B, A
-; CHECK-NEXT:    LXI H, 223
+; CHECK-NEXT:    LXI D, 223
 ; CHECK-NEXT:    MOV A, C
-; CHECK-NEXT:    SUB L
+; CHECK-NEXT:    SUB E
 ; CHECK-NEXT:    MOV C, A
 ; CHECK-NEXT:    MOV A, B
-; CHECK-NEXT:    SBB H
+; CHECK-NEXT:    SBB D
 ; CHECK-NEXT:    MOV B, A
-; CHECK-NEXT:    POP D
-; CHECK:    RET
+; CHECK-NEXT:    RET
 
   %3 = add i16 %0, %1
   %4 = add i16 %3, %3
@@ -70,27 +61,20 @@ define i16 @add_sub_1(i16,i16) {
 
 define i16 @add_sub_2(i16,i16) {
 ; CHECK-LABEL: add_sub_2:
-; CHECK:       LBB1_0:
-; CHECK-NEXT:    PUSH D
-; CHECK-NEXT:    .cfi_adjust_cfa_offset 2
-; CHECK:    LXI H, 6
+; CHECK:         .cfi_startproc
+; CHECK-NEXT:  LBB1_0:
+; CHECK-NEXT:    LXI H, 5
 ; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV B, H
-; CHECK-NEXT:    MOV C, L
-; CHECK-NEXT:    MOV H, B
-; CHECK-NEXT:    MOV L, C
-; CHECK-NEXT:    MOV C, M
-; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    MOV B, M
 ; CHECK-NEXT:    LXI H, 4
 ; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV D, H
-; CHECK-NEXT:    MOV E, L
-; CHECK-NEXT:    MOV H, D
-; CHECK-NEXT:    MOV L, E
-; CHECK-NEXT:    MOV E, M
-; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV C, M
+; CHECK-NEXT:    LXI H, 3
+; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV D, M
+; CHECK-NEXT:    LXI H, 2
+; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    MOV E, M
 ; CHECK-NEXT:    MOV A, E
 ; CHECK-NEXT:    ADD C
 ; CHECK-NEXT:    MOV E, A
@@ -112,15 +96,14 @@ define i16 @add_sub_2(i16,i16) {
 ; CHECK-NEXT:    MOV A, B
 ; CHECK-NEXT:    ADC B
 ; CHECK-NEXT:    MOV B, A
-; CHECK-NEXT:    LXI H, 3
+; CHECK-NEXT:    LXI D, 3
 ; CHECK-NEXT:    MOV A, C
-; CHECK-NEXT:    ADD L
+; CHECK-NEXT:    ADD E
 ; CHECK-NEXT:    MOV C, A
 ; CHECK-NEXT:    MOV A, B
-; CHECK-NEXT:    ADC H
+; CHECK-NEXT:    ADC D
 ; CHECK-NEXT:    MOV B, A
-; CHECK-NEXT:    POP D
-; CHECK:    RET
+; CHECK-NEXT:    RET
 
   %3 = add i16 %0, %1
   %4 = sub i16 %3, 10000
@@ -131,29 +114,19 @@ define i16 @add_sub_2(i16,i16) {
 
 define i8 @add_sub_3(i8,i8) {
 ; CHECK-LABEL: add_sub_3:
-; CHECK:       LBB2_0:
-; CHECK-NEXT:    PUSH D
-; CHECK-NEXT:    .cfi_adjust_cfa_offset 2
-; CHECK:    LXI H, 5
+; CHECK:         .cfi_startproc
+; CHECK-NEXT:  LBB2_0:
+; CHECK-NEXT:    LXI H, 3
 ; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV B, H
-; CHECK-NEXT:    MOV C, L
-; CHECK-NEXT:    LDAX B
+; CHECK-NEXT:    MOV A, M
+; CHECK-NEXT:    LXI H, 2
+; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    MOV B, M
+; CHECK-NEXT:    ADD B
 ; CHECK-NEXT:    MOV B, A
-; CHECK-NEXT:    LXI H, 4
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV D, H
-; CHECK-NEXT:    MOV E, L
-; CHECK-NEXT:    LDAX D
-; CHECK-NEXT:    MOV C, A
-; CHECK-NEXT:    MOV A, C
+; CHECK-NEXT:    MVI A, 58
 ; CHECK-NEXT:    ADD B
-; CHECK-NEXT:    MOV C, A
-; CHECK-NEXT:    MVI B, 58
-; CHECK-NEXT:    MOV A, C
-; CHECK-NEXT:    ADD B
-; CHECK-NEXT:    POP D
-; CHECK:    RET
+; CHECK-NEXT:    RET
 
   %3 = add i8 %0, %1 ; 48
   %4 = sub i8 100, %3 ; 52
@@ -166,34 +139,32 @@ define i8 @add_sub_3(i8,i8) {
 
 define i8 @add_sub_4(i8,i8) {
 ; CHECK-LABEL: add_sub_4:
-; CHECK:       LBB3_0:
+; CHECK:         .cfi_startproc
+; CHECK-NEXT:  LBB3_0:
 ; CHECK-NEXT:    LXI H, 65534
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    SPHL
-; CHECK-NEXT:    .cfi_adjust_cfa_offset {{[0-9]+}}
-; CHECK:    MVI B, 100
+; CHECK-NEXT:    .cfi_adjust_cfa_offset 2
+; CHECK-NEXT:    MVI A, 100
 ; CHECK-NEXT:    LXI H, 1
 ; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, B
+; CHECK-NEXT:    MOV M, A
 ; CHECK-NEXT:    LXI H, 4
 ; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV B, H
-; CHECK-NEXT:    MOV C, L
-; CHECK-NEXT:    LDAX B
+; CHECK-NEXT:    MOV A, M
+; CHECK-NEXT:    MVI B, -95
+; CHECK-NEXT:    MOV A, B
+; CHECK-NEXT:    SUB A
 ; CHECK-NEXT:    MOV B, A
-; CHECK-NEXT:    MVI C, -95
-; CHECK-NEXT:    MOV A, C
-; CHECK-NEXT:    SUB B
-; CHECK-NEXT:    MOV C, A
 ; CHECK-NEXT:    LXI H, 0
 ; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, C
-; CHECK-NEXT:    MOV A, C
+; CHECK-NEXT:    MOV M, B
+; CHECK-NEXT:    MOV A, B
 ; CHECK-NEXT:    LXI H, 2
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    SPHL
-; CHECK-NEXT:    .cfi_adjust_cfa_offset {{[0-9]+}}
-; CHECK:    RET
+; CHECK-NEXT:    .cfi_adjust_cfa_offset 4294967294
+; CHECK-NEXT:    RET
 
   %3 = alloca i8, align 1
   store i8 100, i8* %3, align 1

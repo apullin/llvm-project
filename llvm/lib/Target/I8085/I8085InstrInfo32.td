@@ -89,9 +89,9 @@ def SELECT_32
 
 
 let Constraints = "$rs = $rd", Defs=[SREG]  in {
-  let Defs=[SREG,A], Uses=[A] in def RL_32 : I8085Pseudo<(outs GR32: $rd), (ins GR32: $rs), "RL_32 $rs", []>;
-  let Defs=[SREG,A], Uses=[A] in def RR_32 : I8085Pseudo<(outs GR32: $rd), (ins GR32: $rs), "RR_32 $rs", []>;
-  let Defs=[SREG,A], Uses=[A] in def ASR_32 : I8085Pseudo<(outs GR32: $rd), (ins GR32: $rs), "ASR_32 $rs", []>;
+  let Defs=[SREG,A] in def RL_32 : I8085Pseudo<(outs GR32: $rd), (ins GR32: $rs), "RL_32 $rs", []>;
+  let Defs=[SREG,A] in def RR_32 : I8085Pseudo<(outs GR32: $rd), (ins GR32: $rs), "RR_32 $rs", []>;
+  let Defs=[SREG,A] in def ASR_32 : I8085Pseudo<(outs GR32: $rd), (ins GR32: $rs), "ASR_32 $rs", []>;
 }
 
 let Uses=[SP] in {

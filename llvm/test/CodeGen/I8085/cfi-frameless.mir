@@ -21,5 +21,5 @@ body:             |
     ; CHECK-LABEL: name: cfi_frameless
     ; CHECK-NOT: CFI_INSTRUCTION
     ; CHECK: RET
-    RET
+    RET implicit $sp, implicit-def $sp
 ...

@@ -8,6 +8,7 @@
 
 #include "I8085.h"
 #include "CommonArgs.h"
+#include "clang/Driver/DriverDiagnostic.h"
 #include "clang/Driver/Options.h"
 #include "llvm/Support/Path.h"
 #include "llvm/Support/VirtualFileSystem.h"
@@ -45,6 +46,28 @@ void I8085ToolChain::AddClangSystemIncludeArgs(
   SmallString<128> IncludePath(DefaultSysRoot);
   llvm::sys::path::append(IncludePath, "include");
   addSystemInclude(DriverArgs, CC1Args, IncludePath);
+}
+
+void I8085ToolChain::addClangTargetOptions(
+    const llvm::opt::ArgList &DriverArgs,
+    llvm::opt::ArgStringList &CC1Args, Action::OffloadKind Kind) const {
+  Generic_ELF::addClangTargetOptions(DriverArgs, CC1Args, Kind);
+
+  const llvm::Triple &Triple = getTriple();
+  if (const auto *A = DriverArgs.getLastArg(
+          options::OPT_fexceptions, options::OPT_fcxx_exceptions,
+          options::OPT_fobjc_exceptions, options::OPT_fsjlj_exceptions,
+          options::OPT_fdwarf_exceptions, options::OPT_fwasm_exceptions,
+          options::OPT_fseh_exceptions)) {
+    getDriver().Diag(diag::err_drv_unsupported_opt_for_target)
+        << A->getSpelling() << Triple.getTriple();
+  }
+
+  if (const auto *A = DriverArgs.getLastArg(
+          options::OPT_funwind_tables, options::OPT_fasynchronous_unwind_tables)) {
+    getDriver().Diag(diag::err_drv_unsupported_opt_for_target)
+        << A->getSpelling() << Triple.getTriple();
+  }
 }
 
 Tool *I8085ToolChain::buildLinker() const {

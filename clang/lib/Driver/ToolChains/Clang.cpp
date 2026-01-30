@@ -361,9 +361,10 @@ static bool addExceptionArgs(const ArgList &Args, types::ID InputType,
 
   // Obj-C exceptions are enabled by default, regardless of -fexceptions. This
   // is not necessarily sensible, but follows GCC.
+  bool ObjCExceptionsDefault = Triple.getArch() != llvm::Triple::i8085;
   if (types::isObjC(InputType) &&
       Args.hasFlag(options::OPT_fobjc_exceptions,
-                   options::OPT_fno_objc_exceptions, true)) {
+                   options::OPT_fno_objc_exceptions, ObjCExceptionsDefault)) {
     CmdArgs.push_back("-fobjc-exceptions");
 
     EH |= shouldUseExceptionTablesForObjCExceptions(objcRuntime, Triple);
@@ -372,7 +373,8 @@ static bool addExceptionArgs(const ArgList &Args, types::ID InputType,
   if (types::isCXX(InputType)) {
     // Disable C++ EH by default on XCore and PS4/PS5.
     bool CXXExceptionsEnabled = Triple.getArch() != llvm::Triple::xcore &&
-                                !Triple.isPS() && !Triple.isDriverKit();
+                                !Triple.isPS() && !Triple.isDriverKit() &&
+                                Triple.getArch() != llvm::Triple::i8085;
     Arg *ExceptionArg = Args.getLastArg(
         options::OPT_fcxx_exceptions, options::OPT_fno_cxx_exceptions,
         options::OPT_fexceptions, options::OPT_fno_exceptions);

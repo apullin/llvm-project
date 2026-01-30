@@ -17,14 +17,18 @@
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/StringSwitch.h"
 #include "llvm/CodeGen/CallingConvLower.h"
+#include "llvm/CodeGen/MachineFunction.h"
 #include "llvm/CodeGen/MachineFrameInfo.h"
 #include "llvm/CodeGen/MachineInstrBuilder.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
 #include "llvm/CodeGen/SelectionDAG.h"
 #include "llvm/CodeGen/TargetLoweringObjectFileImpl.h"
+#include "llvm/IR/DiagnosticInfo.h"
 #include "llvm/IR/Function.h"
 #include "llvm/Support/Alignment.h"
 #include "llvm/Support/ErrorHandling.h"
+#include "llvm/ADT/Twine.h"
+#include "llvm/Support/raw_ostream.h"
 
 #include <iostream>
 
@@ -35,6 +39,19 @@
 #include "MCTargetDesc/I8085MCTargetDesc.h"
 
 namespace llvm {
+
+static void fail(const SDLoc &DL, SelectionDAG &DAG, const Twine &Msg,
+                 SDValue Val = {}) {
+  std::string Str;
+  if (Val) {
+    raw_string_ostream OS(Str);
+    Val->print(OS);
+    OS << ' ';
+  }
+  MachineFunction &MF = DAG.getMachineFunction();
+  DAG.getContext()->diagnose(DiagnosticInfoUnsupported(
+      MF.getFunction(), Twine(Str).concat(Msg), DL.getDebugLoc()));
+}
 
 I8085TargetLowering::I8085TargetLowering(const I8085TargetMachine &TM,
                                      const I8085Subtarget &STI)
@@ -51,7 +68,23 @@ I8085TargetLowering::I8085TargetLowering(const I8085TargetMachine &TM,
   setBooleanVectorContents(ZeroOrOneBooleanContent);
   setSchedulingPreference(Sched::RegPressure);
   setStackPointerRegisterToSaveRestore(I8085::SP);
-  setSupportsUnalignedAtomics(true);
+  setSupportsUnalignedAtomics(false);
+  // Atomics are not supported; make them Custom so we can emit diagnostics.
+  for (MVT VT : {MVT::i1, MVT::i8, MVT::i16, MVT::i32, MVT::i64}) {
+    for (unsigned Op :
+         {ISD::ATOMIC_LOAD, ISD::ATOMIC_STORE, ISD::ATOMIC_CMP_SWAP,
+          ISD::ATOMIC_CMP_SWAP_WITH_SUCCESS, ISD::ATOMIC_SWAP,
+          ISD::ATOMIC_LOAD_ADD, ISD::ATOMIC_LOAD_SUB, ISD::ATOMIC_LOAD_AND,
+          ISD::ATOMIC_LOAD_CLR, ISD::ATOMIC_LOAD_OR, ISD::ATOMIC_LOAD_XOR,
+          ISD::ATOMIC_LOAD_NAND, ISD::ATOMIC_LOAD_MIN, ISD::ATOMIC_LOAD_MAX,
+          ISD::ATOMIC_LOAD_UMIN, ISD::ATOMIC_LOAD_UMAX,
+          ISD::ATOMIC_LOAD_FADD, ISD::ATOMIC_LOAD_FSUB,
+          ISD::ATOMIC_LOAD_FMAX, ISD::ATOMIC_LOAD_FMIN,
+          ISD::ATOMIC_LOAD_UINC_WRAP, ISD::ATOMIC_LOAD_UDEC_WRAP}) {
+      setOperationAction(Op, VT, Custom);
+    }
+  }
+  setOperationAction(ISD::ATOMIC_FENCE, MVT::Other, Custom);
   // Force custom memcpy/memset expansion in SelectionDAGInfo.
   MaxStoresPerMemcpy = 0;
   MaxStoresPerMemcpyOptSize = 0;
@@ -199,6 +232,7 @@ I8085TargetLowering::I8085TargetLowering(const I8085TargetMachine &TM,
 
   setMinFunctionAlignment(Align(2));
   setMinimumJumpTableEntries(UINT_MAX);
+  setMaxAtomicSizeInBitsSupported(0);
 }
 
 const char *I8085TargetLowering::getTargetNodeName(unsigned Opcode) const {
@@ -399,6 +433,31 @@ SDValue I8085TargetLowering::LowerOperation(SDValue Op, SelectionDAG &DAG) const
   switch (Op.getOpcode()) {
   default:
     llvm_unreachable("Don't know how to custom lower this!");
+  case ISD::ATOMIC_FENCE:
+  case ISD::ATOMIC_LOAD:
+  case ISD::ATOMIC_STORE:
+  case ISD::ATOMIC_CMP_SWAP:
+  case ISD::ATOMIC_CMP_SWAP_WITH_SUCCESS:
+  case ISD::ATOMIC_SWAP:
+  case ISD::ATOMIC_LOAD_ADD:
+  case ISD::ATOMIC_LOAD_SUB:
+  case ISD::ATOMIC_LOAD_AND:
+  case ISD::ATOMIC_LOAD_CLR:
+  case ISD::ATOMIC_LOAD_OR:
+  case ISD::ATOMIC_LOAD_XOR:
+  case ISD::ATOMIC_LOAD_NAND:
+  case ISD::ATOMIC_LOAD_MIN:
+  case ISD::ATOMIC_LOAD_MAX:
+  case ISD::ATOMIC_LOAD_UMIN:
+  case ISD::ATOMIC_LOAD_UMAX:
+  case ISD::ATOMIC_LOAD_FADD:
+  case ISD::ATOMIC_LOAD_FSUB:
+  case ISD::ATOMIC_LOAD_FMAX:
+  case ISD::ATOMIC_LOAD_FMIN:
+  case ISD::ATOMIC_LOAD_UINC_WRAP:
+  case ISD::ATOMIC_LOAD_UDEC_WRAP:
+    fail(DL, DAG, "i8085 does not support atomic operations");
+    return SDValue();
   case ISD::VASTART:
     return LowerVASTART(Op, DAG);
   case ISD::VAEND:

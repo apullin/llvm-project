@@ -1,0 +1,105 @@
+// REQUIRES: i8085-sim
+// RUN: %S/../../../../../tooling/build/build-clang-8085/bin/clang -target i8085-unknown-elf -O0 -ffreestanding -fno-builtin -nostdlib -c \
+// RUN:   %S/../../../../../sysroot/crt/crt0.S -o %t.crt0.o
+// RUN: %S/../../../../../tooling/build/build-clang-8085/bin/clang -target i8085-unknown-elf -O0 -ffreestanding -fno-builtin -nostdlib -emit-llvm -c \
+// RUN:   %s -o %t.bc
+// RUN: %S/../../../../../tooling/build/build-clang-8085/bin/llc -mtriple=i8085-unknown-elf -filetype=obj %t.bc -o %t.o
+// RUN: %S/../../../../../tooling/build/build-clang-8085/bin/ld.lld -m i8085elf \
+// RUN:   -T %S/../../../../../sysroot/ldscripts/i8085-32kram-32krom.ld -Map %t.map \
+// RUN:   -o %t.elf %t.crt0.o %t.o
+// RUN: llvm-objcopy -O binary %t.elf %t.bin
+// RUN: %S/../../../../../i8085-trace/build/i8085-trace -S -q -n 200000 \
+// RUN:   -d 0x05C0:0x08 %t.bin 2>&1 | FileCheck %s --check-prefix=CFALSE
+
+__attribute__((naked)) int main(void) {
+  __asm__ volatile(
+      "xra a\n"
+      "cnz call_nz_bad\n"
+      "mvi a, 0x01\n"
+      "sta 0x05C0\n"
+      "jmp cnz_done\n"
+      "call_nz_bad:\n"
+      "mvi a, 0xee\n"
+      "sta 0x05C0\n"
+      "ret\n"
+      "cnz_done:\n"
+      "mvi a, 0x01\n"
+      "ora a\n"
+      "cz call_z_bad\n"
+      "mvi a, 0x01\n"
+      "sta 0x05C1\n"
+      "jmp cz_done\n"
+      "call_z_bad:\n"
+      "mvi a, 0xee\n"
+      "sta 0x05C1\n"
+      "ret\n"
+      "cz_done:\n"
+      "xra a\n"
+      "cc call_c_bad\n"
+      "mvi a, 0x01\n"
+      "sta 0x05C2\n"
+      "jmp cc_done\n"
+      "call_c_bad:\n"
+      "mvi a, 0xee\n"
+      "sta 0x05C2\n"
+      "ret\n"
+      "cc_done:\n"
+      "stc\n"
+      "cnc call_nc_bad\n"
+      "mvi a, 0x01\n"
+      "sta 0x05C3\n"
+      "jmp cnc_done\n"
+      "call_nc_bad:\n"
+      "mvi a, 0xee\n"
+      "sta 0x05C3\n"
+      "ret\n"
+      "cnc_done:\n"
+      "mvi a, 0x80\n"
+      "ora a\n"
+      "cp call_p_bad\n"
+      "mvi a, 0x01\n"
+      "sta 0x05C4\n"
+      "jmp cp_done\n"
+      "call_p_bad:\n"
+      "mvi a, 0xee\n"
+      "sta 0x05C4\n"
+      "ret\n"
+      "cp_done:\n"
+      "mvi a, 0x01\n"
+      "ora a\n"
+      "cm call_m_bad\n"
+      "mvi a, 0x01\n"
+      "sta 0x05C5\n"
+      "jmp cm_done\n"
+      "call_m_bad:\n"
+      "mvi a, 0xee\n"
+      "sta 0x05C5\n"
+      "ret\n"
+      "cm_done:\n"
+      "mvi a, 0x01\n"
+      "ora a\n"
+      "cpe call_pe_bad\n"
+      "mvi a, 0x01\n"
+      "sta 0x05C6\n"
+      "jmp cpe_done\n"
+      "call_pe_bad:\n"
+      "mvi a, 0xee\n"
+      "sta 0x05C6\n"
+      "ret\n"
+      "cpe_done:\n"
+      "xra a\n"
+      "cpo call_po_bad\n"
+      "mvi a, 0x01\n"
+      "sta 0x05C7\n"
+      "jmp cpo_done\n"
+      "call_po_bad:\n"
+      "mvi a, 0xee\n"
+      "sta 0x05C7\n"
+      "ret\n"
+      "cpo_done:\n"
+      "hlt\n");
+}
+
+// CFALSE: Memory dump 0x05C0 - 0x05C7 (8 bytes):
+// CFALSE: 05C0: 01 01 01 01 01 01 01 01
+// CFALSE: "halt":"hlt"

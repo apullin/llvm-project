@@ -42,7 +42,7 @@ entry:
 
 define i64 @shl64(i64 %a, i8 %b) {
 ; CHECK-LABEL: shl64:
-; CHECK: CALL __ashldi3
+; CHECK-NOT: CALL __ashldi3
 entry:
   %bb = zext i8 %b to i64
   %r = shl i64 %a, %bb
@@ -51,7 +51,7 @@ entry:
 
 define i64 @lshr64(i64 %a, i8 %b) {
 ; CHECK-LABEL: lshr64:
-; CHECK: CALL __lshrdi3
+; CHECK-NOT: CALL __lshrdi3
 entry:
   %bb = zext i8 %b to i64
   %r = lshr i64 %a, %bb
@@ -60,7 +60,7 @@ entry:
 
 define i64 @ashr64(i64 %a, i8 %b) {
 ; CHECK-LABEL: ashr64:
-; CHECK: CALL __ashrdi3
+; CHECK-NOT: CALL __ashrdi3
 entry:
   %bb = zext i8 %b to i64
   %r = ashr i64 %a, %bb

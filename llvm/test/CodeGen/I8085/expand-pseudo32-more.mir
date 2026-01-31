@@ -34,7 +34,7 @@ body:             |
     ; CHECK-NEXT: $c = MOV_FROM_M
     ; CHECK-NEXT: $hl = INX
     ; CHECK-NEXT: $b = MOV_FROM_M
-    $bc = TRUNC32TO16 $iax
+    $bc = TRUNC32TO16 $iax, implicit-def $a, implicit-def $hl
     RET implicit $sp, implicit-def $sp
 ...
 
@@ -47,7 +47,7 @@ body:             |
     ; CHECK: $hl = LXI 0
     ; CHECK-NEXT: DAD $sp
     ; CHECK-NEXT: $c = MOV_FROM_M
-    $c = TRUNC32TO8 $iax
+    $c = TRUNC32TO8 $iax, implicit-def $a, implicit-def $hl
     RET implicit $sp, implicit-def $sp
 ...
 
@@ -66,7 +66,7 @@ body:             |
     ; CHECK-NEXT: MVI_M 0
     ; CHECK-NEXT: $hl = INX
     ; CHECK-NEXT: MVI_M 0
-    $iax = ZEXT16TO32 $bc
+    $iax = ZEXT16TO32 $bc, implicit-def $a, implicit-def $hl
     RET implicit $sp, implicit-def $sp
 ...
 
@@ -88,7 +88,7 @@ body:             |
     ; CHECK-NEXT: MOV_M $a
     ; CHECK-NEXT: $hl = INX
     ; CHECK-NEXT: MOV_M $a
-    $iax = SEXT16TO32 $bc
+    $iax = SEXT16TO32 $bc, implicit-def $a, implicit-def $hl
     RET implicit $sp, implicit-def $sp
 ...
 
@@ -107,7 +107,7 @@ body:             |
     ; CHECK-NEXT: MVI_M 0
     ; CHECK-NEXT: $hl = INX
     ; CHECK-NEXT: MVI_M 0
-    $iax = ZEXT8TO32 $c
+    $iax = ZEXT8TO32 $c, implicit-def $a, implicit-def $hl
     RET implicit $sp, implicit-def $sp
 ...
 
@@ -129,7 +129,7 @@ body:             |
     ; CHECK-NEXT: MOV_M $a
     ; CHECK-NEXT: $hl = INX
     ; CHECK-NEXT: MOV_M $a
-    $iax = SEXT8TO32 $c
+    $iax = SEXT8TO32 $c, implicit-def $a, implicit-def $hl
     RET implicit $sp, implicit-def $sp
 ...
 
@@ -145,7 +145,7 @@ body:             |
     ; CHECK: ADI 128
     ; CHECK: SBB $a
     ; CHECK: MOV_M $a
-    $iax = SEXT32_INREG_8 $iax, implicit-def $sreg
+    $iax = SEXT32_INREG_8 $iax, implicit-def $sreg, implicit-def $a, implicit-def $hl
     RET implicit $sp, implicit-def $sp
 ...
 
@@ -161,7 +161,7 @@ body:             |
     ; CHECK: ADI 128
     ; CHECK: SBB $a
     ; CHECK: MOV_M $a
-    $iax = SEXT32_INREG_16 $iax, implicit-def $sreg
+    $iax = SEXT32_INREG_16 $iax, implicit-def $sreg, implicit-def $a, implicit-def $hl
     RET implicit $sp, implicit-def $sp
 ...
 
@@ -177,7 +177,7 @@ body:             |
     ; CHECK: $hl = LXI 0
     ; CHECK-NEXT: DAD $sp
     ; CHECK-NEXT: MOV_M $a
-    $iax = LOAD_32_ADDR_CONTENT $bc, implicit $sp
+    $iax = LOAD_32_ADDR_CONTENT $bc, implicit $sp, implicit-def $a, implicit-def $hl
     RET implicit $sp, implicit-def $sp
 ...
 
@@ -190,7 +190,7 @@ body:             |
     ; CHECK: $h = MOV $h
     ; CHECK-NEXT: $l = MOV $l
     ; CHECK-NEXT: $a = MOV_FROM_M
-    $iax = LOAD_32_ADDR_CONTENT $hl, implicit $sp
+    $iax = LOAD_32_ADDR_CONTENT $hl, implicit $sp, implicit-def $a, implicit-def $hl
     RET implicit $sp, implicit-def $sp
 ...
 
@@ -203,7 +203,7 @@ body:             |
     ; CHECK: $hl = LXI 0
     ; CHECK-NEXT: DAD $sp
     ; CHECK-NEXT: $a = MOV_FROM_M
-    $iax = LOAD_32_ADDR_CONTENT $sp, implicit $sp
+    $iax = LOAD_32_ADDR_CONTENT $sp, implicit $sp, implicit-def $a, implicit-def $hl
     RET implicit $sp, implicit-def $sp
 ...
 
@@ -219,7 +219,7 @@ body:             |
     ; CHECK: $h = MOV $b
     ; CHECK-NEXT: $l = MOV $c
     ; CHECK-NEXT: MOV_M $a
-    STORE_32_ADDR_CONTENT $bc, $iax, implicit $sp
+    STORE_32_ADDR_CONTENT $bc, $iax, implicit $sp, implicit-def $a, implicit-def $hl
     RET implicit $sp, implicit-def $sp
 ...
 
@@ -232,7 +232,7 @@ body:             |
     ; CHECK: PUSH $hl
     ; CHECK: POP $hl
     ; CHECK: MOV_M $a
-    STORE_32_ADDR_CONTENT $hl, $iax, implicit $sp
+    STORE_32_ADDR_CONTENT $hl, $iax, implicit $sp, implicit-def $a, implicit-def $hl
     RET implicit $sp, implicit-def $sp
 ...
 
@@ -248,7 +248,7 @@ body:             |
     ; CHECK: $hl = LXI 0
     ; CHECK: DAD $sp
     ; CHECK: MOV_M $a
-    STORE_32_ADDR_CONTENT $sp, $iax, implicit $sp
+    STORE_32_ADDR_CONTENT $sp, $iax, implicit $sp, implicit-def $a, implicit-def $hl
     RET implicit $sp, implicit-def $sp
 ...
 
@@ -265,7 +265,7 @@ body:             |
     ; CHECK: RAL
     ; CHECK: RAL
     ; CHECK: ANI 254
-    $iax = RL_32 $iax, implicit-def $sreg, implicit-def $a, implicit $a
+    $iax = RL_32 $iax, implicit-def $sreg, implicit-def $a, implicit-def $hl, implicit $a
     RET implicit $sp, implicit-def $sp
 ...
 
@@ -282,7 +282,7 @@ body:             |
     ; CHECK: RAR
     ; CHECK: RAR
     ; CHECK: ANI 127
-    $iax = RR_32 $iax, implicit-def $sreg, implicit-def $a, implicit $a
+    $iax = RR_32 $iax, implicit-def $sreg, implicit-def $a, implicit-def $hl, implicit $a
     RET implicit $sp, implicit-def $sp
 ...
 
@@ -294,7 +294,7 @@ body:             |
     ; CHECK-LABEL: name:            asr32_iax
     ; CHECK: RLC
     ; CHECK: RAR
-    $iax = ASR_32 $iax, implicit-def $sreg, implicit-def $a, implicit $a
+    $iax = ASR_32 $iax, implicit-def $sreg, implicit-def $a, implicit-def $hl, implicit $a
     RET implicit $sp, implicit-def $sp
 ...
 
@@ -310,7 +310,7 @@ body:             |
     ; CHECK: $hl = LXI 0
     ; CHECK-NEXT: DAD $sp
     ; CHECK-NEXT: MOV_M $a
-    $iax = LOAD_32_OFFSET_WITH_SP 8, implicit $sp
+    $iax = LOAD_32_OFFSET_WITH_SP 8, implicit $sp, implicit-def $a, implicit-def $hl
     RET implicit $sp, implicit-def $sp
 ...
 
@@ -344,6 +344,6 @@ body:             |
     ; CHECK: $hl = LXI 15
     ; CHECK-NEXT: DAD $sp
     ; CHECK-NEXT: MOV_M $a
-    STORE_32_AT_OFFSET_WITH_SP $iax, 12, implicit $sp
+    STORE_32_AT_OFFSET_WITH_SP $iax, 12, implicit $sp, implicit-def $a, implicit-def $hl
     RET implicit $sp, implicit-def $sp
 ...

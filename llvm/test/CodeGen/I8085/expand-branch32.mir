@@ -16,7 +16,7 @@ body:             |
     ; CHECK-LABEL: name:            jmp32_if_not_equal
     ; CHECK: CMP_M
     ; CHECK: JNZ %bb.{{[0-9]+}}
-    JMP_32_IF_NOT_EQUAL $iax, $ibx, %bb.1, implicit-def $sreg
+    JMP_32_IF_NOT_EQUAL $iax, $ibx, %bb.1, implicit-def $sreg, implicit-def $a, implicit-def $hl
     RET implicit $sp, implicit-def $sp
   bb.1:
     RET implicit $sp, implicit-def $sp
@@ -30,8 +30,8 @@ body:             |
     ; CHECK-LABEL: name:            jmp32_if_not_equal_twice
     ; CHECK-NOT: JMP_32_IF_NOT_EQUAL
     ; CHECK-COUNT-8: JNZ %bb.
-    JMP_32_IF_NOT_EQUAL $iax, $ibx, %bb.1, implicit-def $sreg
-    JMP_32_IF_NOT_EQUAL $iax, $ibx, %bb.2, implicit-def $sreg
+    JMP_32_IF_NOT_EQUAL $iax, $ibx, %bb.1, implicit-def $sreg, implicit-def $a, implicit-def $hl
+    JMP_32_IF_NOT_EQUAL $iax, $ibx, %bb.2, implicit-def $sreg, implicit-def $a, implicit-def $hl
     RET implicit $sp, implicit-def $sp
   bb.1:
     RET implicit $sp, implicit-def $sp
@@ -48,7 +48,7 @@ body:             |
     ; CHECK: XRA_M
     ; CHECK-NEXT: ANI 128
     ; CHECK-NEXT: JZ %bb.1
-    JMP_32_IF_SAME_SIGN $iax, $ibx, %bb.1, implicit-def $sreg
+    JMP_32_IF_SAME_SIGN $iax, $ibx, %bb.1, implicit-def $sreg, implicit-def $a, implicit-def $hl
     RET implicit $sp, implicit-def $sp
   bb.1:
     RET implicit $sp, implicit-def $sp
@@ -63,7 +63,7 @@ body:             |
     ; CHECK: MOV_FROM_M
     ; CHECK-NEXT: ANI 128
     ; CHECK-NEXT: JZ %bb.1
-    JMP_32_IF_POSITIVE $iax, %bb.1, implicit-def $sreg
+    JMP_32_IF_POSITIVE $iax, %bb.1, implicit-def $sreg, implicit-def $a, implicit-def $hl
     RET implicit $sp, implicit-def $sp
   bb.1:
     RET implicit $sp, implicit-def $sp

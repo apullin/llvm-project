@@ -13,6 +13,7 @@
 
 #include "I8085ISelLowering.h"
 
+#include "llvm/ADT/APInt.h"
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/StringSwitch.h"
@@ -27,6 +28,7 @@
 #include "llvm/IR/Function.h"
 #include "llvm/Support/Alignment.h"
 #include "llvm/Support/ErrorHandling.h"
+#include "llvm/Support/KnownBits.h"
 #include "llvm/ADT/Twine.h"
 #include "llvm/Support/raw_ostream.h"
 
@@ -51,6 +53,97 @@ static void fail(const SDLoc &DL, SelectionDAG &DAG, const Twine &Msg,
   MachineFunction &MF = DAG.getMachineFunction();
   DAG.getContext()->diagnose(DiagnosticInfoUnsupported(
       MF.getFunction(), Twine(Str).concat(Msg), DL.getDebugLoc()));
+}
+
+static void splitI64Value(SDValue Val, SDValue &Lo, SDValue &Hi,
+                          SelectionDAG &DAG, const SDLoc &DL) {
+  if (Val.getOpcode() == ISD::BUILD_PAIR) {
+    Lo = Val.getOperand(0);
+    Hi = Val.getOperand(1);
+    return;
+  }
+
+  auto Parts = DAG.SplitScalar(Val, DL, MVT::i32, MVT::i32);
+  Lo = Parts.first;
+  Hi = Parts.second;
+}
+
+static SDValue buildI64Value(SDValue Lo, SDValue Hi,
+                             SelectionDAG &DAG, const SDLoc &DL) {
+  return DAG.getNode(ISD::BUILD_PAIR, DL, MVT::i64, Lo, Hi);
+}
+
+static SDValue lowerI64Load(SDValue Op, SelectionDAG &DAG) {
+  SDLoc DL(Op);
+  auto *LD = cast<LoadSDNode>(Op.getNode());
+  EVT MemVT = LD->getMemoryVT();
+  SDValue Base = LD->getBasePtr();
+  EVT PtrVT = Base.getValueType();
+  Align Align = LD->getOriginalAlign();
+  auto Flags = LD->getMemOperand()->getFlags();
+  auto AAInfo = LD->getAAInfo();
+
+  if (MemVT != MVT::i64) {
+    SDValue Tmp = DAG.getLoad(MemVT, DL, LD->getChain(), Base,
+                              LD->getPointerInfo(), Align, Flags, AAInfo);
+    SDValue Ext;
+    switch (LD->getExtensionType()) {
+    case ISD::SEXTLOAD:
+      Ext = DAG.getNode(ISD::SIGN_EXTEND, DL, MVT::i64, Tmp);
+      break;
+    case ISD::ZEXTLOAD:
+      Ext = DAG.getNode(ISD::ZERO_EXTEND, DL, MVT::i64, Tmp);
+      break;
+    case ISD::EXTLOAD:
+      Ext = DAG.getNode(ISD::ANY_EXTEND, DL, MVT::i64, Tmp);
+      break;
+    default:
+      Ext = DAG.getNode(ISD::ZERO_EXTEND, DL, MVT::i64, Tmp);
+      break;
+    }
+    return DAG.getMergeValues({Ext, Tmp.getValue(1)}, DL);
+  }
+
+  SDValue Lo = DAG.getLoad(MVT::i32, DL, LD->getChain(), Base,
+                           LD->getPointerInfo(), Align, Flags, AAInfo);
+  SDValue HiPtr = DAG.getNode(ISD::ADD, DL, PtrVT, Base,
+                              DAG.getConstant(4, DL, PtrVT));
+  SDValue Hi = DAG.getLoad(MVT::i32, DL, Lo.getValue(1), HiPtr,
+                           LD->getPointerInfo().getWithOffset(4), Align,
+                           Flags, AAInfo);
+
+  SDValue Val = buildI64Value(Lo, Hi, DAG, DL);
+  return DAG.getMergeValues({Val, Hi.getValue(1)}, DL);
+}
+
+static SDValue lowerI64Store(SDValue Op, SelectionDAG &DAG) {
+  SDLoc DL(Op);
+  auto *ST = cast<StoreSDNode>(Op.getNode());
+  EVT MemVT = ST->getMemoryVT();
+  SDValue Base = ST->getBasePtr();
+  EVT PtrVT = Base.getValueType();
+  Align Align = ST->getOriginalAlign();
+  SDValue Val = ST->getValue();
+  auto Flags = ST->getMemOperand()->getFlags();
+  auto AAInfo = ST->getAAInfo();
+
+  if (MemVT != MVT::i64) {
+    SDValue Trunc = DAG.getNode(ISD::TRUNCATE, DL, MemVT, Val);
+    return DAG.getStore(ST->getChain(), DL, Trunc, Base,
+                        ST->getPointerInfo(), Align, Flags, AAInfo);
+  }
+
+  SDValue Lo, Hi;
+  splitI64Value(Val, Lo, Hi, DAG, DL);
+
+  SDValue StoreLo = DAG.getStore(ST->getChain(), DL, Lo, Base,
+                                 ST->getPointerInfo(), Align, Flags, AAInfo);
+  SDValue HiPtr = DAG.getNode(ISD::ADD, DL, PtrVT, Base,
+                              DAG.getConstant(4, DL, PtrVT));
+  SDValue StoreHi = DAG.getStore(StoreLo, DL, Hi, HiPtr,
+                                 ST->getPointerInfo().getWithOffset(4), Align,
+                                 Flags, AAInfo);
+  return StoreHi;
 }
 
 I8085TargetLowering::I8085TargetLowering(const I8085TargetMachine &TM,
@@ -96,9 +189,29 @@ I8085TargetLowering::I8085TargetLowering(const I8085TargetMachine &TM,
   setTruncStoreAction(MVT::i16, MVT::i8, Expand);
   setTruncStoreAction(MVT::i32, MVT::i8, Expand);
   setTruncStoreAction(MVT::i32, MVT::i16, Expand);
+  setOperationAction(ISD::LOAD, MVT::i64, Custom);
+  setOperationAction(ISD::STORE, MVT::i64, Custom);
+  setOperationAction(ISD::ZERO_EXTEND, MVT::i64, Custom);
+  setOperationAction(ISD::SIGN_EXTEND, MVT::i64, Custom);
+  setOperationAction(ISD::ANY_EXTEND, MVT::i64, Custom);
+  setOperationAction(ISD::TRUNCATE, MVT::i32, Custom);
+
+  setOperationAction(ISD::FADD, MVT::f32, LibCall);
+  setOperationAction(ISD::FSUB, MVT::f32, LibCall);
+  setOperationAction(ISD::FMUL, MVT::f32, LibCall);
+  setOperationAction(ISD::FDIV, MVT::f32, LibCall);
+  setOperationAction(ISD::SETCC, MVT::f32, Expand);
+  setOperationAction(ISD::SELECT_CC, MVT::f32, Expand);
+  setOperationAction(ISD::SELECT, MVT::f32, Expand);
+  setOperationAction(ISD::FP_TO_SINT, MVT::i32, LibCall);
+  setOperationAction(ISD::FP_TO_UINT, MVT::i32, LibCall);
+  setOperationAction(ISD::SINT_TO_FP, MVT::i32, LibCall);
+  setOperationAction(ISD::UINT_TO_FP, MVT::i32, LibCall);
 
   for (MVT VT : {MVT::i1, MVT::i8, MVT::i16, MVT::i32})
     setOperationAction(ISD::SIGN_EXTEND_INREG, VT, Custom);
+
+  setTargetDAGCombine(ISD::SUB);
 
   for (MVT VT : MVT::integer_valuetypes()) {
     for (auto N : {ISD::EXTLOAD, ISD::SEXTLOAD, ISD::ZEXTLOAD}) {
@@ -174,10 +287,10 @@ I8085TargetLowering::I8085TargetLowering(const I8085TargetMachine &TM,
   setOperationAction(ISD::ROTR, MVT::i32, Expand);
   setOperationAction(ISD::ROTL, MVT::i64, Expand);
   setOperationAction(ISD::ROTR, MVT::i64, Expand);
-  setOperationAction(ISD::CTLZ, MVT::i32, Custom);
-  setOperationAction(ISD::CTLZ_ZERO_UNDEF, MVT::i32, Custom);
-  setOperationAction(ISD::CTLZ, MVT::i64, Custom);
-  setOperationAction(ISD::CTLZ_ZERO_UNDEF, MVT::i64, Custom);
+  setOperationAction(ISD::CTLZ, MVT::i32, LibCall);
+  setOperationAction(ISD::CTLZ_ZERO_UNDEF, MVT::i32, LibCall);
+  setOperationAction(ISD::CTLZ, MVT::i64, LibCall);
+  setOperationAction(ISD::CTLZ_ZERO_UNDEF, MVT::i64, LibCall);
   setOperationAction(ISD::CTTZ, MVT::i32, Custom);
   setOperationAction(ISD::CTTZ_ZERO_UNDEF, MVT::i32, Custom);
   setOperationAction(ISD::CTTZ, MVT::i64, Custom);
@@ -216,6 +329,22 @@ I8085TargetLowering::I8085TargetLowering(const I8085TargetMachine &TM,
   setLibcallName(RTLIB::UREM_I16, "__urem16");
   setLibcallName(RTLIB::UREM_I32, "__urem32");
   setLibcallName(RTLIB::UREM_I64, "__umoddi3");
+
+  setLibcallName(RTLIB::ADD_F32, "__addsf3");
+  setLibcallName(RTLIB::SUB_F32, "__subsf3");
+  setLibcallName(RTLIB::MUL_F32, "__mulsf3");
+  setLibcallName(RTLIB::DIV_F32, "__divsf3");
+  setLibcallName(RTLIB::SINTTOFP_I32_F32, "__floatsisf");
+  setLibcallName(RTLIB::UINTTOFP_I32_F32, "__floatunsisf");
+  setLibcallName(RTLIB::FPTOSINT_F32_I32, "__fixsfsi");
+  setLibcallName(RTLIB::FPTOUINT_F32_I32, "__fixunssfsi");
+  setLibcallName(RTLIB::OEQ_F32, "__eqsf2");
+  setLibcallName(RTLIB::UNE_F32, "__nesf2");
+  setLibcallName(RTLIB::OLT_F32, "__ltsf2");
+  setLibcallName(RTLIB::OLE_F32, "__lesf2");
+  setLibcallName(RTLIB::OGT_F32, "__gtsf2");
+  setLibcallName(RTLIB::OGE_F32, "__gesf2");
+  setLibcallName(RTLIB::UO_F32, "__unordsf2");
 
   setLibcallName(RTLIB::CTLZ_I32, "__clzsi2");
   setLibcallName(RTLIB::CTLZ_I64, "__clzdi2");
@@ -330,6 +459,19 @@ EVT I8085TargetLowering::getSetCCResultType(const DataLayout &DL, LLVMContext &,
   return MVT::i8;
 }
 
+void I8085TargetLowering::computeKnownBitsForFrameIndex(
+    int FrameIdx, KnownBits &Known, const MachineFunction &MF) const {
+  // Clamp object alignment to the ABI stack alignment so we don't assume
+  // stronger alignment than the runtime provides.
+  Align ObjAlign = MF.getFrameInfo().getObjectAlign(FrameIdx);
+  Align StackAlign = MF.getSubtarget<I8085Subtarget>()
+                         .getFrameLowering()
+                         ->getStackAlign();
+  Align KnownAlign = std::min(ObjAlign, StackAlign);
+  if (KnownAlign > Align(1))
+    Known.Zero.setLowBits(Log2(KnownAlign));
+}
+
 SDValue I8085TargetLowering::LowerGlobalAddress(SDValue Op,
                                               SelectionDAG &DAG) const {
   auto DL = DAG.getDataLayout();
@@ -416,6 +558,73 @@ SDValue I8085TargetLowering::getI8085Cmp(SDValue LHS, SDValue RHS,
   return Cmp;
 }
 
+SDValue I8085TargetLowering::LowerShiftI64(SDValue Op, SelectionDAG &DAG) const {
+  SDLoc DL(Op);
+  SDValue Val = Op.getOperand(0);
+  SDValue Amt = Op.getOperand(1);
+
+  if (Amt.getValueType() != MVT::i32)
+    Amt = DAG.getNode(ISD::ZERO_EXTEND, DL, MVT::i32, Amt);
+
+  SDValue Mask6 = DAG.getConstant(63, DL, MVT::i32);
+  SDValue Mask5 = DAG.getConstant(31, DL, MVT::i32);
+  SDValue Zero = DAG.getConstant(0, DL, MVT::i32);
+  SDValue Const32 = DAG.getConstant(32, DL, MVT::i32);
+  SDValue Const31 = DAG.getConstant(31, DL, MVT::i32);
+
+  SDValue AmtMasked = DAG.getNode(ISD::AND, DL, MVT::i32, Amt, Mask6);
+  SDValue AmtLo = DAG.getNode(ISD::AND, DL, MVT::i32, AmtMasked, Mask5);
+  SDValue InvAmt = DAG.getNode(ISD::SUB, DL, MVT::i32, Const32, AmtLo);
+
+  SDValue Lo;
+  SDValue Hi;
+  splitI64Value(Val, Lo, Hi, DAG, DL);
+
+  SDValue Lo1;
+  SDValue Hi1;
+  SDValue Lo2;
+  SDValue Hi2;
+
+  switch (Op.getOpcode()) {
+  case ISD::SHL:
+    Lo1 = DAG.getNode(ISD::SHL, DL, MVT::i32, Lo, AmtLo);
+    Hi1 = DAG.getNode(ISD::OR, DL, MVT::i32,
+                      DAG.getNode(ISD::SHL, DL, MVT::i32, Hi, AmtLo),
+                      DAG.getNode(ISD::SRL, DL, MVT::i32, Lo, InvAmt));
+    Lo2 = Zero;
+    Hi2 = DAG.getNode(ISD::SHL, DL, MVT::i32, Lo, AmtLo);
+    break;
+  case ISD::SRL:
+    Lo1 = DAG.getNode(ISD::OR, DL, MVT::i32,
+                      DAG.getNode(ISD::SRL, DL, MVT::i32, Lo, AmtLo),
+                      DAG.getNode(ISD::SHL, DL, MVT::i32, Hi, InvAmt));
+    Hi1 = DAG.getNode(ISD::SRL, DL, MVT::i32, Hi, AmtLo);
+    Lo2 = DAG.getNode(ISD::SRL, DL, MVT::i32, Hi, AmtLo);
+    Hi2 = Zero;
+    break;
+  case ISD::SRA:
+    Lo1 = DAG.getNode(ISD::OR, DL, MVT::i32,
+                      DAG.getNode(ISD::SRL, DL, MVT::i32, Lo, AmtLo),
+                      DAG.getNode(ISD::SHL, DL, MVT::i32, Hi, InvAmt));
+    Hi1 = DAG.getNode(ISD::SRA, DL, MVT::i32, Hi, AmtLo);
+    Lo2 = DAG.getNode(ISD::SRA, DL, MVT::i32, Hi, AmtLo);
+    Hi2 = DAG.getNode(ISD::SRA, DL, MVT::i32, Hi, Const31);
+    break;
+  default:
+    llvm_unreachable("Unexpected shift opcode");
+  }
+
+  SDValue Ge32 = DAG.getSetCC(DL, MVT::i1, AmtMasked, Const32, ISD::SETUGE);
+  SDValue ZeroAmt = DAG.getSetCC(DL, MVT::i1, AmtMasked, Zero, ISD::SETEQ);
+
+  SDValue LoSel = DAG.getSelect(DL, MVT::i32, Ge32, Lo2, Lo1);
+  SDValue HiSel = DAG.getSelect(DL, MVT::i32, Ge32, Hi2, Hi1);
+  SDValue LoRes = DAG.getSelect(DL, MVT::i32, ZeroAmt, Lo, LoSel);
+  SDValue HiRes = DAG.getSelect(DL, MVT::i32, ZeroAmt, Hi, HiSel);
+
+  return buildI64Value(LoRes, HiRes, DAG, DL);
+}
+
 SDValue I8085TargetLowering::LowerOperation(SDValue Op, SelectionDAG &DAG) const {
   SDLoc DL(Op);
   EVT VT = Op.getValueType();
@@ -487,6 +696,39 @@ SDValue I8085TargetLowering::LowerOperation(SDValue Op, SelectionDAG &DAG) const
       return lowerI64LibCall(RTLIB::UREM_I64, Op.getOperand(0),
                              Op.getOperand(1));
     break;
+  case ISD::ZERO_EXTEND:
+  case ISD::ANY_EXTEND:
+    if (VT == MVT::i64) {
+      SDValue In = Op.getOperand(0);
+      EVT InVT = In.getValueType();
+      SDValue Lo = (InVT == MVT::i32)
+                       ? In
+                       : DAG.getNode(ISD::ZERO_EXTEND, DL, MVT::i32, In);
+      SDValue Hi = DAG.getConstant(0, DL, MVT::i32);
+      return buildI64Value(Lo, Hi, DAG, DL);
+    }
+    break;
+  case ISD::SIGN_EXTEND:
+    if (VT == MVT::i64) {
+      SDValue In = Op.getOperand(0);
+      EVT InVT = In.getValueType();
+      SDValue Lo = (InVT == MVT::i32)
+                       ? In
+                       : DAG.getNode(ISD::SIGN_EXTEND, DL, MVT::i32, In);
+      SDValue Zero = DAG.getConstant(0, DL, MVT::i32);
+      SDValue NegOne = DAG.getConstant(-1, DL, MVT::i32);
+      SDValue Sign = DAG.getSetCC(DL, MVT::i1, Lo, Zero, ISD::SETLT);
+      SDValue Hi = DAG.getSelect(DL, MVT::i32, Sign, NegOne, Zero);
+      return buildI64Value(Lo, Hi, DAG, DL);
+    }
+    break;
+  case ISD::TRUNCATE:
+    if (VT == MVT::i32 && Op.getOperand(0).getValueType() == MVT::i64) {
+      SDValue Lo, Hi;
+      splitI64Value(Op.getOperand(0), Lo, Hi, DAG, DL);
+      return Lo;
+    }
+    break;
   case ISD::CTLZ:
   case ISD::CTLZ_ZERO_UNDEF:
     if (VT == MVT::i32 || VT == MVT::i64) {
@@ -513,20 +755,19 @@ SDValue I8085TargetLowering::LowerOperation(SDValue Op, SelectionDAG &DAG) const
       return Result;
     }
     break;
+  case ISD::LOAD:
+    if (auto Res = lowerI64Load(Op, DAG))
+      return Res;
+    break;
+  case ISD::STORE:
+    if (auto Res = lowerI64Store(Op, DAG))
+      return Res;
+    break;
   case ISD::SHL:
   case ISD::SRL:
   case ISD::SRA:
-    if (VT == MVT::i64) {
-      SDValue LHS = Op.getOperand(0);
-      SDValue RHS = Op.getOperand(1);
-      if (RHS.getValueType() != MVT::i32)
-        RHS = DAG.getNode(ISD::TRUNCATE, DL, MVT::i32, RHS);
-      RTLIB::Libcall LC =
-          (Op.getOpcode() == ISD::SHL) ? RTLIB::SHL_I64
-          : (Op.getOpcode() == ISD::SRL) ? RTLIB::SRL_I64
-                                         : RTLIB::SRA_I64;
-      return lowerI64LibCall(LC, LHS, RHS);
-    }
+    if (VT == MVT::i64)
+      return LowerShiftI64(Op, DAG);
     break;
   case ISD::SIGN_EXTEND_INREG: {
     SDValue Val = Op.getOperand(0);
@@ -608,6 +849,40 @@ void I8085TargetLowering::ReplaceNodeResults(SDNode *N,
     break;
   }
   }
+}
+
+SDValue I8085TargetLowering::PerformDAGCombine(SDNode *N,
+                                             DAGCombinerInfo &DCI) const {
+  switch (N->getOpcode()) {
+  case ISD::SUB:
+    return performSubCombine(N, DCI);
+  default:
+    break;
+  }
+  return SDValue();
+}
+
+SDValue I8085TargetLowering::performSubCombine(SDNode *N,
+                                             DAGCombinerInfo &DCI) const {
+  EVT VT = N->getValueType(0);
+  if (VT != MVT::i8 && VT != MVT::i16)
+    return SDValue();
+
+  auto *CLHS = dyn_cast<ConstantSDNode>(N->getOperand(0));
+  if (!CLHS)
+    return SDValue();
+
+  if (isa<ConstantSDNode>(N->getOperand(1)))
+    return SDValue();
+
+  SelectionDAG &DAG = DCI.DAG;
+  SDLoc DL(N);
+  SDValue RHS = N->getOperand(1);
+  SDValue AllOnes = DAG.getAllOnesConstant(DL, VT);
+  SDValue NotRHS = DAG.getNode(ISD::XOR, DL, VT, RHS, AllOnes);
+  APInt C = CLHS->getAPIntValue();
+  SDValue CPlusOne = DAG.getConstant(C + 1, DL, VT);
+  return DAG.getNode(ISD::ADD, DL, VT, NotRHS, CPlusOne);
 }
 
 /// Return true if the addressing mode represented
@@ -1196,6 +1471,14 @@ SDValue I8085TargetLowering::LowerCallResult(
     const SmallVectorImpl<ISD::InputArg> &Ins, const SDLoc &dl,
     SelectionDAG &DAG, SmallVectorImpl<SDValue> &InVals) const {
 
+  if (Ins.size() == 1 && Ins[0].VT == MVT::i8) {
+    SDValue V = DAG.getCopyFromReg(Chain, dl, I8085::A, MVT::i8, InFlag);
+    Chain = V.getValue(1);
+    InFlag = V.getValue(2);
+    InVals.push_back(V.getValue(0));
+    return Chain;
+  }
+
   bool IsI64 =
       (!Ins.empty() && Ins[0].VT == MVT::i64) ||
       (Ins.size() == 2 && Ins[0].VT == MVT::i32 && Ins[1].VT == MVT::i32 &&
@@ -1203,8 +1486,10 @@ SDValue I8085TargetLowering::LowerCallResult(
       (Ins.size() == 2 &&
        Ins[0].VT == MVT::i32 && Ins[1].VT == MVT::i32);
 
+  bool IsF32 =
+      (Ins.size() == 1 && Ins[0].VT == MVT::f32);
   bool IsI32 =
-      (Ins.size() == 1 && Ins[0].VT == MVT::i32);
+      (Ins.size() == 1 && Ins[0].VT == MVT::i32) || IsF32;
 
   if (IsI64) {
     SDValue Lo = DAG.getCopyFromReg(Chain, dl, I8085::IAX, MVT::i32, InFlag);
@@ -1233,6 +1518,8 @@ SDValue I8085TargetLowering::LowerCallResult(
                                   DAG.getConstant(16, dl, MVT::i32));
     SDValue Val = DAG.getNode(ISD::OR, dl, MVT::i32, LoZ, HiShift);
 
+    if (IsF32)
+      Val = DAG.getNode(ISD::BITCAST, dl, MVT::f32, Val);
     InVals.push_back(Val);
     return Chain;
   }
@@ -1295,6 +1582,10 @@ bool I8085TargetLowering::CanLowerReturn(
     const SmallVectorImpl<ISD::OutputArg> &Outs, LLVMContext &Context) const {
   if (CallConv == CallingConv::I8085_BUILTIN) {
     for (const auto &Out : Outs) {
+      if (Out.VT == MVT::f32)
+        return true;
+    }
+    for (const auto &Out : Outs) {
       if (Out.VT == MVT::i64 || Out.Flags.isSplit())
         return true;
     }
@@ -1313,7 +1604,7 @@ bool I8085TargetLowering::CanLowerReturn(
   if (Outs.size() > 1 && !IsI64)
     return false;
   for (const auto &Out : Outs) {
-    if (!Out.VT.isInteger())
+    if (!(Out.VT.isInteger() || Out.VT == MVT::f32))
       return false;
   }
 
@@ -1341,6 +1632,20 @@ I8085TargetLowering::LowerReturn(SDValue Chain, CallingConv::ID CallConv,
     return Chain;
   }
 
+  if (MF.getFunction().getReturnType()->isIntegerTy(8) && !OutVals.empty()) {
+    SDValue Val = OutVals[0];
+    if (Val.getValueType() != MVT::i8)
+      Val = DAG.getNode(ISD::TRUNCATE, dl, MVT::i8, Val);
+    SDValue Flag;
+    Chain = DAG.getCopyToReg(Chain, dl, I8085::A, Val, Flag);
+    SmallVector<SDValue, 4> RetOps;
+    RetOps.push_back(Chain);
+    RetOps.push_back(DAG.getRegister(I8085::A, MVT::i8));
+    if (Flag.getNode())
+      RetOps.push_back(Flag);
+    return DAG.getNode(I8085ISD::RET_FLAG, dl, MVT::Other, RetOps);
+  }
+
   bool IsI64 =
       (!Outs.empty() && Outs[0].VT == MVT::i64) ||
       (Outs.size() == 2 && Outs[0].VT == MVT::i32 && Outs[1].VT == MVT::i32 &&
@@ -1349,9 +1654,13 @@ I8085TargetLowering::LowerReturn(SDValue Chain, CallingConv::ID CallConv,
        OutVals[0].getValueType() == MVT::i32 &&
        OutVals[1].getValueType() == MVT::i32);
 
+  bool IsF32 =
+      (Outs.size() == 1 && Outs[0].VT == MVT::f32) ||
+      (OutVals.size() == 1 && OutVals[0].getValueType() == MVT::f32);
   bool IsI32 =
       (Outs.size() == 1 && Outs[0].VT == MVT::i32) ||
-      (OutVals.size() == 1 && OutVals[0].getValueType() == MVT::i32);
+      (OutVals.size() == 1 && OutVals[0].getValueType() == MVT::i32) ||
+      IsF32;
 
   if (IsI64) {
     SDValue Lo;
@@ -1360,12 +1669,7 @@ I8085TargetLowering::LowerReturn(SDValue Chain, CallingConv::ID CallConv,
       Lo = OutVals[0];
       Hi = OutVals[1];
     } else {
-      SDValue Val = OutVals[0];
-      Lo = DAG.getNode(ISD::TRUNCATE, dl, MVT::i32, Val);
-      Hi = DAG.getNode(
-          ISD::TRUNCATE, dl, MVT::i32,
-          DAG.getNode(ISD::SRL, dl, MVT::i64, Val,
-                      DAG.getConstant(32, dl, MVT::i64)));
+      splitI64Value(OutVals[0], Lo, Hi, DAG, dl);
     }
 
     SDValue Flag;
@@ -1386,6 +1690,8 @@ I8085TargetLowering::LowerReturn(SDValue Chain, CallingConv::ID CallConv,
 
   if (IsI32) {
     SDValue Val = OutVals[0];
+    if (Val.getValueType() == MVT::f32)
+      Val = DAG.getNode(ISD::BITCAST, dl, MVT::i32, Val);
     SDValue Lo = DAG.getNode(ISD::TRUNCATE, dl, MVT::i16, Val);
     SDValue Hi = DAG.getNode(
         ISD::TRUNCATE, dl, MVT::i16,
@@ -1525,8 +1831,13 @@ MachineBasicBlock *I8085TargetLowering::insertShiftSet(MachineInstr &MI,
   unsigned operandOne = MI.getOperand(1).getReg();
   unsigned operandTwo = MI.getOperand(2).getReg();
 
-  unsigned counterTempReg = MF->getRegInfo().createVirtualRegister(getRegClassFor(MVT::i8));
-  unsigned counterTempReg2 = MF->getRegInfo().createVirtualRegister(getRegClassFor(MVT::i8));
+  // Avoid A/HL here because GR32 shift pseudos clobber A/HL as scratch.
+  unsigned counterTempReg =
+      MF->getRegInfo().createVirtualRegister(&I8085::GR8NoAHLRegClass);
+  unsigned counterTempReg2 =
+      MF->getRegInfo().createVirtualRegister(&I8085::GR8NoAHLRegClass);
+  unsigned shiftCount =
+      MF->getRegInfo().createVirtualRegister(&I8085::GR8NoAHLRegClass);
 
   unsigned tempHolderOne,tempHolderTwo;
   int rrOpcode;
@@ -1557,6 +1868,9 @@ MachineBasicBlock *I8085TargetLowering::insertShiftSet(MachineInstr &MI,
   //MBB:
   // Jump to loop MBB
 
+  BuildMI(MBB, dl, TII.get(TargetOpcode::COPY), shiftCount)
+      .addReg(operandTwo);
+
   BuildMI(MBB, dl, TII.get(I8085::JMP))
      .addMBB(checkMBB);
 
@@ -1581,7 +1895,7 @@ MachineBasicBlock *I8085TargetLowering::insertShiftSet(MachineInstr &MI,
       .addMBB(shiftLoopMBB);
 
   BuildMI(checkMBB, dl, TII.get(I8085::PHI), counterTempReg2)
-      .addReg(operandTwo)
+      .addReg(shiftCount)
       .addMBB(MBB)
       .addReg(counterTempReg)
       .addMBB(shiftLoopMBB);
@@ -1639,9 +1953,13 @@ static MachineBasicBlock *insertSelectPseudo(MachineInstr &MI,
   unsigned trueReg = MI.getOperand(2).getReg();
   unsigned falseReg = MI.getOperand(3).getReg();
 
-  BuildMI(MBB, dl, TII.get(I8085::JMP_8_IF))
-      .addReg(condReg)
-      .addMBB(trueMBB);
+  // Materialize the condition into A immediately before branching so
+  // intervening GR32 pseudo expansions cannot clobber it.
+  BuildMI(MBB, dl, TII.get(I8085::MOV))
+      .addReg(I8085::A, RegState::Define)
+      .addReg(condReg);
+  BuildMI(MBB, dl, TII.get(I8085::ORI)).addImm(0);
+  BuildMI(MBB, dl, TII.get(I8085::JNZ)).addMBB(trueMBB);
   BuildMI(MBB, dl, TII.get(I8085::JMP)).addMBB(falseMBB);
 
   MBB->addSuccessor(falseMBB);

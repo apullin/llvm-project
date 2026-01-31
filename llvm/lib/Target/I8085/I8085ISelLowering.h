@@ -18,6 +18,7 @@
 #include "llvm/CodeGen/TargetLowering.h"
 
 namespace llvm {
+class DAGCombinerInfo;
 
 namespace I8085ISD {
 
@@ -109,6 +110,8 @@ public:
   void ReplaceNodeResults(SDNode *N, SmallVectorImpl<SDValue> &Results,
                           SelectionDAG &DAG) const override;
 
+  SDValue PerformDAGCombine(SDNode *N, DAGCombinerInfo &DCI) const override;
+
   bool isLegalAddressingMode(const DataLayout &DL, const AddrMode &AM, Type *Ty,
                              unsigned AS,
                              Instruction *I = nullptr) const override;
@@ -126,6 +129,8 @@ public:
   EVT getSetCCResultType(const DataLayout &DL, LLVMContext &Context,
                          EVT VT) const override;
 
+  void computeKnownBitsForFrameIndex(int FrameIdx, KnownBits &Known,
+                                     const MachineFunction &MF) const override;
 
   MachineBasicBlock * EmitInstrWithCustomInserter(MachineInstr &MI,
                               MachineBasicBlock *MBB) const override;
@@ -135,7 +140,7 @@ public:
 
   bool shouldSplitFunctionArgumentsAsLittleEndian(
       const DataLayout &DL) const override {
-    return false;
+    return DL.isLittleEndian();
   }
 
 private:
@@ -144,12 +149,14 @@ private:
   SDValue getI8085Cmp(SDValue LHS, SDValue RHS, SelectionDAG &DAG,
                     SDLoc dl) const;
   SDValue LowerShifts(SDValue Op, SelectionDAG &DAG) const;
+  SDValue LowerShiftI64(SDValue Op, SelectionDAG &DAG) const;
   SDValue LowerDivRem(SDValue Op, SelectionDAG &DAG) const;
   SDValue LowerGlobalAddress(SDValue Op, SelectionDAG &DAG) const;
   SDValue LowerBlockAddress(SDValue Op, SelectionDAG &DAG) const;
   SDValue LowerConstantPool(SDValue Op, SelectionDAG &DAG) const;
   SDValue LowerVASTART(SDValue Op, SelectionDAG &DAG) const;
   SDValue LowerVAEND(SDValue Op, SelectionDAG &DAG) const;
+  SDValue performSubCombine(SDNode *N, DAGCombinerInfo &DCI) const;
 
 
   bool CanLowerReturn(CallingConv::ID CallConv, MachineFunction &MF,

@@ -15,6 +15,8 @@
 #include "fp_mode.h"
 
 static __inline fp_t __addXf3__(fp_t a, fp_t b) {
+  const int tWidth = typeWidth;
+  const int one = 1;
   rep_t aRep = toRep(a);
   rep_t bRep = toRep(b);
   const rep_t aAbs = aRep & absMask;
@@ -94,7 +96,7 @@ static __inline fp_t __addXf3__(fp_t a, fp_t b) {
   const unsigned int align = (unsigned int)(aExponent - bExponent);
   if (align) {
     if (align < typeWidth) {
-      const bool sticky = (bSignificand << (typeWidth - align)) != 0;
+      const bool sticky = (bSignificand << (tWidth - align)) != 0;
       bSignificand = bSignificand >> align | sticky;
     } else {
       bSignificand = 1; // Set the sticky bit.  b is known to be non-zero.
@@ -132,8 +134,8 @@ static __inline fp_t __addXf3__(fp_t a, fp_t b) {
   if (aExponent <= 0) {
     // The result is denormal before rounding.  The exponent is zero and we
     // need to shift the significand.
-    const int shift = 1 - aExponent;
-    const bool sticky = (aSignificand << (typeWidth - shift)) != 0;
+    const int shift = one - aExponent;
+    const bool sticky = (aSignificand << (tWidth - shift)) != 0;
     aSignificand = aSignificand >> shift | sticky;
     aExponent = 0;
   }

@@ -84,12 +84,10 @@ define i16 @add_sub_2(i16,i16) {
 ; CHECK-NEXT:    LXI B, 10000
 ; CHECK-NEXT:    MOV A, E
 ; CHECK-NEXT:    SUB C
-; CHECK-NEXT:    MOV E, A
+; CHECK-NEXT:    MOV C, A
 ; CHECK-NEXT:    MOV A, D
 ; CHECK-NEXT:    SBB B
-; CHECK-NEXT:    MOV D, A
-; CHECK-NEXT:    MOV B, D
-; CHECK-NEXT:    MOV C, E
+; CHECK-NEXT:    MOV B, A
 ; CHECK-NEXT:    MOV A, C
 ; CHECK-NEXT:    ADD C
 ; CHECK-NEXT:    MOV C, A

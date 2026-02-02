@@ -149,12 +149,10 @@ define i8 @cmp_uge_i16(i16 %a, i16 %b) {
 ; CHECK-NEXT:    MOV E, M
 ; CHECK-NEXT:    MOV A, E
 ; CHECK-NEXT:    SUB C
-; CHECK-NEXT:    MOV E, A
+; CHECK-NEXT:    MOV C, A
 ; CHECK-NEXT:    MOV A, D
 ; CHECK-NEXT:    SBB B
-; CHECK-NEXT:    MOV D, A
-; CHECK-NEXT:    MOV B, D
-; CHECK-NEXT:    MOV C, E
+; CHECK-NEXT:    MOV B, A
 ; CHECK-NEXT:    JNC LBB3_2
 ; CHECK-NEXT:  LBB3_1:
 ; CHECK-NEXT:    MVI A, 0

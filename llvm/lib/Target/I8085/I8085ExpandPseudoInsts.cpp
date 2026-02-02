@@ -19,14 +19,13 @@
 
 #include "llvm/CodeGen/MachineFunctionPass.h"
 #include "llvm/Support/ErrorHandling.h"
+#include "llvm/Support/raw_ostream.h"
 #include "llvm/CodeGen/MachineInstrBuilder.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
 #include "llvm/CodeGen/LivePhysRegs.h"
 #include "llvm/CodeGen/RegisterScavenging.h"
 #include "llvm/CodeGen/TargetRegisterInfo.h"
 #include <stdint.h>
-
-#include <iostream>
 
 using namespace llvm;
 
@@ -499,28 +498,17 @@ template <>
 bool I8085ExpandPseudo::expand<I8085::CALL_INDIRECT>(Block &MBB, BlockIt MBBI) {
   MachineInstr &MI = *MBBI;
   MachineFunction *MF = MBB.getParent();
-  LivePhysRegs LiveRegs(*TRI);
-  LiveRegs.addLiveOuts(MBB);
-  for (auto I = MBB.rbegin(), E = MBBI.getReverse(); I != E; ++I)
-    LiveRegs.stepBackward(*I);
-  for (const MachineOperand &MO : MI.operands()) {
-    if (!MO.isReg() || MO.isDef())
-      continue;
-    Register Reg = MO.getReg();
-    if (Reg.isPhysical())
-      LiveRegs.addReg(Reg);
-  }
 
   const BasicBlock *LLVMBB = MBB.getBasicBlock();
   MachineBasicBlock *ReturnMBB = MF->CreateMachineBasicBlock(LLVMBB);
   auto InsertPos = std::next(MBB.getIterator());
   MF->insert(InsertPos, ReturnMBB);
-  MF->RenumberBlocks(&MBB);
 
   ReturnMBB->splice(ReturnMBB->begin(), &MBB, std::next(MBBI), MBB.end());
   ReturnMBB->transferSuccessorsAndUpdatePHIs(&MBB);
   MBB.addSuccessor(ReturnMBB);
-  addLiveIns(*ReturnMBB, LiveRegs);
+  LivePhysRegs LiveRegs;
+  computeAndAddLiveIns(LiveRegs, *ReturnMBB);
 
   buildMI(MBB, MBBI, I8085::LXI)
       .addReg(I8085::BC, RegState::Define)
@@ -2054,18 +2042,6 @@ template <> bool I8085ExpandPseudo::expand<I8085::JMP_16_IF_NOT_EQUAL>(Block &MB
   if (!getPairRegs(operandTwo, opTwoLow, opTwoHigh))
     return false;
 
-  LivePhysRegs LiveRegs(*TRI);
-  LiveRegs.addLiveOuts(MBB);
-  for (auto I = MBB.rbegin(), E = MBBI.getReverse(); I != E; ++I)
-    LiveRegs.stepBackward(*I);
-  for (const MachineOperand &MO : MI.operands()) {
-    if (!MO.isReg() || MO.isDef())
-      continue;
-    Register Reg = MO.getReg();
-    if (Reg.isPhysical())
-      LiveRegs.addReg(Reg);
-  }
-
   const BasicBlock *LLVMBB = MBB.getBasicBlock();
   MachineBasicBlock *CmpLowMBB = MF->CreateMachineBasicBlock(LLVMBB);
   MachineBasicBlock *TailMBB = MF->CreateMachineBasicBlock(LLVMBB);
@@ -2074,7 +2050,6 @@ template <> bool I8085ExpandPseudo::expand<I8085::JMP_16_IF_NOT_EQUAL>(Block &MB
   MF->insert(InsertPos, CmpLowMBB);
   MF->insert(InsertPos, TailMBB);
   MF->insert(InsertPos, DiffMBB);
-  MF->RenumberBlocks(&MBB);
 
   TailMBB->splice(TailMBB->begin(), &MBB, std::next(MBBI), MBB.end());
   TailMBB->transferSuccessorsAndUpdatePHIs(&MBB);
@@ -2089,9 +2064,10 @@ template <> bool I8085ExpandPseudo::expand<I8085::JMP_16_IF_NOT_EQUAL>(Block &MB
   CmpLowMBB->addSuccessor(DiffMBB);
   DiffMBB->addSuccessor(TargetMBB);
 
-  addLiveIns(*CmpLowMBB, LiveRegs);
-  addLiveIns(*TailMBB, LiveRegs);
-  addLiveIns(*DiffMBB, LiveRegs);
+  LivePhysRegs LiveRegs;
+  computeAndAddLiveIns(LiveRegs, *TailMBB);
+  computeAndAddLiveIns(LiveRegs, *DiffMBB);
+  computeAndAddLiveIns(LiveRegs, *CmpLowMBB);
 
   BuildMI(MBB, MBBI, DL, TII->get(I8085::MOV))
       .addReg(I8085::A, RegState::Define)

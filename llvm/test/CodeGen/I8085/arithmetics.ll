@@ -151,10 +151,14 @@ define i8 @add_sub_4(i8,i8) {
 ; CHECK-NEXT:    MOV M, A
 ; CHECK-NEXT:    LXI H, 4
 ; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
-; CHECK-NEXT:    MVI B, -95
+; CHECK-NEXT:    MOV B, M
+; CHECK-NEXT:    ADD B
+; CHECK-NEXT:    MOV B, A
 ; CHECK-NEXT:    MOV A, B
-; CHECK-NEXT:    SUB A
+; CHECK-NEXT:    XRI -1
+; CHECK-NEXT:    MOV B, A
+; CHECK-NEXT:    MVI A, 6
+; CHECK-NEXT:    ADD B
 ; CHECK-NEXT:    MOV B, A
 ; CHECK-NEXT:    LXI H, 0
 ; CHECK-NEXT:    DAD SP

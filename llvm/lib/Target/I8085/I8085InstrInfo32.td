@@ -1,4 +1,4 @@
-let Constraints = "$src = $rd", Defs=[SREG]  in {
+let Constraints = "$src = $rd", Defs=[SREG, A, HL]  in {
 
   def SUB_32
       : I8085Pseudo<(outs GR32: $rd),
@@ -88,13 +88,13 @@ def SELECT_32
             []>;
 
 
-let Constraints = "$rs = $rd", Defs=[SREG]  in {
-  let Defs=[SREG,A] in def RL_32 : I8085Pseudo<(outs GR32: $rd), (ins GR32: $rs), "RL_32 $rs", []>;
-  let Defs=[SREG,A] in def RR_32 : I8085Pseudo<(outs GR32: $rd), (ins GR32: $rs), "RR_32 $rs", []>;
-  let Defs=[SREG,A] in def ASR_32 : I8085Pseudo<(outs GR32: $rd), (ins GR32: $rs), "ASR_32 $rs", []>;
+let Constraints = "$rs = $rd", Defs=[SREG, A, HL]  in {
+  let Defs=[SREG, A, HL] in def RL_32 : I8085Pseudo<(outs GR32: $rd), (ins GR32: $rs), "RL_32 $rs", []>;
+  let Defs=[SREG, A, HL] in def RR_32 : I8085Pseudo<(outs GR32: $rd), (ins GR32: $rs), "RR_32 $rs", []>;
+  let Defs=[SREG, A, HL] in def ASR_32 : I8085Pseudo<(outs GR32: $rd), (ins GR32: $rs), "ASR_32 $rs", []>;
 }
 
-let Uses=[SP] in {
+let Uses=[SP], Defs=[A, HL] in {
 def LOAD_32 : I8085Pseudo<(outs GR32: $dst),
                        (ins i32imm: $src),
                        "LOAD_32 $dst, $src", [(set i32
@@ -102,7 +102,7 @@ def LOAD_32 : I8085Pseudo<(outs GR32: $dst),
                                              : $src)]>; 
 
 def STORE_32 : I8085Pseudo<(outs),
-                            (ins mspi: $dst, GR32: $src),
+                            (ins mspibdsp: $dst, GR32: $src),
                             "STORE_32 $dst, $src", [(store i32: $src, addr: $dst)]>;
                             
 
@@ -126,15 +126,19 @@ def LOAD_32_WITH_IMM_ADDR : I8085Pseudo<(outs GR32: $dst),
 
 def LOAD_32_ADDR_CONTENT : I8085Pseudo<(outs GR32: $dst),
                        (ins GR16: $src),
-                       "LOAD_32_ADDR_CONTENT $dst, $src", [(set i32: $dst, (load i16: $src))]>;
+                       "LOAD_32_ADDR_CONTENT $dst, $src", [(set i32: $dst, (load addr: $src))]>;
 
 def STORE_32_ADDR_CONTENT : I8085Pseudo<(outs),
                        (ins GR16: $addr, GR32: $src),
                        "STORE_32_ADDR_CONTENT $addr, $src",
                        [(store i32: $src, i16: $addr)]>;
 
-}
+def PACK_16_TO_32 : I8085Pseudo<(outs GR32: $dst),
+                       (ins GR16: $lo, GR16: $hi),
+                       "PACK_16_TO_32 $dst, $lo, $hi", []>;
 
+}
+let Defs=[A, HL] in {
 def MVI_32 : I8085Pseudo<(outs GR32: $rd),
                     (ins i32imm: $k),
                     "MVI_32 $rd, $k", [(set i32: $rd, imm: $k)]>;
@@ -197,9 +201,10 @@ def TRUNC32TO8
                       [(set i8
                         : $dst, (trunc i32
                                  : $src))]>;                                 
+}
 
 
-let Constraints = "$src = $dst", Defs=[SREG]  in {
+let Constraints = "$src = $dst", Defs=[SREG, A, HL]  in {
         def SEXT32_INREG_8
             : I8085Pseudo<(outs GR32: $dst),
                             (ins GR32: $src),
@@ -214,12 +219,12 @@ let Constraints = "$src = $dst", Defs=[SREG]  in {
 
 }
 
-def MOV_32 : I8085Pseudo<(outs GR32: $rd),
+let Defs=[A, HL] in def MOV_32 : I8085Pseudo<(outs GR32: $rd),
                     (ins GR32: $rs),
                     "MOV_32 $rd, $rs", []>;
 
 
-let isBranch = 1, isTerminator = 1, Defs=[SREG] in {
+let isBranch = 1, isTerminator = 1, Defs=[SREG, A, HL] in {
 
    def JMP_32_IF_NOT_EQUAL : I8085Pseudo<(outs),(ins GR32: $lhs, GR32: $rhs, addressTarget:$k),
                                            "JMP_32_IF_NOT_EQUAL $lhs, $rhs, $k", []>; 

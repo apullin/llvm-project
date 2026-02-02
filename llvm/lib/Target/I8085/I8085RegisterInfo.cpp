@@ -42,15 +42,12 @@ static bool needsBasePointer(const MachineFunction &MF) {
 
 const uint16_t *
 I8085RegisterInfo::getCalleeSavedRegs(const MachineFunction *MF) const {
-  const I8085MachineFunctionInfo *AFI = MF->getInfo<I8085MachineFunctionInfo>();
-  const I8085Subtarget &STI = MF->getSubtarget<I8085Subtarget>();
-    return CSR_Normal_SaveList;
+  return CSR_Normal_SaveList;
 }
 
 const uint32_t *
 I8085RegisterInfo::getCallPreservedMask(const MachineFunction &MF,
                                       CallingConv::ID CC) const {
-  const I8085Subtarget &STI = MF.getSubtarget<I8085Subtarget>();
   return CSR_Normal_RegMask;
 }
 
@@ -68,6 +65,33 @@ BitVector I8085RegisterInfo::getReservedRegs(const MachineFunction &MF) const {
     Reserved.set(I8085::E);
   }
 
+  // GR32 pseudos use HL as a scratch address register after regalloc.
+  // Reserve HL when IAX/IBX are present to avoid clobbering live values.
+  bool UsesGR32 = false;
+  for (const auto &MBB : MF) {
+    for (const auto &MI : MBB) {
+      for (const auto &MO : MI.operands()) {
+        if (!MO.isReg())
+          continue;
+        Register Reg = MO.getReg();
+        if (Reg == I8085::IAX || Reg == I8085::IBX) {
+          UsesGR32 = true;
+          break;
+        }
+      }
+      if (UsesGR32)
+        break;
+    }
+    if (UsesGR32)
+      break;
+  }
+  if (UsesGR32) {
+    Reserved.set(I8085::A);
+    Reserved.set(I8085::HL);
+    Reserved.set(I8085::H);
+    Reserved.set(I8085::L);
+  }
+
   return Reserved;
 }
 
@@ -76,6 +100,8 @@ I8085RegisterInfo::getLargestLegalSuperClass(const TargetRegisterClass *RC,
                                            const MachineFunction &MF) const {
   const TargetRegisterInfo *TRI = MF.getSubtarget().getRegisterInfo();
 
+  if (RC == &I8085::GR16BDRegClass || RC == &I8085::GR16BDSPRegClass)
+    return RC;
 
   if (TRI->isTypeLegalForClass(*RC, MVT::i16)) {
     return &I8085::GR16RegClass;
@@ -105,10 +131,8 @@ bool I8085RegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
   MachineBasicBlock &MBB = *MI.getParent();
   const MachineFunction &MF = *MBB.getParent();
   const I8085TargetMachine &TM = (const I8085TargetMachine &)MF.getTarget();
-  const TargetInstrInfo &TII = *TM.getSubtargetImpl()->getInstrInfo();
   const MachineFrameInfo &MFI = MF.getFrameInfo();
   const TargetFrameLowering *TFI = TM.getSubtargetImpl()->getFrameLowering();
-  const I8085Subtarget &STI = MF.getSubtarget<I8085Subtarget>();
   int FrameIndex = MI.getOperand(FIOperandNum).getIndex();
   int Offset = MFI.getObjectOffset(FrameIndex);
 
@@ -152,9 +176,18 @@ bool I8085RegisterInfo::shouldCoalesce(
     MachineInstr *MI, const TargetRegisterClass *SrcRC, unsigned SubReg,
     const TargetRegisterClass *DstRC, unsigned DstSubReg,
     const TargetRegisterClass *NewRC, LiveIntervals &LIS) const {
+  // Prevent widening GR16BD copies into GR16, which can reintroduce HL for
+  // base-address uses that must stay in BC/DE.
+  if ((SrcRC == &I8085::GR16BDRegClass ||
+       DstRC == &I8085::GR16BDRegClass ||
+       SrcRC == &I8085::GR16BDSPRegClass ||
+       DstRC == &I8085::GR16BDSPRegClass) &&
+      NewRC == &I8085::GR16RegClass) {
+    return false;
+  }
 
-  return TargetRegisterInfo::shouldCoalesce(MI, SrcRC, SubReg, DstRC, DstSubReg,
-                                            NewRC, LIS);
+  return TargetRegisterInfo::shouldCoalesce(
+      MI, SrcRC, SubReg, DstRC, DstSubReg, NewRC, LIS);
 }
 
 } // end of namespace llvm

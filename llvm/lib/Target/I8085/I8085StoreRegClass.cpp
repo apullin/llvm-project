@@ -45,7 +45,7 @@ public:
         case I8085::STORE_8:
         case I8085::STORE_16:
           SrcIdx = 0;
-          RC = &I8085::GR16BDRegClass;
+          RC = &I8085::GR16BDSPRegClass;
           break;
         default:
           break;

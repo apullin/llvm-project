@@ -82,6 +82,12 @@ def GR8NoHL : RegisterClass<"I8085", [i8], 8,
                             add A,B,C,D,E
                             )>;
 
+// 8-bit GPRs that avoid A/HL for condition values across GR32 pseudos.
+def GR8NoAHL : RegisterClass<"I8085", [i8], 8,
+                        (
+                            add B,C,D,E
+                            )>;
+
 def GR16 : RegisterClass<"I8085", [i16], 8,
                         (
                             add BC,DE,HL,SP
@@ -90,6 +96,11 @@ def GR16 : RegisterClass<"I8085", [i16], 8,
 def GR16BD : RegisterClass<"I8085", [i16], 8,
                         (
                             add BC,DE
+                        )>;
+
+def GR16BDSP : RegisterClass<"I8085", [i16], 8,
+                        (
+                            add BC,DE,SP
                         )>;
 
 def GR16PP : RegisterClass<"I8085", [i16], 8,

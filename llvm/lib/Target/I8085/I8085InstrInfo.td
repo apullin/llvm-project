@@ -236,24 +236,24 @@ def SELECT_16
             []>;
 
 let Defs=[SREG,A], Uses=[A] in def SUB : F2<0b10010,(outs), (ins GR8: $rs), "SUB $rs", []>;
-let Defs=[SREG,A], Uses=[A] in def SBB : F2<0b10011,(outs), (ins GR8: $rs), "SBB $rs",[]>;
-let Uses=[H,L],Defs=[SREG,A] in def SUB_M : F1<0b10010110,(outs), (ins), "SUB M", []>;
-let Uses=[H,L],Defs=[SREG,A] in def SBB_M : F1<0b10011110,(outs), (ins), "SBB M", []>;
+let Defs=[SREG,A], Uses=[A,SREG] in def SBB : F2<0b10011,(outs), (ins GR8: $rs), "SBB $rs",[]>;
+let Uses=[H,L,A],Defs=[SREG,A] in def SUB_M : F1<0b10010110,(outs), (ins), "SUB M", []>;
+let Uses=[H,L,A,SREG],Defs=[SREG,A] in def SBB_M : F1<0b10011110,(outs), (ins), "SBB M", []>;
 let Defs=[SREG,A], Uses=[A] in def ADD : F2<0b10000,(outs), (ins GR8: $rs), "ADD $rs", []>;
-let Defs=[SREG,A], Uses=[A] in def ADC : F2<0b10001,(outs), (ins GR8: $rs), "ADC $rs", []>;
+let Defs=[SREG,A], Uses=[A,SREG] in def ADC : F2<0b10001,(outs), (ins GR8: $rs), "ADC $rs", []>;
 
-let Uses=[H,L] in def ADD_M : F1<0b10000110,(outs), (ins), "ADD M", []>;
-let Uses=[H,L] in def ADC_M : F1<0b10001110,(outs), (ins), "ADC M", []>;
-let Uses=[H,L] in def ANA_M : F1<0b10100110,(outs), (ins), "ANA M", []>;
-let Uses=[H,L] in def ORA_M : F1<0b10110110,(outs), (ins), "ORA M", []>;
+let Uses=[H,L,A],Defs=[SREG,A] in def ADD_M : F1<0b10000110,(outs), (ins), "ADD M", []>;
+let Uses=[H,L,A,SREG],Defs=[SREG,A] in def ADC_M : F1<0b10001110,(outs), (ins), "ADC M", []>;
+let Uses=[H,L,A],Defs=[SREG,A] in def ANA_M : F1<0b10100110,(outs), (ins), "ANA M", []>;
+let Uses=[H,L,A],Defs=[SREG,A] in def ORA_M : F1<0b10110110,(outs), (ins), "ORA M", []>;
 
 
-let Uses=[H,L],Defs=[SREG,A] in def CMP_M : F1<0b10111110,(outs), (ins), "CMP M", []>;
-let Uses=[H,L],Defs=[SREG,A] in def XRA_M : F1<0b10101110,(outs), (ins), "XRA M", []>;
+let Uses=[H,L,A],Defs=[SREG] in def CMP_M : F1<0b10111110,(outs), (ins), "CMP M", []>;
+let Uses=[H,L,A],Defs=[SREG,A] in def XRA_M : F1<0b10101110,(outs), (ins), "XRA M", []>;
 
 let Defs=[SREG,A], Uses=[A] in def ADI : F5<0b11000110,(outs), (ins I8085Imm8: $k), "ADI $k", []>;
-let Defs=[SREG,A], Uses=[A] in def ACI : F5<0b11001110,(outs), (ins I8085Imm8: $k), "ACI $k", []>;
-let Defs=[SREG,A], Uses=[A] in def SBI : F5<0b11011110,(outs), (ins I8085Imm8: $k), "SBI $k", []>;
+let Defs=[SREG,A], Uses=[A,SREG] in def ACI : F5<0b11001110,(outs), (ins I8085Imm8: $k), "ACI $k", []>;
+let Defs=[SREG,A], Uses=[A,SREG] in def SBI : F5<0b11011110,(outs), (ins I8085Imm8: $k), "SBI $k", []>;
 let Defs=[SREG,A], Uses=[A] in def SUI : F5<0b11010110,(outs), (ins I8085Imm8: $k), "SUI $k", []>;
 
 let Constraints = "$rs = $rd", Defs=[SREG]  in {
@@ -333,7 +333,7 @@ let Defs=[SREG,A], Uses=[A] in def XRA : F2<0b10101,(outs), (ins GR8: $rs), "XRA
 let Defs=[SREG,A], Uses=[A] in def ANI : F5<0b11100110,(outs), (ins I8085Imm8: $k), "ANI $k", []>;
 let Defs=[SREG,A], Uses=[A] in def ORI : F5<0b11110110,(outs), (ins I8085Imm8: $k), "ORI $k", []>;
 let Defs=[SREG,A], Uses=[A] in def XRI : F5<0b11101110,(outs), (ins I8085Imm8: $k), "XRI $k", []>;
-let Defs=[SREG,A], Uses=[A] in def CPI : F5<0b11111110,(outs), (ins I8085Imm8: $k), "CPI $k", []>;
+let Defs=[SREG], Uses=[A] in def CPI : F5<0b11111110,(outs), (ins I8085Imm8: $k), "CPI $k", []>;
 
 let hasSideEffects = 1, Defs=[A] in
 def IN : F5<0b11011011,(outs), (ins I8085Imm8: $k), "IN $k", []>;
@@ -410,6 +410,11 @@ def mspi : Operand<iPTR> {
   let MIOperandInfo = (ops GR16, I8085Imm16); 
 }
 
+// Addressing mode for stores that must avoid HL as a base (allow BC/DE/SP).
+def mspibdsp : Operand<iPTR> {
+  let MIOperandInfo = (ops GR16BDSP, I8085Imm16);
+}
+
 
 def LXI : F4<0b0001,(outs GR16: $rd), (ins I8085Imm16: $k), "LXI $rd, $k", []>;
 def INX : F8<0b0011,(outs GR16: $rd), (ins), "INX $rd", []>;
@@ -431,6 +436,7 @@ let Uses = [H,L] in {
 
   let Uses=[H,L] in def MOV_FROM_M  : FMOV_F_M<(outs GR8: $rd), (ins), "MOV $rd, M", []>;
 
+  let Uses=[H,L] in
   def MVI_M : F5<0b00110110,(outs), (ins I8085Imm8: $k), "MVI M, $k", []>;
 }          
 
@@ -460,20 +466,20 @@ def LOAD_16 : I8085Pseudo<(outs GR16: $dst),
                                              : $src)]>; 
 
 let Defs=[HL] in def STORE_16 : I8085Pseudo<(outs),
-                            (ins mspi: $dst, GR16: $src),
+                            (ins mspibdsp: $dst, GR16: $src),
                             "STORE_16 $dst, $src", [(store i16: $src, addr: $dst)]>;
 
 let Defs=[HL] in def STORE_8 : I8085Pseudo<(outs),
-                        (ins mspi: $memri,
+                        (ins mspibdsp: $memri,
                          GR8NoHL: $reg),
                         "STORE $memri, $reg", [(store i8: $reg, addr: $memri)]>;
 
 
-let Defs=[A] in def LOAD_16_WITH_ADDR : I8085Pseudo<(outs GR16: $dst),
+let Defs=[HL, A] in def LOAD_16_WITH_ADDR : I8085Pseudo<(outs GR16: $dst),
                        (ins mspi: $src),
                        "LOAD $dst, $src", [(set i16: $dst, (load addr: $src))]>;    
 
-def LOAD_8_WITH_ADDR : I8085Pseudo<(outs GR8: $dst),
+let Defs=[HL] in def LOAD_8_WITH_ADDR : I8085Pseudo<(outs GR8: $dst),
                        (ins mspi: $src),
                        "LOAD $dst, $src", [(set i8: $dst, (load addr: $src))]>;
 

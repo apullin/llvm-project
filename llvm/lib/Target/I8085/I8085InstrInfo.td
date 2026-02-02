@@ -169,6 +169,12 @@ let Constraints = "$src = $rd", Defs=[SREG, A]  in {
               "SUB_8\t$rd, $rr",
               [(set i8: $rd, (sub i8: $src, i8: $rr))]>;
 
+  def SUBI_8
+      : I8085Pseudo<(outs GR8: $rd),
+              (ins GR8: $src, I8085Imm8: $rr),
+              "SUBI_8\t$rd, $rr",
+              [(set i8: $rd, (sub i8: $src, imm: $rr))]>;
+
   def SUB_16
       : I8085Pseudo<(outs GR16: $rd),
               (ins GR16: $src, GR16: $rr),
@@ -596,11 +602,14 @@ def IsNeg16 : ImmLeaf<i16, [{
 }], imm16_Neg_Form>;
 
 
-def : Pat<(add i8: $src1, (IsNeg8 :$src2)),(SUB_8 i8: $src1, (MVI (imm8_Neg_Form imm: $src2)))>;
+def : Pat<(add i8: $src1, (IsNeg8 :$src2)),
+          (SUBI_8 i8: $src1, (imm8_Neg_Form imm: $src2))>;
 def : Pat<(add i16: $src1, (IsNeg16 :$src2)),(SUB_16 i16: $src1, (LOAD_16 (imm16_Neg_Form imm: $src2)))>;
 
 def : Pat<(add i8: $src1, (imm :$src2)),(ADD_8 i8: $src1, (MVI imm: $src2))>;
 def : Pat<(add i16: $src1, (imm :$src2)),(ADD_16 i16: $src1, (LOAD_16 imm: $src2))>;
+
+def : Pat<(sub i8: $src1, (imm :$src2)), (SUBI_8 i8: $src1, imm: $src2)>;
 
 
 let Defs=[SREG, A] in def SEXT8TO16

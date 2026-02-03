@@ -43,6 +43,17 @@ public:
     for (MachineBasicBlock &MBB : MF) {
       for (auto MI = MBB.begin(); MI != MBB.end();) {
         auto Next = std::next(MI);
+        if (MI->getOpcode() == I8085::MOV && MI->getNumOperands() >= 2 &&
+            MI->getOperand(0).isReg() && MI->getOperand(1).isReg()) {
+          Register Dst = MI->getOperand(0).getReg();
+          Register Src = MI->getOperand(1).getReg();
+          if (Dst == Src) {
+            MI = MBB.erase(MI);
+            Changed = true;
+            continue;
+          }
+        }
+
         if (Next != MBB.end() && MI->getOpcode() == I8085::MOV &&
             Next->getOpcode() == I8085::MOV) {
           if (MI->getNumOperands() >= 2 && Next->getNumOperands() >= 2 &&
@@ -88,6 +99,30 @@ public:
 
         if (Next == MBB.end()) {
           ++MI;
+          continue;
+        }
+
+        if ((MI->getOpcode() == I8085::INX && Next->getOpcode() == I8085::DCX) ||
+            (MI->getOpcode() == I8085::DCX && Next->getOpcode() == I8085::INX)) {
+          if (MI->getNumOperands() >= 1 && Next->getNumOperands() >= 1 &&
+              MI->getOperand(0).isReg() && Next->getOperand(0).isReg()) {
+            if (MI->getOperand(0).getReg() == Next->getOperand(0).getReg()) {
+              auto NextAfter = std::next(Next);
+              Next->eraseFromParent();
+              MI->eraseFromParent();
+              Changed = true;
+              MI = NextAfter;
+              continue;
+            }
+          }
+        }
+
+        if (MI->getOpcode() == I8085::XCHG && Next->getOpcode() == I8085::XCHG) {
+          auto NextAfter = std::next(Next);
+          Next->eraseFromParent();
+          MI->eraseFromParent();
+          Changed = true;
+          MI = NextAfter;
           continue;
         }
 

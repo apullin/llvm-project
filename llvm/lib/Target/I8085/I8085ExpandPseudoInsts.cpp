@@ -2068,11 +2068,6 @@ template <> bool I8085ExpandPseudo::expand<I8085::JMP_16_IF_NOT_EQUAL>(Block &MB
   CmpLowMBB->addSuccessor(DiffMBB);
   DiffMBB->addSuccessor(TargetMBB);
 
-  LivePhysRegs LiveRegs;
-  computeAndAddLiveIns(LiveRegs, *TailMBB);
-  computeAndAddLiveIns(LiveRegs, *DiffMBB);
-  computeAndAddLiveIns(LiveRegs, *CmpLowMBB);
-
   BuildMI(MBB, MBBI, DL, TII->get(I8085::MOV))
       .addReg(I8085::A, RegState::Define)
       .addReg(opOneHigh);
@@ -2095,6 +2090,11 @@ template <> bool I8085ExpandPseudo::expand<I8085::JMP_16_IF_NOT_EQUAL>(Block &MB
       BuildMI(TailMBB, DL, TII->get(I8085::JMP))
           .addMBB(*TailMBB->succ_begin());
   }
+
+  LivePhysRegs LiveRegs;
+  computeAndAddLiveIns(LiveRegs, *TailMBB);
+  computeAndAddLiveIns(LiveRegs, *DiffMBB);
+  computeAndAddLiveIns(LiveRegs, *CmpLowMBB);
 
   MI.eraseFromParent();
   return true;

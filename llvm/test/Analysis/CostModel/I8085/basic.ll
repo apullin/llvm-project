@@ -10,7 +10,7 @@ define i8 @add_i8(i8 %a, i8 %b) {
 }
 
 ; CHECK-LABEL: function 'add_i32'
-; CHECK: cost of 8 {{.*}} add i32
+; CHECK: cost of 4 {{.*}} add i32
 ; CHECK: cost of 1 {{.*}} ret i32
 
 define i32 @add_i32(i32 %a, i32 %b) {
@@ -19,7 +19,7 @@ define i32 @add_i32(i32 %a, i32 %b) {
 }
 
 ; CHECK-LABEL: function 'mul_i32'
-; CHECK: cost of 64 {{.*}} mul i32
+; CHECK: cost of 128 {{.*}} mul i32
 ; CHECK: cost of 1 {{.*}} ret i32
 
 define i32 @mul_i32(i32 %a, i32 %b) {
@@ -28,7 +28,7 @@ define i32 @mul_i32(i32 %a, i32 %b) {
 }
 
 ; CHECK-LABEL: function 'load_i32'
-; CHECK: cost of 8 {{.*}} load i32
+; CHECK: cost of 4 {{.*}} load i32
 ; CHECK: cost of 1 {{.*}} ret i32
 
 define i32 @load_i32(ptr %p) {

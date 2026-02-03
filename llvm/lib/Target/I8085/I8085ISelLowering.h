@@ -163,6 +163,9 @@ private:
   SDValue performMulCombine(SDNode *N, DAGCombinerInfo &DCI) const;
   SDValue performUDivCombine(SDNode *N, DAGCombinerInfo &DCI) const;
   SDValue performURemCombine(SDNode *N, DAGCombinerInfo &DCI) const;
+  SDValue performAddSubCombine(SDNode *N, DAGCombinerInfo &DCI) const;
+  SDValue performLogicCombine(SDNode *N, DAGCombinerInfo &DCI) const;
+  SDValue performShiftCombine(SDNode *N, DAGCombinerInfo &DCI) const;
 
 
   bool CanLowerReturn(CallingConv::ID CallConv, MachineFunction &MF,

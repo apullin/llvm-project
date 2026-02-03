@@ -1893,23 +1893,23 @@ static bool detectShiftUntilZeroIdiom(Loop *CurLoop, const DataLayout &DL,
   return true;
 }
 
-// Check if CTLZ / CTTZ intrinsic is profitable. Assume it is always
-// profitable if we delete the loop.
+// Check if CTLZ / CTTZ intrinsic is profitable.
 bool LoopIdiomRecognize::isProfitableToInsertFFS(Intrinsic::ID IntrinID,
                                                  Value *InitX, bool ZeroCheck,
                                                  size_t CanonicalSize) {
   const Value *Args[] = {InitX,
                          ConstantInt::getBool(InitX->getContext(), ZeroCheck)};
 
-  // @llvm.dbg doesn't count as they have no semantic effect.
-  auto InstWithoutDebugIt = CurLoop->getHeader()->instructionsWithoutDebug();
-  uint32_t HeaderSize =
-      std::distance(InstWithoutDebugIt.begin(), InstWithoutDebugIt.end());
+  (void)CanonicalSize;  // Previously used, kept for API compatibility.
 
   IntrinsicCostAttributes Attrs(IntrinID, InitX->getType(), Args);
   InstructionCost Cost = TTI->getIntrinsicInstrCost(
       Attrs, TargetTransformInfo::TCK_SizeAndLatency);
-  if (HeaderSize != CanonicalSize && Cost > TargetTransformInfo::TCC_Basic)
+
+  // Always check if the intrinsic is expensive. Targets without native
+  // ctlz/cttz report high costs for these intrinsics, and replacing even
+  // a small loop with an expensive intrinsic is not profitable.
+  if (Cost > TargetTransformInfo::TCC_Basic)
     return false;
 
   return true;

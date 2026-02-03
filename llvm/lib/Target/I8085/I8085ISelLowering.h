@@ -156,6 +156,7 @@ private:
   SDValue LowerConstantPool(SDValue Op, SelectionDAG &DAG) const;
   SDValue LowerVASTART(SDValue Op, SelectionDAG &DAG) const;
   SDValue LowerVAEND(SDValue Op, SelectionDAG &DAG) const;
+  SDValue LowerVACOPY(SDValue Op, SelectionDAG &DAG) const;
   SDValue performSubCombine(SDNode *N, DAGCombinerInfo &DCI) const;
 
 

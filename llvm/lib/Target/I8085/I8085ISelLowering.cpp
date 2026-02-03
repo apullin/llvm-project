@@ -261,6 +261,7 @@ I8085TargetLowering::I8085TargetLowering(const I8085TargetMachine &TM,
   setOperationAction(ISD::SRL_PARTS, MVT::i32, Expand);
   setOperationAction(ISD::VASTART, MVT::Other, Custom);
   setOperationAction(ISD::VAEND, MVT::Other, Custom);
+  setOperationAction(ISD::VACOPY, MVT::Other, Custom);
   setOperationAction(ISD::VAARG, MVT::Other, Expand);
   setOperationAction(ISD::DYNAMIC_STACKALLOC, MVT::i8, Expand);
   setOperationAction(ISD::DYNAMIC_STACKALLOC, MVT::i16, Expand);
@@ -685,6 +686,8 @@ SDValue I8085TargetLowering::LowerOperation(SDValue Op, SelectionDAG &DAG) const
     return LowerVASTART(Op, DAG);
   case ISD::VAEND:
     return LowerVAEND(Op, DAG);
+  case ISD::VACOPY:
+    return LowerVACOPY(Op, DAG);
   case ISD::MUL:
     if (VT == MVT::i64)
       return lowerI64LibCall(RTLIB::MUL_I64, Op.getOperand(0),
@@ -850,6 +853,26 @@ SDValue I8085TargetLowering::LowerVASTART(SDValue Op,
 
 SDValue I8085TargetLowering::LowerVAEND(SDValue Op, SelectionDAG &DAG) const {
   return Op.getOperand(0);
+}
+
+SDValue I8085TargetLowering::LowerVACOPY(SDValue Op, SelectionDAG &DAG) const {
+  // va_list is a simple pointer on i8085, so va_copy is just a pointer copy.
+  SDLoc dl(Op);
+  auto DL = DAG.getDataLayout();
+  EVT PtrVT = getPointerTy(DL);
+
+  SDValue Chain = Op.getOperand(0);
+  SDValue DstPtr = Op.getOperand(1);
+  SDValue SrcPtr = Op.getOperand(2);
+  const Value *DstSV = cast<SrcValueSDNode>(Op.getOperand(3))->getValue();
+  const Value *SrcSV = cast<SrcValueSDNode>(Op.getOperand(4))->getValue();
+
+  // Load the va_list pointer from the source.
+  SDValue SrcVal =
+      DAG.getLoad(PtrVT, dl, Chain, SrcPtr, MachinePointerInfo(SrcSV));
+  // Store it to the destination.
+  return DAG.getStore(SrcVal.getValue(1), dl, SrcVal, DstPtr,
+                      MachinePointerInfo(DstSV));
 }
 
 /// Replace a node with an illegal result type

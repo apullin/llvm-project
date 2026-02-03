@@ -8,6 +8,11 @@ extern "C" {
 typedef __SIZE_TYPE__ size_t;
 typedef __PTRDIFF_TYPE__ ptrdiff_t;
 typedef __WCHAR_TYPE__ wchar_t;
+typedef __WINT_TYPE__ wint_t;
+
+// max_align_t: type with the largest fundamental alignment.
+// On i8085, all types have alignment 1, so we use long as a convention.
+typedef long max_align_t;
 
 #ifndef NULL
 #ifdef __cplusplus

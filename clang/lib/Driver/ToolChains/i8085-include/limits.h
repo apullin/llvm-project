@@ -7,8 +7,13 @@
 #define SCHAR_MIN (-SCHAR_MAX - 1)
 #define UCHAR_MAX __UCHAR_MAX__
 
+#ifdef __CHAR_MAX__
 #define CHAR_MIN __CHAR_MIN__
 #define CHAR_MAX __CHAR_MAX__
+#else
+#define CHAR_MIN SCHAR_MIN
+#define CHAR_MAX SCHAR_MAX
+#endif
 
 #define SHRT_MAX __SHRT_MAX__
 #define SHRT_MIN (-SHRT_MAX - 1)
@@ -32,6 +37,10 @@
 
 #define LLONG_MAX __LONG_LONG_MAX__
 #define LLONG_MIN (-LLONG_MAX - 1)
+#ifdef __ULLONG_MAX__
 #define ULLONG_MAX __ULLONG_MAX__
+#else
+#define ULLONG_MAX __UINT64_MAX__
+#endif
 
 #endif // _I8085_LIMITS_H_

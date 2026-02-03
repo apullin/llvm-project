@@ -23,6 +23,10 @@
 
 namespace llvm {
 
+class Loop;
+class OptimizationRemarkEmitter;
+class ScalarEvolution;
+
 class I8085TTIImpl : public BasicTTIImplBase<I8085TTIImpl> {
   using BaseT = BasicTTIImplBase<I8085TTIImpl>;
   using TTI = TargetTransformInfo;
@@ -30,6 +34,7 @@ class I8085TTIImpl : public BasicTTIImplBase<I8085TTIImpl> {
 
   const I8085Subtarget *ST;
   const I8085TargetLowering *TLI;
+  const Function *Func;
 
   const I8085Subtarget *getST() const { return ST; }
   const I8085TargetLowering *getTLI() const { return TLI; }
@@ -39,14 +44,18 @@ class I8085TTIImpl : public BasicTTIImplBase<I8085TTIImpl> {
       return 1;
     if (Ty->isVectorTy())
       return 16;
-    if (!Ty->isIntegerTy())
-      return 1;
-    unsigned Bits = Ty->getPrimitiveSizeInBits();
-    if (Bits <= 8)
-      return 1;
-    if (Bits <= 16)
+    if (Ty->isPointerTy())
       return 2;
-    if (Bits <= 32)
+    if (!Ty->isSized())
+      return 1;
+    uint64_t Bytes = getDataLayout().getTypeStoreSize(Ty);
+    if (Bytes <= 1)
+      return 1;
+    if (Bytes <= 2)
+      return 2;
+    if (Bytes <= 4)
+      return 4;
+    if (Bytes <= 8)
       return 8;
     return 16;
   }
@@ -54,7 +63,7 @@ class I8085TTIImpl : public BasicTTIImplBase<I8085TTIImpl> {
 public:
   explicit I8085TTIImpl(const I8085TargetMachine *TM, const Function &F)
       : BaseT(TM, F.getDataLayout()), ST(TM->getSubtargetImpl(F)),
-        TLI(ST->getTargetLowering()) {}
+        TLI(ST->getTargetLowering()), Func(&F) {}
 
   unsigned getNumberOfRegisters(unsigned ClassID) const {
     bool Vector = (ClassID == 1);
@@ -104,15 +113,19 @@ public:
                                       Args, CxtI);
     int ISD = TLI->InstructionOpcodeToISD(Opcode);
 
+    unsigned Scale = getTypeScale(Ty);
     switch (ISD) {
     case ISD::MUL:
+      return 16 * Scale * Base;
     case ISD::SDIV:
     case ISD::UDIV:
     case ISD::SREM:
     case ISD::UREM:
-      if (Ty && Ty->isIntegerTy(64))
-        return 64 * Base;
-      return 32 * Base;
+      return 32 * Scale * Base;
+    case ISD::SHL:
+    case ISD::SRL:
+    case ISD::SRA:
+      return 2 * Scale * Base;
     default:
       break;
     }
@@ -149,6 +162,30 @@ public:
     InstructionCost Base = BaseT::getMemoryOpCost(Opcode, Src, Alignment,
                                                   AddressSpace, CostKind, OpInfo, I);
     return Base * getTypeScale(Src);
+  }
+
+  void getUnrollingPreferences(Loop *L, ScalarEvolution &SE,
+                               TTI::UnrollingPreferences &UP,
+                               OptimizationRemarkEmitter *ORE) {
+    BaseT::getUnrollingPreferences(L, SE, UP, ORE);
+    if (!Func)
+      return;
+
+    unsigned MaxCount = 4;
+    unsigned Threshold = 100;
+    if (Func->hasMinSize()) {
+      MaxCount = 2;
+      Threshold = 40;
+      UP.Partial = false;
+      UP.UnrollRemainder = false;
+    } else if (Func->hasOptSize()) {
+      MaxCount = 3;
+      Threshold = 60;
+      UP.Partial = false;
+    }
+
+    UP.Threshold = std::min(UP.Threshold, Threshold);
+    UP.MaxCount = std::min(UP.MaxCount, MaxCount);
   }
 };
 

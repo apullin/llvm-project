@@ -1110,6 +1110,105 @@ template <> bool I8085ExpandPseudo32::expand<I8085::JMP_32_IF_NOT_EQUAL>(Block &
   return true;
 }
 
+template <> bool I8085ExpandPseudo32::expand<I8085::JMP_32_IF_ULT>(Block &MBB, BlockIt MBBI) {
+  MachineInstr &MI = *MBBI;
+  MachineFunction *MF = MBB.getParent();
+  const DebugLoc &DL = MI.getDebugLoc();
+
+  unsigned operandOne = MI.getOperand(0).getReg();
+  unsigned operandTwo = MI.getOperand(1).getReg();
+  MachineBasicBlock *TargetMBB = MI.getOperand(2).getMBB();
+
+  LivePhysRegs LiveRegs(*TRI);
+  LiveRegs.addLiveOuts(MBB);
+  for (auto I = MBB.rbegin(), E = MBBI.getReverse(); I != E; ++I)
+    LiveRegs.stepBackward(*I);
+  for (const MachineOperand &MO : MI.operands()) {
+    if (!MO.isReg() || MO.isDef())
+      continue;
+    Register Reg = MO.getReg();
+    if (Reg.isPhysical())
+      LiveRegs.addReg(Reg);
+  }
+
+  const BasicBlock *LLVMBB = MBB.getBasicBlock();
+  SmallVector<MachineBasicBlock *, 3> CmpMBBs;
+  for (int i = 0; i < 3; ++i)
+    CmpMBBs.push_back(MF->CreateMachineBasicBlock(LLVMBB));
+  MachineBasicBlock *TailMBB = MF->CreateMachineBasicBlock(LLVMBB);
+  MachineBasicBlock *LtMBB = MF->CreateMachineBasicBlock(LLVMBB);
+
+  auto InsertPos = std::next(MBB.getIterator());
+  for (MachineBasicBlock *CmpMBB : CmpMBBs)
+    MF->insert(InsertPos, CmpMBB);
+  MF->insert(InsertPos, TailMBB);
+  MF->insert(InsertPos, LtMBB);
+  // Renumber ALL blocks to avoid conflicts with existing block numbers.
+  MF->RenumberBlocks();
+
+  TailMBB->splice(TailMBB->begin(), &MBB, std::next(MBBI), MBB.end());
+  TailMBB->transferSuccessorsAndUpdatePHIs(&MBB);
+  if (TailMBB->isSuccessor(TargetMBB)) {
+    TailMBB->removeSuccessor(TargetMBB);
+    TargetMBB->replacePhiUsesWith(TailMBB, LtMBB);
+  }
+
+  MBB.addSuccessor(CmpMBBs[0]);
+  MBB.addSuccessor(LtMBB);
+  MBB.addSuccessor(TailMBB);
+
+  CmpMBBs[0]->addSuccessor(CmpMBBs[1]);
+  CmpMBBs[0]->addSuccessor(LtMBB);
+  CmpMBBs[0]->addSuccessor(TailMBB);
+
+  CmpMBBs[1]->addSuccessor(CmpMBBs[2]);
+  CmpMBBs[1]->addSuccessor(LtMBB);
+  CmpMBBs[1]->addSuccessor(TailMBB);
+
+  CmpMBBs[2]->addSuccessor(LtMBB);
+  CmpMBBs[2]->addSuccessor(TailMBB);
+
+  LtMBB->addSuccessor(TargetMBB);
+
+  addLiveIns(*CmpMBBs[0], LiveRegs);
+  addLiveIns(*CmpMBBs[1], LiveRegs);
+  addLiveIns(*CmpMBBs[2], LiveRegs);
+  addLiveIns(*TailMBB, LiveRegs);
+  addLiveIns(*LtMBB, LiveRegs);
+
+  // Compare byte3 -> byte2 -> byte1 -> byte0.
+  emitScratchLoad(MBB, MBBI, operandOne, 3, I8085::A);
+  emitScratchAddr(MBB, MBBI, operandTwo, 3);
+  buildMI(MBB, MBBI, I8085::CMP_M);
+  buildMI(MBB, MBBI, I8085::JC).addMBB(LtMBB);
+  buildMI(MBB, MBBI, I8085::JNZ).addMBB(TailMBB);
+  buildMI(MBB, MBBI, I8085::JMP).addMBB(CmpMBBs[0]);
+
+  for (int i = 0; i < 3; ++i) {
+    MachineBasicBlock *CurMBB = CmpMBBs[i];
+    int ByteIndex = 2 - i;
+    emitScratchLoad(*CurMBB, DL, operandOne, ByteIndex, I8085::A);
+    emitScratchAddr(*CurMBB, DL, operandTwo, ByteIndex);
+    BuildMI(CurMBB, DL, TII->get(I8085::CMP_M));
+    BuildMI(CurMBB, DL, TII->get(I8085::JC)).addMBB(LtMBB);
+    BuildMI(CurMBB, DL, TII->get(I8085::JNZ)).addMBB(TailMBB);
+    MachineBasicBlock *NextMBB = (i == 2) ? TailMBB : CmpMBBs[i + 1];
+    BuildMI(CurMBB, DL, TII->get(I8085::JMP)).addMBB(NextMBB);
+  }
+
+  BuildMI(LtMBB, DL, TII->get(I8085::JMP)).addMBB(TargetMBB);
+
+  if (TailMBB->succ_size() == 1) {
+    auto Last = TailMBB->getLastNonDebugInstr();
+    if (Last == TailMBB->end() || !Last->isTerminator())
+      BuildMI(TailMBB, DL, TII->get(I8085::JMP))
+          .addMBB(*TailMBB->succ_begin());
+  }
+
+  MI.eraseFromParent();
+  return true;
+}
+
 
 template <> bool I8085ExpandPseudo32::expand<I8085::JMP_32_IF_SAME_SIGN>(Block &MBB, BlockIt MBBI) {
   MachineInstr &MI = *MBBI;
@@ -1277,6 +1376,7 @@ bool I8085ExpandPseudo32::expandMI(Block &MBB, BlockIt MBBI) {
     EXPAND(I8085::JMP_32_IF_POSITIVE);
     EXPAND(I8085::JMP_32_IF_SAME_SIGN);
     EXPAND(I8085::JMP_32_IF_NOT_EQUAL);
+    EXPAND(I8085::JMP_32_IF_ULT);
     EXPAND(I8085::MOV_32);
     EXPAND(I8085::PACK_16_TO_32);
     EXPAND(I8085::SUBI_32);

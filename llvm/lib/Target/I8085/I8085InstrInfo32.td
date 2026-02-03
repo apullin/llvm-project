@@ -229,6 +229,9 @@ let isBranch = 1, isTerminator = 1, Defs=[SREG, A, HL] in {
    def JMP_32_IF_NOT_EQUAL : I8085Pseudo<(outs),(ins GR32: $lhs, GR32: $rhs, addressTarget:$k),
                                            "JMP_32_IF_NOT_EQUAL $lhs, $rhs, $k", []>; 
 
+   def JMP_32_IF_ULT : I8085Pseudo<(outs),(ins GR32: $lhs, GR32: $rhs, addressTarget:$k),
+                                           "JMP_32_IF_ULT $lhs, $rhs, $k", []>;
+
    def JMP_32_IF_SAME_SIGN : I8085Pseudo<(outs),(ins GR32: $lhs, GR32: $rhs, addressTarget:$k),
                                            "JMP_32_IF_SAME_SIGN $lhs, $rhs, $k", []>;   
    

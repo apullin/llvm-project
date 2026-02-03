@@ -63,7 +63,6 @@ void I8085InstrInfo::copyPhysReg(MachineBasicBlock &MBB,
                                MachineBasicBlock::iterator MI,
                                const DebugLoc &DL, MCRegister DestReg,
                                MCRegister SrcReg, bool KillSrc) const {
-  const I8085Subtarget &STI = MBB.getParent()->getSubtarget<I8085Subtarget>();
   unsigned Opc;
 
 
@@ -488,7 +487,9 @@ MachineBasicBlock *I8085InstrInfo::getBranchDestBlock(const MachineInstr &MI) co
   case I8085::JNZ:
   case I8085::JC:
   case I8085::JNC:
-    return MI.getOperand(0).getMBB(); 
+  case I8085::JPE:
+  case I8085::JPO:
+    return MI.getOperand(0).getMBB();
   }
 }
 
@@ -506,6 +507,8 @@ bool I8085InstrInfo::isBranchOffsetInRange(unsigned BranchOp,
   case I8085::JNZ:
   case I8085::JC:
   case I8085::JNC:
+  case I8085::JPE:
+  case I8085::JPO:
     return true;
   }
 }

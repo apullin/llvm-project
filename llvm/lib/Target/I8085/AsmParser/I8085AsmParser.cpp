@@ -640,8 +640,8 @@ ParseStatus I8085AsmParser::tryParseRegister(MCRegister &RegNo,
   EndLoc = Parser.getTok().getLoc();
 
   if (RegNo == I8085::NoRegister)
-    return MatchOperand_NoMatch;
-  return MatchOperand_Success;
+    return ParseStatus::NoMatch;
+  return ParseStatus::Success;
 }
 
 void I8085AsmParser::eatComma() {

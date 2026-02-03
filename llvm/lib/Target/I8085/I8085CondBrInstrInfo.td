@@ -1,5 +1,5 @@
 
-let Constraints = "$lhs = $dst" , Uses=[SREG] in {
+let Uses=[SREG] in {
 def SET_NE_8 : I8085InserterPseudo<(outs GR8: $dst),
                         (ins GR8: $lhs,GR8: $rhs),
                         "SET_NE_8\t$dst, $lhs, $rhs", []>;
@@ -26,7 +26,7 @@ def SET_LE_8 : I8085InserterPseudo<(outs GR8: $dst),
 
 }
 
-let Constraints = "$lhs = $dst" , Uses=[SREG] in {
+let Uses=[SREG] in {
 
 def SET_UGT_8 : I8085InserterPseudo<(outs GR8: $dst),
                         (ins GR8: $lhs,GR8: $rhs),
@@ -173,8 +173,8 @@ let isCall = 1 in {
 }
 
 
-let isBranch = 1, isTerminator = 1, Defs=[SREG] in {
-   def JMP_8_IF : I8085Pseudo<(outs),(ins GR8: $reg, addressTarget:$k),
+let isBranch = 1, isTerminator = 1, Defs=[SREG, A] in {
+   def JMP_8_IF : I8085Pseudo<(outs),(ins GR8NoHL: $reg, addressTarget:$k),
                                            "JMP_8_IF $reg, $k", []>;
 
    def JMP_16_IF : I8085Pseudo<(outs),(ins GR16: $reg, addressTarget:$k),
@@ -203,7 +203,7 @@ let isBranch = 1, isTerminator = 1, Defs=[SREG] in {
 //                         "INVERSE $src", []>; 
 // }
 
-let Defs=[SREG] in {
+let Defs=[SREG], Uses=[A] in {
    def CMP : F2<0b10111,(outs),(ins GR8: $rs),"CMP $rs", []>;
 }
 

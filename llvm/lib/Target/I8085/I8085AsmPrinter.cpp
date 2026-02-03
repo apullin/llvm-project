@@ -69,7 +69,6 @@ public:
 
 private:
   const MCRegisterInfo &MRI;
-  bool EmittedStructorSymbolAttrs = false;
 };
 
 void I8085AsmPrinter::emitBasicBlockStart(const MachineBasicBlock &MBB) {
@@ -125,6 +124,7 @@ bool I8085AsmPrinter::PrintAsmOperand(const MachineInstr *MI, unsigned OpNum,
       unsigned ByteNumber = ExtraCode[0] - 'A';
       const InlineAsm::Flag OpFlags(MI->getOperand(OpNum - 1).getImm());
       const unsigned NumOpRegs = OpFlags.getNumOperandRegisters();
+      (void)NumOpRegs;
 
       const I8085Subtarget &STI = MF->getSubtarget<I8085Subtarget>();
       const TargetRegisterInfo &TRI = *STI.getRegisterInfo();

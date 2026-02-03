@@ -139,8 +139,9 @@ void I8085PassConfig::addPreSched2() {
 }
 
 void I8085PassConfig::addPreEmitPass() {
-  // Must run branch selection immediately preceding the asm printer.
-  addPass(&BranchRelaxationPassID);
+  // The i8085 uses absolute 16-bit addresses for all branches (JMP, JZ, JNZ,
+  // etc.), so every branch can reach every address in the 64KB address space.
+  // Branch relaxation is not needed and is therefore not added here.
 }
 
 MachineFunctionInfo *I8085TargetMachine::createMachineFunctionInfo(

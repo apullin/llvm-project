@@ -181,6 +181,8 @@ unsigned get8Opc(ISD::CondCode CC){
       case ISD::SETLT:
           Opc = I8085::SET_LT_8;
           break;    
+      default:
+          break;
   }
   return Opc;
 }
@@ -227,6 +229,8 @@ unsigned get16Opc(ISD::CondCode CC){
       case ISD::SETUGT:
           Opc = I8085::SET_UGT_16;
           break;    
+      default:
+          break;
   }
   return Opc;
 }
@@ -273,6 +277,8 @@ unsigned get32Opc(ISD::CondCode CC){
       case ISD::SETUGT:
           Opc = I8085::SET_UGT_32;
           break;    
+      default:
+          break;
   }
   return Opc;
 }
@@ -296,6 +302,9 @@ template <> bool I8085DAGToDAGISel::select<ISD::SETCC>(SDNode *N) {
   else if(Lhs.getSimpleValueType() == MVT::i32){
     Opc=get32Opc(CC);
   }
+
+  if (Opc == 0)
+    return false;
 
   SDNode *ResNode=CurDAG->getMachineNode(Opc, dl,MVT::i8,Ops);
   ReplaceUses(SDValue(N, 0), SDValue(ResNode, 0));
@@ -384,6 +393,26 @@ template <> bool I8085DAGToDAGISel::select<ISD::SHL>(SDNode *N) {
         return true;
       }
     }
+    SDValue Amt = RHS;
+    if (Amt.getSimpleValueType() != MVT::i8)
+      Amt = CurDAG->getZExtOrTrunc(Amt, dl, MVT::i8);
+    unsigned Opc = I8085::SHL_16;
+    SDValue Ops[] = {LHS, Amt};
+    SDNode *ResNode = CurDAG->getMachineNode(Opc, dl, MVT::i16, Ops);
+    ReplaceUses(SDValue(N, 0), SDValue(ResNode, 0));
+    CurDAG->RemoveDeadNode(N);
+    return true;
+  }
+  if(LHS.getSimpleValueType() == MVT::i32){
+    SDValue Amt = RHS;
+    if (Amt.getSimpleValueType() != MVT::i8)
+      Amt = CurDAG->getZExtOrTrunc(Amt, dl, MVT::i8);
+    unsigned Opc = I8085::SHL_32;
+    SDValue Ops[] = {LHS, Amt};
+    SDNode *ResNode = CurDAG->getMachineNode(Opc, dl, MVT::i32, Ops);
+    ReplaceUses(SDValue(N, 0), SDValue(ResNode, 0));
+    CurDAG->RemoveDeadNode(N);
+    return true;
   }
   if(LHS.getSimpleValueType() == MVT::i8 && RHS.getSimpleValueType() == MVT::i8){
     unsigned Opc=I8085::SHL_8;
@@ -405,10 +434,123 @@ template <> bool I8085DAGToDAGISel::select<ISD::SRA>(SDNode *N) {
   SDValue RHS = N->getOperand(1);
   
   
+  if(LHS.getSimpleValueType() == MVT::i16){
+    SDValue Amt = RHS;
+    if (Amt.getSimpleValueType() != MVT::i8)
+      Amt = CurDAG->getZExtOrTrunc(Amt, dl, MVT::i8);
+    unsigned Opc=I8085::SRA_16;
+    SDValue Ops[] = {LHS,Amt};
+    SDNode *ResNode = CurDAG->getMachineNode(Opc, dl,MVT::i16,Ops);
+    ReplaceUses(SDValue(N, 0), SDValue(ResNode, 0));
+    CurDAG->RemoveDeadNode(N);
+    return true;
+  }
+  if(LHS.getSimpleValueType() == MVT::i32){
+    SDValue Amt = RHS;
+    if (Amt.getSimpleValueType() != MVT::i8)
+      Amt = CurDAG->getZExtOrTrunc(Amt, dl, MVT::i8);
+    unsigned Opc=I8085::SRA_32;
+    SDValue Ops[] = {LHS,Amt};
+    SDNode *ResNode = CurDAG->getMachineNode(Opc, dl,MVT::i32,Ops);
+    ReplaceUses(SDValue(N, 0), SDValue(ResNode, 0));
+    CurDAG->RemoveDeadNode(N);
+    return true;
+  }
   if(LHS.getSimpleValueType() == MVT::i8 && RHS.getSimpleValueType() == MVT::i8){
     unsigned Opc=I8085::SRA_8;
     SDValue Ops[] = {LHS,RHS};
     SDNode *ResNode = CurDAG->getMachineNode(Opc, dl,MVT::i8,Ops);
+    ReplaceUses(SDValue(N, 0), SDValue(ResNode, 0));
+    CurDAG->RemoveDeadNode(N);
+    return true;
+  }
+
+  return false;
+}
+
+template <> bool I8085DAGToDAGISel::select<ISD::SRL>(SDNode *N) {
+  SDLoc dl(N);
+  auto DL = CurDAG->getDataLayout();
+
+  SDValue LHS = N->getOperand(0);
+  SDValue RHS = N->getOperand(1);
+
+  if(LHS.getSimpleValueType() == MVT::i16){
+    SDValue Amt = RHS;
+    if (Amt.getSimpleValueType() != MVT::i8)
+      Amt = CurDAG->getZExtOrTrunc(Amt, dl, MVT::i8);
+    unsigned Opc=I8085::SRL_16;
+    SDValue Ops[] = {LHS,Amt};
+    SDNode *ResNode = CurDAG->getMachineNode(Opc, dl,MVT::i16,Ops);
+    ReplaceUses(SDValue(N, 0), SDValue(ResNode, 0));
+    CurDAG->RemoveDeadNode(N);
+    return true;
+  }
+  if(LHS.getSimpleValueType() == MVT::i32){
+    SDValue Amt = RHS;
+    if (Amt.getSimpleValueType() != MVT::i8)
+      Amt = CurDAG->getZExtOrTrunc(Amt, dl, MVT::i8);
+    unsigned Opc=I8085::SRL_32;
+    SDValue Ops[] = {LHS,Amt};
+    SDNode *ResNode = CurDAG->getMachineNode(Opc, dl,MVT::i32,Ops);
+    ReplaceUses(SDValue(N, 0), SDValue(ResNode, 0));
+    CurDAG->RemoveDeadNode(N);
+    return true;
+  }
+  if(LHS.getSimpleValueType() == MVT::i8 && RHS.getSimpleValueType() == MVT::i8){
+    unsigned Opc=I8085::SRL_8;
+    SDValue Ops[] = {LHS,RHS};
+    SDNode *ResNode = CurDAG->getMachineNode(Opc, dl,MVT::i8,Ops);
+    ReplaceUses(SDValue(N, 0), SDValue(ResNode, 0));
+    CurDAG->RemoveDeadNode(N);
+    return true;
+  }
+
+  return false;
+}
+
+template <> bool I8085DAGToDAGISel::select<ISD::OR>(SDNode *N) {
+  SDLoc dl(N);
+
+  if (N->getValueType(0) != MVT::i32)
+    return false;
+
+  SDValue LHS = N->getOperand(0);
+  SDValue RHS = N->getOperand(1);
+
+  auto matchExt16 = [&](SDValue V, SDValue &Out) -> bool {
+    unsigned Opc = V.getOpcode();
+    if (Opc != ISD::ZERO_EXTEND && Opc != ISD::ANY_EXTEND)
+      return false;
+    SDValue Op0 = V.getOperand(0);
+    if (Op0.getValueType() != MVT::i16)
+      return false;
+    Out = Op0;
+    return true;
+  };
+
+  auto matchHiShift = [&](SDValue V, SDValue &Out) -> bool {
+    if (V.getOpcode() != ISD::SHL)
+      return false;
+    auto *C = dyn_cast<ConstantSDNode>(V.getOperand(1));
+    if (!C || C->getZExtValue() != 16)
+      return false;
+    return matchExt16(V.getOperand(0), Out);
+  };
+
+  SDValue Lo, Hi;
+  if (matchHiShift(LHS, Hi) && matchExt16(RHS, Lo)) {
+    SDValue Ops[] = {Lo, Hi};
+    SDNode *ResNode =
+        CurDAG->getMachineNode(I8085::PACK_16_TO_32, dl, MVT::i32, Ops);
+    ReplaceUses(SDValue(N, 0), SDValue(ResNode, 0));
+    CurDAG->RemoveDeadNode(N);
+    return true;
+  }
+  if (matchHiShift(RHS, Hi) && matchExt16(LHS, Lo)) {
+    SDValue Ops[] = {Lo, Hi};
+    SDNode *ResNode =
+        CurDAG->getMachineNode(I8085::PACK_16_TO_32, dl, MVT::i32, Ops);
     ReplaceUses(SDValue(N, 0), SDValue(ResNode, 0));
     CurDAG->RemoveDeadNode(N);
     return true;
@@ -940,6 +1082,10 @@ bool I8085DAGToDAGISel::trySelect(SDNode *N) {
     return select<ISD::SHL>(N);  
   case ISD::SRA:
     return select<ISD::SRA>(N);
+  case ISD::SRL:
+    return select<ISD::SRL>(N);
+  case ISD::OR:
+    return select<ISD::OR>(N);
   case ISD::SELECT:
     return select<ISD::SELECT>(N);
   case ISD::FrameIndex:

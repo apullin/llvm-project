@@ -458,66 +458,64 @@ MachineBasicBlock *I8085TargetLowering::insertCond16Set(MachineInstr &MI,
   unsigned operandTwo = MI.getOperand(2).getReg();
   
   
-  unsigned tempRegOne = MF->getRegInfo().createVirtualRegister(getRegClassFor(MVT::i8));
-  unsigned tempRegTwo = MF->getRegInfo().createVirtualRegister(getRegClassFor(MVT::i8));
-
-  unsigned tempRegThree = MF->getRegInfo().createVirtualRegister(getRegClassFor(MVT::i16));
-
-
+  unsigned tempRegOne =
+      MF->getRegInfo().createVirtualRegister(getRegClassFor(MVT::i8));
+  unsigned tempRegTwo =
+      MF->getRegInfo().createVirtualRegister(getRegClassFor(MVT::i8));
+  unsigned tempRegThree =
+      MF->getRegInfo().createVirtualRegister(getRegClassFor(MVT::i16));
 
   unsigned destReg = MI.getOperand(0).getReg();
 
-  // SUB_16 is a two-operand pseudo (dest == src). Let the two-address pass
-  // insert a copy if needed so operandOne remains available for later compares.
+  // Use a distinct destination for the subtraction so we don't create
+  // multiple defs of the same vreg in SSA.
   BuildMI(MBB, dl, TII.get(I8085::SUB_16))
-        .addReg(tempRegThree, RegState::Define)
+      .addReg(tempRegThree, RegState::Define)
+      .addReg(operandOne)
+      .addReg(operandTwo);
+
+  if (Opc == I8085::SET_UGT_16) {
+    BuildMI(MBB, dl, TII.get(I8085::JC)).addMBB(falseMBB);
+    BuildMI(MBB, dl, TII.get(I8085::JMP)).addMBB(checkMBB);
+
+    MBB->addSuccessor(falseMBB);
+    MBB->addSuccessor(checkMBB);
+
+    BuildMI(checkMBB, dl, TII.get(I8085::JMP_16_IF_NOT_EQUAL))
         .addReg(operandOne)
-        .addReg(operandTwo);
-
-  if(Opc == I8085::SET_UGT_16){
-    BuildMI(MBB, dl, TII.get(I8085::JC)).addMBB(falseMBB);
-    BuildMI(MBB, dl, TII.get(I8085::JMP)).addMBB(checkMBB);
-
-    MBB->addSuccessor(falseMBB);
-    MBB->addSuccessor(checkMBB);
-
-    BuildMI(checkMBB, dl, TII.get(I8085::JMP_16_IF_ZERO))
-        .addReg(tempRegThree)
-        .addMBB(falseMBB);
-    BuildMI(checkMBB, dl, TII.get(I8085::JMP)).addMBB(trueMBB);
-
-    checkMBB->addSuccessor(falseMBB);
-    checkMBB->addSuccessor(trueMBB);
-  }
-
-  else if(Opc == I8085::SET_ULT_16){
-    BuildMI(MBB, dl, TII.get(I8085::JC)).addMBB(trueMBB);
-    BuildMI(MBB, dl, TII.get(I8085::JMP)).addMBB(falseMBB);  
-    MBB->addSuccessor(trueMBB);
-    MBB->addSuccessor(falseMBB);
-  }
-
-  else if(Opc == I8085::SET_UGE_16){
-    BuildMI(MBB, dl, TII.get(I8085::JC)).addMBB(falseMBB);
-    BuildMI(MBB, dl, TII.get(I8085::JMP)).addMBB(trueMBB);  
-    MBB->addSuccessor(falseMBB);
-    MBB->addSuccessor(trueMBB);
-  }
-
-  else if(Opc == I8085::SET_ULE_16){
-    BuildMI(MBB, dl, TII.get(I8085::JC)).addMBB(trueMBB);
-    BuildMI(MBB, dl, TII.get(I8085::JMP)).addMBB(checkMBB);
-
-    MBB->addSuccessor(trueMBB);
-    MBB->addSuccessor(checkMBB);
-
-    BuildMI(checkMBB, dl, TII.get(I8085::JMP_16_IF_ZERO))
-        .addReg(tempRegThree)
+        .addReg(operandTwo)
         .addMBB(trueMBB);
     BuildMI(checkMBB, dl, TII.get(I8085::JMP)).addMBB(falseMBB);
 
     checkMBB->addSuccessor(trueMBB);
     checkMBB->addSuccessor(falseMBB);
+  } else if (Opc == I8085::SET_ULT_16) {
+    BuildMI(MBB, dl, TII.get(I8085::JC)).addMBB(trueMBB);
+    BuildMI(MBB, dl, TII.get(I8085::JMP)).addMBB(falseMBB);
+
+    MBB->addSuccessor(trueMBB);
+    MBB->addSuccessor(falseMBB);
+  } else if (Opc == I8085::SET_UGE_16) {
+    BuildMI(MBB, dl, TII.get(I8085::JC)).addMBB(falseMBB);
+    BuildMI(MBB, dl, TII.get(I8085::JMP)).addMBB(trueMBB);
+
+    MBB->addSuccessor(falseMBB);
+    MBB->addSuccessor(trueMBB);
+  } else if (Opc == I8085::SET_ULE_16) {
+    BuildMI(MBB, dl, TII.get(I8085::JC)).addMBB(trueMBB);
+    BuildMI(MBB, dl, TII.get(I8085::JMP)).addMBB(checkMBB);
+
+    MBB->addSuccessor(trueMBB);
+    MBB->addSuccessor(checkMBB);
+
+    BuildMI(checkMBB, dl, TII.get(I8085::JMP_16_IF_NOT_EQUAL))
+        .addReg(operandOne)
+        .addReg(operandTwo)
+        .addMBB(falseMBB);
+    BuildMI(checkMBB, dl, TII.get(I8085::JMP)).addMBB(trueMBB);
+
+    checkMBB->addSuccessor(falseMBB);
+    checkMBB->addSuccessor(trueMBB);
   }
   
   BuildMI(trueMBB, dl, TII.get(I8085::MVI))
@@ -1020,24 +1018,28 @@ MachineBasicBlock *I8085TargetLowering::insertCond32Set(MachineInstr &MI,
 
   unsigned operandOne = MI.getOperand(1).getReg();
   unsigned operandTwo = MI.getOperand(2).getReg();
-  
-  
+
   unsigned tempRegOne = MF->getRegInfo().createVirtualRegister(getRegClassFor(MVT::i8));
   unsigned tempRegTwo = MF->getRegInfo().createVirtualRegister(getRegClassFor(MVT::i8));
 
-  unsigned tempRegThree = MF->getRegInfo().createVirtualRegister(getRegClassFor(MVT::i32));
-
-
+  unsigned tempRegThree =
+      MF->getRegInfo().createVirtualRegister(getRegClassFor(MVT::i32));
+  unsigned tempRegFour =
+      MF->getRegInfo().createVirtualRegister(getRegClassFor(MVT::i32));
 
   unsigned destReg = MI.getOperand(0).getReg();
 
+  // SUB_32 enforces $src = $rd, so copy the lhs first to avoid clobbering
+  // operandOne (it is still needed for equality checks below).
+  BuildMI(MBB, dl, TII.get(I8085::MOV_32))
+      .addReg(tempRegThree, RegState::Define)
+      .addReg(operandOne);
   BuildMI(MBB, dl, TII.get(I8085::SUB_32))
-        .addReg(tempRegThree, RegState::Define)
-        .addReg(operandOne)
-        .addReg(operandTwo);    
+      .addReg(tempRegFour, RegState::Define)
+      .addReg(tempRegThree, RegState::Kill)
+      .addReg(operandTwo);
 
-
-  if(Opc == I8085::SET_UGT_32){
+  if (Opc == I8085::SET_UGT_32) {
     BuildMI(MBB, dl, TII.get(I8085::JC)).addMBB(falseMBB);
     BuildMI(MBB, dl, TII.get(I8085::JMP)).addMBB(checkMBB);
 
@@ -1054,21 +1056,21 @@ MachineBasicBlock *I8085TargetLowering::insertCond32Set(MachineInstr &MI,
     checkMBB->addSuccessor(falseMBB);
   }
 
-  else if(Opc == I8085::SET_ULT_32){
+  else if (Opc == I8085::SET_ULT_32) {
     BuildMI(MBB, dl, TII.get(I8085::JC)).addMBB(trueMBB);
-    BuildMI(MBB, dl, TII.get(I8085::JMP)).addMBB(falseMBB);  
+    BuildMI(MBB, dl, TII.get(I8085::JMP)).addMBB(falseMBB);
     MBB->addSuccessor(trueMBB);
     MBB->addSuccessor(falseMBB);
   }
 
-  else if(Opc == I8085::SET_UGE_32){
+  else if (Opc == I8085::SET_UGE_32) {
     BuildMI(MBB, dl, TII.get(I8085::JC)).addMBB(falseMBB);
-    BuildMI(MBB, dl, TII.get(I8085::JMP)).addMBB(trueMBB);  
+    BuildMI(MBB, dl, TII.get(I8085::JMP)).addMBB(trueMBB);
     MBB->addSuccessor(falseMBB);
     MBB->addSuccessor(trueMBB);
   }
 
-  else if(Opc == I8085::SET_ULE_32){
+  else if (Opc == I8085::SET_ULE_32) {
     BuildMI(MBB, dl, TII.get(I8085::JC)).addMBB(trueMBB);
     BuildMI(MBB, dl, TII.get(I8085::JMP)).addMBB(checkMBB);
 

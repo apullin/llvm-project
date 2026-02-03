@@ -28,7 +28,9 @@ def RetCC_I8085_BUILTIN : CallingConv<[
   CCIfType<[i8], CCAssignToReg<[A]>>,
   CCIfType<[i16], CCAssignToReg<[BC,DE]>>,
   CCIfType<[i32], CCAssignToReg<[IAX]>>,
-  CCIfType<[i64], CCAssignToReg<[IAX,IBX]>>
+  CCIfType<[i64], CCAssignToReg<[IAX,IBX]>>,
+  CCIfType<[f32], CCAssignToReg<[IAX]>>,
+  CCIfType<[f64], CCAssignToReg<[IAX,IBX]>>
 
   // CCIfType<[i8], CCAssignToReg<[R24, R25]>>,
   // CCIfType<[i16], CCAssignToReg<[R23R22, R25R24]>>
@@ -47,7 +49,9 @@ def ArgCC_I8085_Vararg : CallingConv<[
   CCIfType<[i8], CCAssignToStack<1, 1>>,
   CCIfType<[i16], CCAssignToStack<2, 1>>,
   CCIfType<[i32], CCAssignToStack<4, 1>>,
-  CCIfType<[i64], CCAssignToStack<8, 1>>
+  CCIfType<[i64], CCAssignToStack<8, 1>>,
+  CCIfType<[f32], CCAssignToStack<4, 1>>,
+  CCIfType<[f64], CCAssignToStack<8, 1>>
   // i16 are always passed through the stack with an alignment of 1.
 ]>;
 

@@ -26,7 +26,7 @@ Currently basic constructs such as , loading and storing variables, function cal
 ## <a id="notes">**Some implementation note:**
 
 1. Arguments are passed via stack.
-2. Scalar returns use registers: i8 in A, i16 in BC, i32 in IAX, i64 in IAX+IBX.
+2. Scalar returns use registers: i8 in A, i16 in BC, i32 in BC+DE. i64 uses `sret`.
 3. Aggregate returns are currently demoted to `sret` (hidden pointer).
 
 

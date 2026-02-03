@@ -287,10 +287,10 @@ I8085TargetLowering::I8085TargetLowering(const I8085TargetMachine &TM,
   setOperationAction(ISD::ROTR, MVT::i32, Expand);
   setOperationAction(ISD::ROTL, MVT::i64, Expand);
   setOperationAction(ISD::ROTR, MVT::i64, Expand);
-  setOperationAction(ISD::CTLZ, MVT::i32, LibCall);
-  setOperationAction(ISD::CTLZ_ZERO_UNDEF, MVT::i32, LibCall);
-  setOperationAction(ISD::CTLZ, MVT::i64, LibCall);
-  setOperationAction(ISD::CTLZ_ZERO_UNDEF, MVT::i64, LibCall);
+  setOperationAction(ISD::CTLZ, MVT::i32, Custom);
+  setOperationAction(ISD::CTLZ_ZERO_UNDEF, MVT::i32, Custom);
+  setOperationAction(ISD::CTLZ, MVT::i64, Custom);
+  setOperationAction(ISD::CTLZ_ZERO_UNDEF, MVT::i64, Custom);
   setOperationAction(ISD::CTTZ, MVT::i32, Custom);
   setOperationAction(ISD::CTTZ_ZERO_UNDEF, MVT::i32, Custom);
   setOperationAction(ISD::CTTZ, MVT::i64, Custom);
@@ -507,26 +507,6 @@ SDValue I8085TargetLowering::LowerConstantPool(SDValue Op,
   return DAG.getNode(I8085ISD::WRAPPER, SDLoc(Op), getPointerTy(DL), Result);
 }
 
-/// IntCCToI8085CC - Convert a DAG integer condition code to an I8085 CC.
-static I8085CC::CondCodes intCCToI8085CC(ISD::CondCode CC) {
-  switch (CC) {
-  default:
-    llvm_unreachable("Unknown condition code!");
-  case ISD::SETEQ:
-    return I8085CC::COND_EQ;
-  case ISD::SETNE:
-    return I8085CC::COND_NE;
-  case ISD::SETGE:
-    return I8085CC::COND_GE;
-  case ISD::SETLT:
-    return I8085CC::COND_LT;
-  case ISD::SETUGE:
-    return I8085CC::COND_SH;
-  case ISD::SETULT:
-    return I8085CC::COND_LO;
-  }
-}
-
 /// Returns appropriate CP/CPI/CPC nodes code for the given 8/16-bit operands.
 SDValue I8085TargetLowering::getI8085Cmp(SDValue LHS, SDValue RHS,
                                      SelectionDAG &DAG, SDLoc DL) const {
@@ -631,12 +611,46 @@ SDValue I8085TargetLowering::LowerOperation(SDValue Op, SelectionDAG &DAG) const
 
   auto lowerI64LibCall = [&](RTLIB::Libcall LC, SDValue LHS,
                              SDValue RHS) -> SDValue {
-    MakeLibCallOptions CallOptions;
-    SDValue Result;
-    SDValue Chain;
-    std::tie(Result, Chain) =
-        makeLibCall(DAG, LC, VT, {LHS, RHS}, CallOptions, DL);
-    return Result;
+    ArgListTy Args;
+    SDValue Chain = DAG.getEntryNode();
+    auto PtrVT = getPointerTy(DAG.getDataLayout());
+    Type *RetTy = VT.getTypeForEVT(*DAG.getContext());
+    Type *RetTyABI = RetTy;
+
+    // Use an sret temp to match clang's ABI for >32-bit integer returns.
+    MachineFrameInfo &MFI = DAG.getMachineFunction().getFrameInfo();
+    int RetFI = MFI.CreateStackObject(8, Align(1), false);
+    SDValue RetPtr = DAG.getFrameIndex(RetFI, PtrVT);
+
+    ArgListEntry RetEntry;
+    RetEntry.Node = RetPtr;
+    RetEntry.Ty = PointerType::getUnqual(RetTy);
+    RetEntry.IsSRet = true;
+    RetEntry.IndirectType = RetTy;
+    Args.push_back(RetEntry);
+    RetTyABI = Type::getVoidTy(*DAG.getContext());
+
+    ArgListEntry A1;
+    A1.Node = LHS;
+    A1.Ty = LHS.getValueType().getTypeForEVT(*DAG.getContext());
+    Args.push_back(A1);
+
+    ArgListEntry A2;
+    A2.Node = RHS;
+    A2.Ty = RHS.getValueType().getTypeForEVT(*DAG.getContext());
+    Args.push_back(A2);
+
+    SDValue Callee = DAG.getExternalSymbol(getLibcallName(LC), PtrVT);
+    TargetLowering::CallLoweringInfo CLI(DAG);
+    CLI.setDebugLoc(DL)
+        .setChain(Chain)
+        .setLibCallee(getLibcallCallingConv(LC), RetTyABI, Callee,
+                      std::move(Args));
+    std::pair<SDValue, SDValue> CallInfo = LowerCallTo(CLI);
+
+    SDValue Load =
+        DAG.getLoad(VT, DL, CallInfo.second, RetPtr, MachinePointerInfo());
+    return Load;
   };
 
   switch (Op.getOpcode()) {
@@ -731,28 +745,44 @@ SDValue I8085TargetLowering::LowerOperation(SDValue Op, SelectionDAG &DAG) const
     break;
   case ISD::CTLZ:
   case ISD::CTLZ_ZERO_UNDEF:
-    if (VT == MVT::i32 || VT == MVT::i64) {
-      RTLIB::Libcall LC =
-          (VT == MVT::i32) ? RTLIB::CTLZ_I32 : RTLIB::CTLZ_I64;
+    if (VT == MVT::i32) {
       MakeLibCallOptions CallOptions;
       SDValue Result;
       SDValue Chain;
-      std::tie(Result, Chain) =
-          makeLibCall(DAG, LC, VT, {Op.getOperand(0)}, CallOptions, DL);
+      std::tie(Result, Chain) = makeLibCall(DAG, RTLIB::CTLZ_I32, VT,
+                                            {Op.getOperand(0)}, CallOptions,
+                                            DL);
       return Result;
+    }
+    if (VT == MVT::i64) {
+      MakeLibCallOptions CallOptions;
+      SDValue Result32;
+      SDValue Chain;
+      std::tie(Result32, Chain) =
+          makeLibCall(DAG, RTLIB::CTLZ_I64, MVT::i32, {Op.getOperand(0)},
+                      CallOptions, DL);
+      return DAG.getNode(ISD::ZERO_EXTEND, DL, MVT::i64, Result32);
     }
     break;
   case ISD::CTTZ:
   case ISD::CTTZ_ZERO_UNDEF:
-    if (VT == MVT::i32 || VT == MVT::i64) {
-      RTLIB::Libcall LC =
-          (VT == MVT::i32) ? RTLIB::CTTZ_I32 : RTLIB::CTTZ_I64;
+    if (VT == MVT::i32) {
       MakeLibCallOptions CallOptions;
       SDValue Result;
       SDValue Chain;
-      std::tie(Result, Chain) =
-          makeLibCall(DAG, LC, VT, {Op.getOperand(0)}, CallOptions, DL);
+      std::tie(Result, Chain) = makeLibCall(DAG, RTLIB::CTTZ_I32, VT,
+                                            {Op.getOperand(0)}, CallOptions,
+                                            DL);
       return Result;
+    }
+    if (VT == MVT::i64) {
+      MakeLibCallOptions CallOptions;
+      SDValue Result32;
+      SDValue Chain;
+      std::tie(Result32, Chain) =
+          makeLibCall(DAG, RTLIB::CTTZ_I64, MVT::i32, {Op.getOperand(0)},
+                      CallOptions, DL);
+      return DAG.getNode(ISD::ZERO_EXTEND, DL, MVT::i64, Result32);
     }
     break;
   case ISD::LOAD:
@@ -870,6 +900,8 @@ SDValue I8085TargetLowering::performSubCombine(SDNode *N,
 
   auto *CLHS = dyn_cast<ConstantSDNode>(N->getOperand(0));
   if (!CLHS)
+    return SDValue();
+  if (CLHS->isZero())
     return SDValue();
 
   if (isa<ConstantSDNode>(N->getOperand(1)))
@@ -1033,9 +1065,11 @@ bool I8085TargetLowering::isOffsetFoldingLegal(
 
 /// Registers for calling conventions, ordered in reverse as required by ABI.
 /// Both arrays must be of the same length.
-static const MCPhysReg RegList8I8085[] = { I8085::B, I8085::C, I8085::D, I8085::E };
+static const MCPhysReg LLVM_ATTRIBUTE_UNUSED RegList8I8085[] = {
+    I8085::B, I8085::C, I8085::D, I8085::E};
 
-static const MCPhysReg RegList16I8085[] = { I8085::BC, I8085::DE };
+static const MCPhysReg LLVM_ATTRIBUTE_UNUSED RegList16I8085[] = {
+    I8085::BC, I8085::DE};
 
 
 
@@ -1313,11 +1347,8 @@ SDValue I8085TargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
   // If the callee is a GlobalAddress/ExternalSymbol node (quite common, every
   // direct call is) turn it into a TargetGlobalAddress/TargetExternalSymbol
   // node so that legalize doesn't hack it.
-  const Function *F = nullptr;
   if (const GlobalAddressSDNode *G = dyn_cast<GlobalAddressSDNode>(Callee)) {
     const GlobalValue *GV = G->getGlobal();
-    if (isa<Function>(GV))
-      F = cast<Function>(GV);
     Callee =
         DAG.getTargetGlobalAddress(GV, DL, getPointerTy(DAG.getDataLayout()));
   } else if (const ExternalSymbolSDNode *ES =
@@ -1359,8 +1390,6 @@ SDValue I8085TargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
   // chain them here. In fact, chaining them here somehow causes the first and
   // second store to be reversed which is the exact opposite of the intended
   // effect.
-  MachineFrameInfo &MFI = MF.getFrameInfo();
-  
   if (HasStackArgs) {
     SmallVector<SDValue, 8> MemOpChains;
     for (; AI != AE; AI++) {
@@ -1538,11 +1567,11 @@ SDValue I8085TargetLowering::LowerCallResult(
   // Copy all of the result registers out of their specified physreg.
   for (CCValAssign const &RVLoc : RVLocs) {
     if(RVLoc.isRegLoc()){
-    Chain = DAG.getCopyFromReg(Chain, dl, RVLoc.getLocReg(), RVLoc.getValVT(),
-                               InFlag)
-                .getValue(1);
-    InFlag = Chain.getValue(2);
-    InVals.push_back(Chain.getValue(0));
+    SDValue Copy = DAG.getCopyFromReg(Chain, dl, RVLoc.getLocReg(),
+                                      RVLoc.getValVT(), InFlag);
+    Chain = Copy.getValue(1);
+    InFlag = Copy.getValue(2);
+    InVals.push_back(Copy.getValue(0));
     }
     else{
       assert(RVLoc.isMemLoc() && "Must be memory location.");
@@ -1756,8 +1785,6 @@ I8085TargetLowering::LowerReturn(SDValue Chain, CallingConv::ID CallConv,
     return DAG.getNode(RetOpc, dl, MVT::Other, RetOps); 
     }
   }
-
-  const I8085MachineFunctionInfo *AFI = MF.getInfo<I8085MachineFunctionInfo>();
 
   unsigned RetOpc = I8085ISD::RET_FLAG;
 

@@ -503,6 +503,8 @@ bool I8085ExpandPseudo::expand<I8085::CALL_INDIRECT>(Block &MBB, BlockIt MBBI) {
   MachineBasicBlock *ReturnMBB = MF->CreateMachineBasicBlock(LLVMBB);
   auto InsertPos = std::next(MBB.getIterator());
   MF->insert(InsertPos, ReturnMBB);
+  // Renumber ALL blocks to avoid conflicts with existing block numbers.
+  MF->RenumberBlocks();
 
   ReturnMBB->splice(ReturnMBB->begin(), &MBB, std::next(MBBI), MBB.end());
   ReturnMBB->transferSuccessorsAndUpdatePHIs(&MBB);
@@ -2050,6 +2052,8 @@ template <> bool I8085ExpandPseudo::expand<I8085::JMP_16_IF_NOT_EQUAL>(Block &MB
   MF->insert(InsertPos, CmpLowMBB);
   MF->insert(InsertPos, TailMBB);
   MF->insert(InsertPos, DiffMBB);
+  // Renumber ALL blocks to avoid conflicts with existing block numbers.
+  MF->RenumberBlocks();
 
   TailMBB->splice(TailMBB->begin(), &MBB, std::next(MBBI), MBB.end());
   TailMBB->transferSuccessorsAndUpdatePHIs(&MBB);

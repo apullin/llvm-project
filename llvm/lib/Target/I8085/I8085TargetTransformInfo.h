@@ -18,6 +18,7 @@
 #include "llvm/Analysis/TargetTransformInfo.h"
 #include "llvm/CodeGen/BasicTTIImpl.h"
 #include "llvm/CodeGen/TargetLowering.h"
+#include "llvm/IR/IntrinsicInst.h"
 #include "llvm/Support/MathExtras.h"
 #include <algorithm>
 
@@ -162,6 +163,23 @@ public:
     InstructionCost Base = BaseT::getMemoryOpCost(Opcode, Src, Alignment,
                                                   AddressSpace, CostKind, OpInfo, I);
     return Base * getTypeScale(Src);
+  }
+
+  InstructionCost getIntrinsicInstrCost(const IntrinsicCostAttributes &ICA,
+                                        TTI::TargetCostKind CostKind) {
+    // The i8085 has no native count-leading-zeros, count-trailing-zeros, or
+    // popcount instructions. These must be emulated via loops or library calls.
+    // Report them as expensive to prevent loop idiom recognition from
+    // transforming simple shift loops into these intrinsics.
+    switch (ICA.getID()) {
+    case Intrinsic::ctlz:
+    case Intrinsic::cttz:
+    case Intrinsic::ctpop:
+      return TTI::TCC_Expensive;
+    default:
+      break;
+    }
+    return BaseT::getIntrinsicInstrCost(ICA, CostKind);
   }
 
   void getUnrollingPreferences(Loop *L, ScalarEvolution &SE,

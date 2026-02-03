@@ -24,7 +24,7 @@ body:             |
     ; CHECK: $hl = LXI 2
     ; CHECK-NEXT: DAD $sp
     ; CHECK-NEXT: $c = MOV_FROM_M
-    $c = LOAD_8_WITH_ADDR $sp, 2, implicit $sp
+    $c = LOAD_8_WITH_ADDR $sp, 2, implicit-def $hl, implicit $sp
     RET implicit $sp, implicit-def $sp
 ...
 
@@ -37,7 +37,7 @@ body:             |
     ; CHECK: $hl = LXI {{-?[0-9]+}}
     ; CHECK-NEXT: DAD $sp
     ; CHECK-NEXT: $c = MOV_FROM_M
-    $c = LOAD_8_WITH_ADDR $sp, -1, implicit $sp
+    $c = LOAD_8_WITH_ADDR $sp, -1, implicit-def $hl, implicit $sp
     RET implicit $sp, implicit-def $sp
 ...
 
@@ -137,7 +137,7 @@ body:             |
     ; CHECK-NEXT: $hl = LXI 0
     ; CHECK-NEXT: DAD $sp
     ; CHECK-NEXT: $e = MOV_FROM_M
-    $de = LOAD_16_WITH_ADDR $sp, 0, implicit-def $a, implicit $sp
+    $de = LOAD_16_WITH_ADDR $sp, 0, implicit-def $a, implicit-def $hl, implicit $sp
     RET implicit $sp, implicit-def $sp
 ...
 

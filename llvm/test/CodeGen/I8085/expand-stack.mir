@@ -98,6 +98,6 @@ body:             |
     ; CHECK: $hl = LXI 260
     ; CHECK-NEXT: DAD $sp
     ; CHECK-NEXT: $c = MOV_FROM_M
-    $c = LOAD_8_WITH_ADDR $sp, 260, implicit $sp
+    $c = LOAD_8_WITH_ADDR $sp, 260, implicit-def $hl, implicit $sp
     RET implicit $sp, implicit-def $sp
 ...

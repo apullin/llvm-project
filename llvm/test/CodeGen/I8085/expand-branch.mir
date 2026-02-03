@@ -19,7 +19,7 @@ body:             |
     ; CHECK: $a = MOV $c
     ; CHECK-NEXT: ORI 0
     ; CHECK-NEXT: JNZ %bb.1
-    JMP_8_IF $c, %bb.1, implicit-def $sreg
+    JMP_8_IF $c, %bb.1, implicit-def $sreg, implicit-def $a
     RET implicit $sp, implicit-def $sp
   bb.1:
     RET implicit $sp, implicit-def $sp
@@ -37,7 +37,7 @@ body:             |
     ; CHECK-NEXT: $a = MOV $c
     ; CHECK-NEXT: ANI 255
     ; CHECK-NEXT: JNZ %bb.1
-    JMP_16_IF $bc, %bb.1, implicit-def $sreg
+    JMP_16_IF $bc, %bb.1, implicit-def $sreg, implicit-def $a
     RET implicit $sp, implicit-def $sp
   bb.1:
     RET implicit $sp, implicit-def $sp
@@ -55,7 +55,7 @@ body:             |
     ; CHECK: $a = MOV $c
     ; CHECK: CMP $e
     ; CHECK: JNZ %bb.
-    JMP_16_IF_NOT_EQUAL $bc, $de, %bb.1, implicit-def $sreg
+    JMP_16_IF_NOT_EQUAL $bc, $de, %bb.1, implicit-def $sreg, implicit-def $a
     RET implicit $sp, implicit-def $sp
   bb.1:
     RET implicit $sp, implicit-def $sp
@@ -69,8 +69,8 @@ body:             |
     ; CHECK-LABEL: name:            jmp16_if_not_equal_twice
     ; CHECK-NOT: JMP_16_IF_NOT_EQUAL
     ; CHECK-COUNT-4: JNZ %bb.
-    JMP_16_IF_NOT_EQUAL $bc, $de, %bb.1, implicit-def $sreg
-    JMP_16_IF_NOT_EQUAL $bc, $de, %bb.2, implicit-def $sreg
+    JMP_16_IF_NOT_EQUAL $bc, $de, %bb.1, implicit-def $sreg, implicit-def $a
+    JMP_16_IF_NOT_EQUAL $bc, $de, %bb.2, implicit-def $sreg, implicit-def $a
     RET implicit $sp, implicit-def $sp
   bb.1:
     RET implicit $sp, implicit-def $sp
@@ -88,7 +88,7 @@ body:             |
     ; CHECK-NEXT: XRA $d
     ; CHECK-NEXT: ANI 128
     ; CHECK-NEXT: JZ %bb.1
-    JMP_16_IF_SAME_SIGN $bc, $de, %bb.1, implicit-def $sreg
+    JMP_16_IF_SAME_SIGN $bc, $de, %bb.1, implicit-def $sreg, implicit-def $a
     RET implicit $sp, implicit-def $sp
   bb.1:
     RET implicit $sp, implicit-def $sp
@@ -103,7 +103,7 @@ body:             |
     ; CHECK: $a = MOV $d
     ; CHECK-NEXT: ANI 128
     ; CHECK-NEXT: JZ %bb.1
-    JMP_16_IF_POSITIVE $de, %bb.1, implicit-def $sreg
+    JMP_16_IF_POSITIVE $de, %bb.1, implicit-def $sreg, implicit-def $a
     RET implicit $sp, implicit-def $sp
   bb.1:
     RET implicit $sp, implicit-def $sp

@@ -10,6 +10,24 @@
 // RUN: llvm-objcopy -O binary %t.elf %t.bin
 // RUN: %S/../../../../../i8085-trace/build/i8085-trace -S -q -n 200000 \
 // RUN:   -d 0x0600:0x0A %t.bin 2>&1 | FileCheck %s --check-prefix=ABI
+// RUN: %S/../../../../../tooling/build/build-clang-8085/bin/clang -target i8085-unknown-elf -O1 -ffreestanding -fno-builtin -nostdlib -emit-llvm -c \
+// RUN:   %s -o %t.o1.bc
+// RUN: %S/../../../../../tooling/build/build-clang-8085/bin/llc -O1 -mtriple=i8085-unknown-elf -filetype=obj %t.o1.bc -o %t.o1.o
+// RUN: %S/../../../../../tooling/build/build-clang-8085/bin/ld.lld -m i8085elf \
+// RUN:   -T %S/../../../../../sysroot/ldscripts/i8085-32kram-32krom.ld -Map %t.o1.map \
+// RUN:   -o %t.o1.elf %t.crt0.o %t.o1.o
+// RUN: llvm-objcopy -O binary %t.o1.elf %t.o1.bin
+// RUN: %S/../../../../../i8085-trace/build/i8085-trace -S -q -n 200000 \
+// RUN:   -d 0x0600:0x0A %t.o1.bin 2>&1 | FileCheck %s --check-prefix=ABI
+// RUN: %S/../../../../../tooling/build/build-clang-8085/bin/clang -target i8085-unknown-elf -Os -ffreestanding -fno-builtin -nostdlib -emit-llvm -c \
+// RUN:   %s -o %t.os.bc
+// RUN: %S/../../../../../tooling/build/build-clang-8085/bin/llc -O2 -mtriple=i8085-unknown-elf -filetype=obj %t.os.bc -o %t.os.o
+// RUN: %S/../../../../../tooling/build/build-clang-8085/bin/ld.lld -m i8085elf \
+// RUN:   -T %S/../../../../../sysroot/ldscripts/i8085-32kram-32krom.ld -Map %t.os.map \
+// RUN:   -o %t.os.elf %t.crt0.o %t.os.o
+// RUN: llvm-objcopy -O binary %t.os.elf %t.os.bin
+// RUN: %S/../../../../../i8085-trace/build/i8085-trace -S -q -n 200000 \
+// RUN:   -d 0x0600:0x0A %t.os.bin 2>&1 | FileCheck %s --check-prefix=ABI
 // NOTE: Exercise sret/byval+varargs under -O2.
 
 #include <stdint.h>

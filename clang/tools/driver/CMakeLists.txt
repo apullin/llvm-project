@@ -108,8 +108,11 @@ set(I8085_CRT_OBJECTS
 set(I8085_BUILTINS_DIR "${LLVM_MAIN_SRC_DIR}/../compiler-rt/lib/builtins")
 set(I8085_LIBGCC_SOURCES
   "${I8085_BUILTINS_DIR}/i8085/int_mul_div.c"
+  "${I8085_BUILTINS_DIR}/addsf3.c"
   "${I8085_BUILTINS_DIR}/muldi3.c"
+  "${I8085_BUILTINS_DIR}/mulsf3.c"
   "${I8085_BUILTINS_DIR}/divdi3.c"
+  "${I8085_BUILTINS_DIR}/divsf3.c"
   "${I8085_BUILTINS_DIR}/udivdi3.c"
   "${I8085_BUILTINS_DIR}/moddi3.c"
   "${I8085_BUILTINS_DIR}/umoddi3.c"
@@ -124,6 +127,18 @@ set(I8085_LIBGCC_SOURCES
   "${I8085_BUILTINS_DIR}/cmpdi2.c"
   "${I8085_BUILTINS_DIR}/ucmpdi2.c"
   "${I8085_BUILTINS_DIR}/negdi2.c"
+  "${I8085_BUILTINS_DIR}/negsf2.c"
+  "${I8085_BUILTINS_DIR}/subsf3.c"
+  "${I8085_BUILTINS_DIR}/comparesf2.c"
+  "${I8085_BUILTINS_DIR}/fixsfsi.c"
+  "${I8085_BUILTINS_DIR}/fixunssfsi.c"
+  "${I8085_BUILTINS_DIR}/fixsfdi.c"
+  "${I8085_BUILTINS_DIR}/fixunssfdi.c"
+  "${I8085_BUILTINS_DIR}/floatsisf.c"
+  "${I8085_BUILTINS_DIR}/floatunsisf.c"
+  "${I8085_BUILTINS_DIR}/floatdisf.c"
+  "${I8085_BUILTINS_DIR}/floatundisf.c"
+  "${I8085_BUILTINS_DIR}/fp_mode.c"
 )
 
 set(I8085_LIBGCC_OBJ_DIR "${I8085_SYSROOT_LIB_DIR}/builtins")
@@ -135,10 +150,14 @@ endforeach()
 
 set(I8085_LIBGCC_CFLAGS
   --target=i8085-unknown-elf
-  -Os
+  -Oz
   -ffreestanding
   -fno-builtin
   -fno-stack-protector
+  -ffunction-sections
+  -fdata-sections
+  -fno-unwind-tables
+  -fno-asynchronous-unwind-tables
   -I${I8085_BUILTINS_DIR}
 )
 

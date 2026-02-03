@@ -84,12 +84,10 @@ define i16 @add_sub_2(i16,i16) {
 ; CHECK-NEXT:    LXI B, 10000
 ; CHECK-NEXT:    MOV A, E
 ; CHECK-NEXT:    SUB C
-; CHECK-NEXT:    MOV E, A
+; CHECK-NEXT:    MOV C, A
 ; CHECK-NEXT:    MOV A, D
 ; CHECK-NEXT:    SBB B
-; CHECK-NEXT:    MOV D, A
-; CHECK-NEXT:    MOV B, D
-; CHECK-NEXT:    MOV C, E
+; CHECK-NEXT:    MOV B, A
 ; CHECK-NEXT:    MOV A, C
 ; CHECK-NEXT:    ADD C
 ; CHECK-NEXT:    MOV C, A
@@ -151,10 +149,14 @@ define i8 @add_sub_4(i8,i8) {
 ; CHECK-NEXT:    MOV M, A
 ; CHECK-NEXT:    LXI H, 4
 ; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
-; CHECK-NEXT:    MVI B, -95
+; CHECK-NEXT:    MOV B, M
+; CHECK-NEXT:    ADD B
+; CHECK-NEXT:    MOV B, A
 ; CHECK-NEXT:    MOV A, B
-; CHECK-NEXT:    SUB A
+; CHECK-NEXT:    XRI -1
+; CHECK-NEXT:    MOV B, A
+; CHECK-NEXT:    MVI A, 6
+; CHECK-NEXT:    ADD B
 ; CHECK-NEXT:    MOV B, A
 ; CHECK-NEXT:    LXI H, 0
 ; CHECK-NEXT:    DAD SP

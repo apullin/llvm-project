@@ -70,6 +70,21 @@ public:
     return TargetInfo::VoidPtrBuiltinVaList;
   }
 
+  void adjust(DiagnosticsEngine &Diags, LangOptions &Opts) override {
+    TargetInfo::adjust(Diags, Opts);
+    // Keep ABI alignments minimal; the backend does not realign the stack.
+    PointerAlign = 8;
+    IntAlign = 8;
+    LongAlign = 8;
+    LongLongAlign = 8;
+    HalfAlign = 8;
+    FloatAlign = 8;
+    DoubleAlign = 8;
+    LongDoubleAlign = 8;
+    SuitableAlign = 8;
+    DefaultAlignForAttributeAligned = 8;
+  }
+
   std::string_view getClobbers() const override { return ""; }
 
   ArrayRef<const char *> getGCCRegNames() const override;

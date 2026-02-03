@@ -228,6 +228,9 @@ createTargetCodeGenInfo(CodeGenModule &CGM) {
   case llvm::Triple::msp430:
     return createMSP430TargetCodeGenInfo(CGM);
 
+  case llvm::Triple::i8085:
+    return createI8085TargetCodeGenInfo(CGM);
+
   case llvm::Triple::riscv32:
   case llvm::Triple::riscv64: {
     StringRef ABIStr = Target.getABI();

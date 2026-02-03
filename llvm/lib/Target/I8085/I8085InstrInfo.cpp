@@ -282,7 +282,13 @@ unsigned I8085InstrInfo::getInstSizeInBytes(const MachineInstr &MI) const {
   // A regular instruction
   default: {
     const MCInstrDesc &Desc = get(Opcode);
-    return Desc.getSize();
+    unsigned Size = Desc.getSize();
+    // Pseudos have Size=0 in tablegen. Return a conservative estimate
+    // for any pass that queries size before expansion. Most pseudos expand
+    // to 5-20 bytes; 16 is a reasonable upper bound for estimation.
+    if (Size == 0 && Desc.isPseudo())
+      return 16;
+    return Size;
   }
   case TargetOpcode::EH_LABEL:
   case TargetOpcode::IMPLICIT_DEF:

@@ -73,6 +73,17 @@ static SDValue buildI64Value(SDValue Lo, SDValue Hi,
   return DAG.getNode(ISD::BUILD_PAIR, DL, MVT::i64, Lo, Hi);
 }
 
+static bool getPowerOf2ShiftAmount(const ConstantSDNode *C,
+                                   unsigned &ShiftAmt) {
+  if (!C)
+    return false;
+  const APInt &Val = C->getAPIntValue();
+  if (!Val.isPowerOf2())
+    return false;
+  ShiftAmt = Val.logBase2();
+  return true;
+}
+
 static SDValue lowerI64Load(SDValue Op, SelectionDAG &DAG) {
   SDLoc DL(Op);
   auto *LD = cast<LoadSDNode>(Op.getNode());
@@ -212,6 +223,9 @@ I8085TargetLowering::I8085TargetLowering(const I8085TargetMachine &TM,
     setOperationAction(ISD::SIGN_EXTEND_INREG, VT, Custom);
 
   setTargetDAGCombine(ISD::SUB);
+  setTargetDAGCombine(ISD::MUL);
+  setTargetDAGCombine(ISD::UDIV);
+  setTargetDAGCombine(ISD::UREM);
 
   for (MVT VT : MVT::integer_valuetypes()) {
     for (auto N : {ISD::EXTLOAD, ISD::SEXTLOAD, ISD::ZEXTLOAD}) {
@@ -909,6 +923,12 @@ SDValue I8085TargetLowering::PerformDAGCombine(SDNode *N,
   switch (N->getOpcode()) {
   case ISD::SUB:
     return performSubCombine(N, DCI);
+  case ISD::MUL:
+    return performMulCombine(N, DCI);
+  case ISD::UDIV:
+    return performUDivCombine(N, DCI);
+  case ISD::UREM:
+    return performURemCombine(N, DCI);
   default:
     break;
   }
@@ -938,6 +958,68 @@ SDValue I8085TargetLowering::performSubCombine(SDNode *N,
   APInt C = CLHS->getAPIntValue();
   SDValue CPlusOne = DAG.getConstant(C + 1, DL, VT);
   return DAG.getNode(ISD::ADD, DL, VT, NotRHS, CPlusOne);
+}
+
+SDValue I8085TargetLowering::performMulCombine(SDNode *N,
+                                             DAGCombinerInfo &DCI) const {
+  EVT VT = N->getValueType(0);
+  if (!VT.isInteger() || VT == MVT::i1)
+    return SDValue();
+
+  SDValue LHS = N->getOperand(0);
+  SDValue RHS = N->getOperand(1);
+  const ConstantSDNode *C = dyn_cast<ConstantSDNode>(LHS);
+  SDValue Other = RHS;
+  if (!C) {
+    C = dyn_cast<ConstantSDNode>(RHS);
+    Other = LHS;
+  }
+
+  unsigned ShiftAmt = 0;
+  if (!getPowerOf2ShiftAmount(C, ShiftAmt))
+    return SDValue();
+
+  SelectionDAG &DAG = DCI.DAG;
+  SDLoc DL(N);
+  EVT ShiftVT = getShiftAmountTy(VT, DAG.getDataLayout());
+  SDValue Amt = DAG.getConstant(ShiftAmt, DL, ShiftVT);
+  return DAG.getNode(ISD::SHL, DL, VT, Other, Amt);
+}
+
+SDValue I8085TargetLowering::performUDivCombine(SDNode *N,
+                                              DAGCombinerInfo &DCI) const {
+  EVT VT = N->getValueType(0);
+  if (!VT.isInteger() || VT == MVT::i1)
+    return SDValue();
+
+  const ConstantSDNode *C = dyn_cast<ConstantSDNode>(N->getOperand(1));
+  unsigned ShiftAmt = 0;
+  if (!getPowerOf2ShiftAmount(C, ShiftAmt))
+    return SDValue();
+
+  SelectionDAG &DAG = DCI.DAG;
+  SDLoc DL(N);
+  EVT ShiftVT = getShiftAmountTy(VT, DAG.getDataLayout());
+  SDValue Amt = DAG.getConstant(ShiftAmt, DL, ShiftVT);
+  return DAG.getNode(ISD::SRL, DL, VT, N->getOperand(0), Amt);
+}
+
+SDValue I8085TargetLowering::performURemCombine(SDNode *N,
+                                              DAGCombinerInfo &DCI) const {
+  EVT VT = N->getValueType(0);
+  if (!VT.isInteger() || VT == MVT::i1)
+    return SDValue();
+
+  const ConstantSDNode *C = dyn_cast<ConstantSDNode>(N->getOperand(1));
+  unsigned ShiftAmt = 0;
+  if (!getPowerOf2ShiftAmount(C, ShiftAmt))
+    return SDValue();
+
+  SelectionDAG &DAG = DCI.DAG;
+  SDLoc DL(N);
+  APInt Mask = C->getAPIntValue() - 1;
+  SDValue MaskVal = DAG.getConstant(Mask, DL, VT);
+  return DAG.getNode(ISD::AND, DL, VT, N->getOperand(0), MaskVal);
 }
 
 /// Return true if the addressing mode represented

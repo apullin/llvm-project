@@ -89,7 +89,9 @@ public:
   }
 
   MVT::SimpleValueType getCmpLibcallReturnType() const override {
-    return MVT::i8;
+    // compiler-rt comparesf2 returns CMP_RESULT, which is long on i8085
+    // (32-bit). Match that to avoid truncating compare results.
+    return MVT::i32;
   }
 
   const char *getTargetNodeName(unsigned Opcode) const override;
@@ -158,6 +160,9 @@ private:
   SDValue LowerVAEND(SDValue Op, SelectionDAG &DAG) const;
   SDValue LowerVACOPY(SDValue Op, SelectionDAG &DAG) const;
   SDValue performSubCombine(SDNode *N, DAGCombinerInfo &DCI) const;
+  SDValue performMulCombine(SDNode *N, DAGCombinerInfo &DCI) const;
+  SDValue performUDivCombine(SDNode *N, DAGCombinerInfo &DCI) const;
+  SDValue performURemCombine(SDNode *N, DAGCombinerInfo &DCI) const;
 
 
   bool CanLowerReturn(CallingConv::ID CallConv, MachineFunction &MF,

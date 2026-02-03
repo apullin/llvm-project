@@ -519,7 +519,16 @@ let Defs=[HL, A] in def LOAD_8_ADDR_CONTENT : I8085Pseudo<(outs GR8: $dst),
                        (ins GR16: $src),
                        "LOAD_8_ADDR_CONTENT $dst, $src", [(set i8: $dst, (load i16: $src))]>;
 
-let Defs=[HL, A] in def LOAD_16_ADDR_CONTENT : I8085Pseudo<(outs GR16: $dst),
+// LOAD_16_ADDR_CONTENT: Load 16-bit value from address in register.
+// Output constrained to GR16BD (BC/DE only) because HL is always clobbered
+// during expansion (used as address pointer). This avoids a Machine Copy
+// Propagation bug where "implicit-def dead $hl" causes incorrect COPY removal.
+//
+// NOTE: Allowing HL as output would require removing HL from Defs (risky for
+// liveness) or custom instruction selection to pick a variant without HL in Defs.
+// The expansion code can handle HL output, but register allocation needs to
+// know HL is clobbered, which prevents it from being allocated as output anyway.
+let Defs=[HL, A] in def LOAD_16_ADDR_CONTENT : I8085Pseudo<(outs GR16BD: $dst),
                        (ins GR16: $src),
                        "LOAD_16_ADDR_CONTENT $dst, $src", [(set i16: $dst, (load i16: $src))]>;
 

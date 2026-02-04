@@ -201,6 +201,31 @@ public:
     case Intrinsic::ctpop:
     case Intrinsic::abs:
       return TTI::TCC_Expensive;
+    case Intrinsic::bswap:
+      // bswap is cheap on i8085 - just byte reordering
+      // i16: ~4 instructions, i32: ~16 instructions
+      if (ICA.getReturnType()->isIntegerTy(16))
+        return 4;
+      if (ICA.getReturnType()->isIntegerTy(32))
+        return 16;
+      return TTI::TCC_Expensive;
+    case Intrinsic::smin:
+    case Intrinsic::smax:
+    case Intrinsic::umin:
+    case Intrinsic::umax:
+      // min/max expand to compare + select
+      // Cost depends on operand size
+      if (ICA.getReturnType()->isIntegerTy(8))
+        return 6;
+      if (ICA.getReturnType()->isIntegerTy(16))
+        return 10;
+      if (ICA.getReturnType()->isIntegerTy(32))
+        return 20;
+      return TTI::TCC_Expensive;
+    case Intrinsic::fshl:
+    case Intrinsic::fshr:
+      // Funnel shifts are expensive - no hardware support
+      return TTI::TCC_Expensive;
     default:
       break;
     }

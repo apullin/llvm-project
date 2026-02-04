@@ -308,8 +308,11 @@ I8085TargetLowering::I8085TargetLowering(const I8085TargetMachine &TM,
   setOperationAction(ISD::BITREVERSE, MVT::i16, Expand);
   setOperationAction(ISD::BITREVERSE, MVT::i32, Expand);
   setOperationAction(ISD::BITREVERSE, MVT::i64, Expand);
-  setOperationAction(ISD::BSWAP, MVT::i16, Expand);
-  setOperationAction(ISD::BSWAP, MVT::i32, Expand);
+  // BSWAP is implemented via pseudo instructions for i16 and i32.
+  // These expand to simple byte moves which is much more efficient than
+  // the default shift-based expansion.
+  setOperationAction(ISD::BSWAP, MVT::i16, Legal);
+  setOperationAction(ISD::BSWAP, MVT::i32, Legal);
   setOperationAction(ISD::BSWAP, MVT::i64, Expand);
   setOperationAction(ISD::ROTL, MVT::i8, Expand);
   setOperationAction(ISD::ROTR, MVT::i8, Expand);
@@ -1173,7 +1176,6 @@ SDValue I8085TargetLowering::performShiftCombine(SDNode *N,
           dyn_cast<ConstantSDNode>(ShiftIn.getOperand(1));
       if (ShlAmt && ShlAmt->getZExtValue() == ShiftAmt) {
         SDValue OrigVal = ShiftIn.getOperand(0);
-        unsigned SignBitPos = 32 - ShiftAmt;
 
         // (sra (shl x, 16), 16) is sign-extend from i16 to i32
         if (ShiftAmt == 16) {

@@ -702,7 +702,14 @@ let Defs = [SREG, H, L],
                                                     (ins mspi: $memri),
                                                     "FRMIDX\t$dst, $memri", []>;
 
-                                              
+// Byte swap pseudo-instructions
+// BSWAP16 swaps the two bytes of an i16 value
+let Defs = [A] in
+def BSWAP16 : I8085Pseudo<(outs GR16: $dst),
+                          (ins GR16: $src),
+                          "BSWAP16 $dst, $src",
+                          [(set i16: $dst, (bswap i16: $src))]>;
+
 include "I8085CondBrInstrInfo.td"
 
 include "I8085InstrInfo32.td"

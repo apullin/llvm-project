@@ -1730,6 +1730,38 @@ template <> bool I8085ExpandPseudo::expand<I8085::AEXT8TO16>(Block &MBB, BlockIt
   return expand<I8085::ZEXT8TO16>(MBB, MI);
 }
 
+template <> bool I8085ExpandPseudo::expand<I8085::BSWAP16>(Block &MBB, BlockIt MBBI) {
+  MachineInstr &MI = *MBBI;
+
+  unsigned destReg = MI.getOperand(0).getReg();
+  unsigned srcReg = MI.getOperand(1).getReg();
+
+  unsigned srcLow, srcHigh;
+  if (!getPairRegs(srcReg, srcLow, srcHigh))
+    return false;
+
+  unsigned destLow, destHigh;
+  if (!getPairRegs(destReg, destLow, destHigh))
+    return false;
+
+  // BSWAP16: swap the two bytes
+  // Use A as temporary to swap: A = srcLow, destLow = srcHigh, destHigh = A
+  buildMI(MBB, MBBI, I8085::MOV)
+    .addReg(I8085::A, RegState::Define)
+    .addReg(srcLow);
+
+  buildMI(MBB, MBBI, I8085::MOV)
+    .addReg(destLow, RegState::Define)
+    .addReg(srcHigh);
+
+  buildMI(MBB, MBBI, I8085::MOV)
+    .addReg(destHigh, RegState::Define)
+    .addReg(I8085::A);
+
+  MI.eraseFromParent();
+  return true;
+}
+
 template <> bool I8085ExpandPseudo::expand<I8085::RL_16>(Block &MBB, BlockIt MBBI) {
   MachineInstr &MI = *MBBI;
   
@@ -2263,6 +2295,7 @@ bool I8085ExpandPseudo::expandMI(Block &MBB, BlockIt MBBI) {
     EXPAND(I8085::AEXT8TO16);
     EXPAND(I8085::SEXT8TO16);
     EXPAND(I8085::ZEXT8TO16);
+    EXPAND(I8085::BSWAP16);
     EXPAND(I8085::RL_16);
     EXPAND(I8085::RR_16);
     EXPAND(I8085::ASR_16);

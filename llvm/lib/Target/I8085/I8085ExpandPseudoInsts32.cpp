@@ -876,6 +876,49 @@ template <> bool I8085ExpandPseudo32::expand<I8085::PACK_16_TO_32>(Block &MBB, B
   return true;
 }
 
+template <> bool I8085ExpandPseudo32::expand<I8085::BSWAP32>(Block &MBB, BlockIt MBBI) {
+  MachineInstr &MI = *MBBI;
+
+  unsigned destReg = MI.getOperand(0).getReg();
+  unsigned srcReg = MI.getOperand(1).getReg();
+
+  // BSWAP32: reverse all 4 bytes
+  // bytes: [b0, b1, b2, b3] -> [b3, b2, b1, b0]
+  // Load source bytes, store in reverse order to dest
+
+  // Load all 4 bytes from src using scratch space
+  emitScratchAddr(MBB, MBBI, srcReg, 0);
+  buildMI(MBB, MBBI, I8085::MOV)
+    .addReg(I8085::B, RegState::Define)
+    .addReg(I8085::M);
+  emitScratchAdvance(MBB, MBBI, 1);
+  buildMI(MBB, MBBI, I8085::MOV)
+    .addReg(I8085::C, RegState::Define)
+    .addReg(I8085::M);
+  emitScratchAdvance(MBB, MBBI, 1);
+  buildMI(MBB, MBBI, I8085::MOV)
+    .addReg(I8085::D, RegState::Define)
+    .addReg(I8085::M);
+  emitScratchAdvance(MBB, MBBI, 1);
+  buildMI(MBB, MBBI, I8085::MOV)
+    .addReg(I8085::E, RegState::Define)
+    .addReg(I8085::M);
+
+  // Now B=b0, C=b1, D=b2, E=b3
+  // Store in reverse order: dest = [E, D, C, B] = [b3, b2, b1, b0]
+  emitScratchAddr(MBB, MBBI, destReg, 0);
+  buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::E);
+  emitScratchAdvance(MBB, MBBI, 1);
+  buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::D);
+  emitScratchAdvance(MBB, MBBI, 1);
+  buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::C);
+  emitScratchAdvance(MBB, MBBI, 1);
+  buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::B);
+
+  MI.eraseFromParent();
+  return true;
+}
+
 template <> bool I8085ExpandPseudo32::expand<I8085::STORE_32>(Block &MBB, BlockIt MBBI) {
   MachineInstr &MI = *MBBI;
 
@@ -1443,6 +1486,7 @@ bool I8085ExpandPseudo32::expandMI(Block &MBB, BlockIt MBBI) {
     EXPAND(I8085::JMP_32_IF_ULT);
     EXPAND(I8085::MOV_32);
     EXPAND(I8085::PACK_16_TO_32);
+    EXPAND(I8085::BSWAP32);
     EXPAND(I8085::SUBI_32);
     EXPAND(I8085::SUB_32);
     EXPAND(I8085::ADD_32);

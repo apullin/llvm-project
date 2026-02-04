@@ -137,6 +137,12 @@ def PACK_16_TO_32 : I8085Pseudo<(outs GR32: $dst),
                        (ins GR16: $lo, GR16: $hi),
                        "PACK_16_TO_32 $dst, $lo, $hi", []>;
 
+// BSWAP32 reverses all 4 bytes of an i32 value
+def BSWAP32 : I8085Pseudo<(outs GR32: $dst),
+                          (ins GR32: $src),
+                          "BSWAP32 $dst, $src",
+                          [(set i32: $dst, (bswap i32: $src))]>;
+
 }
 let Defs=[A, HL] in {
 def MVI_32 : I8085Pseudo<(outs GR32: $rd),

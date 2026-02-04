@@ -211,6 +211,12 @@ I8085TargetLowering::I8085TargetLowering(const I8085TargetMachine &TM,
   setOperationAction(ISD::ANY_EXTEND, MVT::i64, Custom);
   setOperationAction(ISD::TRUNCATE, MVT::i32, Custom);
 
+  // Ensure sign/zero/any extension to i32 uses efficient pseudo instructions
+  // instead of being expanded to shift sequences.
+  setOperationAction(ISD::SIGN_EXTEND, MVT::i32, Legal);
+  setOperationAction(ISD::ZERO_EXTEND, MVT::i32, Legal);
+  setOperationAction(ISD::ANY_EXTEND, MVT::i32, Legal);
+
   setOperationAction(ISD::FADD, MVT::f32, LibCall);
   setOperationAction(ISD::FSUB, MVT::f32, LibCall);
   setOperationAction(ISD::FMUL, MVT::f32, LibCall);
@@ -323,6 +329,12 @@ I8085TargetLowering::I8085TargetLowering(const I8085TargetMachine &TM,
   setOperationAction(ISD::CTTZ_ZERO_UNDEF, MVT::i64, Custom);
   setOperationAction(ISD::CTPOP, MVT::i32, Expand);
   setOperationAction(ISD::CTPOP, MVT::i64, Expand);
+
+  // Custom lowering for ABS to avoid expensive shift-based expansion.
+  // We expand abs(x) to: x < 0 ? -x : x
+  for (MVT VT : {MVT::i8, MVT::i16, MVT::i32})
+    setOperationAction(ISD::ABS, VT, Custom);
+  setOperationAction(ISD::ABS, MVT::i64, Expand);
 
   for (MVT VT : {MVT::i8, MVT::i16, MVT::i32}) {
     setOperationAction(ISD::SELECT, VT, Legal);
@@ -850,6 +862,17 @@ SDValue I8085TargetLowering::LowerOperation(SDValue Op, SelectionDAG &DAG) const
     SDValue Cond = DAG.getNode(ISD::SETCC, DL, CCVT, LHS, RHS, CC, Op->getFlags());
     return DAG.getSelect(DL, VT, Cond, TrueV, FalseV, Op->getFlags());
   }
+  case ISD::ABS: {
+    // Expand abs(x) to: x < 0 ? -x : x
+    // This avoids the default expansion which uses expensive shift operations
+    // to extract the sign bit on i8085.
+    SDValue N0 = Op.getOperand(0);
+    SDValue Zero = DAG.getConstant(0, DL, VT);
+    SDValue Neg = DAG.getNode(ISD::SUB, DL, VT, Zero, N0);
+    EVT CCVT = getSetCCResultType(DAG.getDataLayout(), *DAG.getContext(), VT);
+    SDValue Cond = DAG.getSetCC(DL, CCVT, N0, Zero, ISD::SETLT);
+    return DAG.getSelect(DL, VT, Cond, Neg, N0);
+  }
   case ISD::GlobalAddress:
     return LowerGlobalAddress(Op, DAG);
   case ISD::BlockAddress:
@@ -1126,11 +1149,97 @@ SDValue I8085TargetLowering::performShiftCombine(SDNode *N,
   if (!isIntegerVT(VT))
     return SDValue();
 
+  SelectionDAG &DAG = DCI.DAG;
+  SDLoc DL(N);
+
   const ConstantSDNode *C = dyn_cast<ConstantSDNode>(N->getOperand(1));
-  if (!C || !C->isZero())
+  if (!C)
     return SDValue();
 
-  return N->getOperand(0);
+  // Remove shifts by zero.
+  if (C->isZero())
+    return N->getOperand(0);
+
+  // Recognize sign-extension pattern: (sra (shl x, N), N) -> sext
+  // This pattern appears when sext i16 to i32 is legalized to shifts.
+  // Converting it back allows matching the efficient SEXT16TO32 instruction.
+  if (N->getOpcode() == ISD::SRA && VT == MVT::i32) {
+    unsigned ShiftAmt = C->getZExtValue();
+    SDValue ShiftIn = N->getOperand(0);
+
+    // Check if the input is (shl x, ShiftAmt)
+    if (ShiftIn.getOpcode() == ISD::SHL) {
+      const ConstantSDNode *ShlAmt =
+          dyn_cast<ConstantSDNode>(ShiftIn.getOperand(1));
+      if (ShlAmt && ShlAmt->getZExtValue() == ShiftAmt) {
+        SDValue OrigVal = ShiftIn.getOperand(0);
+        unsigned SignBitPos = 32 - ShiftAmt;
+
+        // (sra (shl x, 16), 16) is sign-extend from i16 to i32
+        if (ShiftAmt == 16) {
+          // Check if the original value comes from a zero/any extend of i16
+          if (OrigVal.getOpcode() == ISD::ZERO_EXTEND ||
+              OrigVal.getOpcode() == ISD::ANY_EXTEND) {
+            SDValue ExtendIn = OrigVal.getOperand(0);
+            if (ExtendIn.getValueType() == MVT::i16) {
+              // Replace with sign_extend i16 -> i32
+              return DAG.getNode(ISD::SIGN_EXTEND, DL, MVT::i32, ExtendIn);
+            }
+          }
+          // Also handle the case where OrigVal is already i32 but was extended
+          // Check if the upper 16 bits are known to be zero (from earlier zext)
+          // In that case, we can still use sign_extend by truncating first
+          if (OrigVal.getValueType() == MVT::i32) {
+            // Truncate to i16 then sign extend back to i32
+            SDValue Trunc = DAG.getNode(ISD::TRUNCATE, DL, MVT::i16, OrigVal);
+            return DAG.getNode(ISD::SIGN_EXTEND, DL, MVT::i32, Trunc);
+          }
+        }
+
+        // (sra (shl x, 24), 24) is sign-extend from i8 to i32
+        if (ShiftAmt == 24) {
+          if (OrigVal.getOpcode() == ISD::ZERO_EXTEND ||
+              OrigVal.getOpcode() == ISD::ANY_EXTEND) {
+            SDValue ExtendIn = OrigVal.getOperand(0);
+            if (ExtendIn.getValueType() == MVT::i8) {
+              return DAG.getNode(ISD::SIGN_EXTEND, DL, MVT::i32, ExtendIn);
+            }
+          }
+          if (OrigVal.getValueType() == MVT::i32) {
+            SDValue Trunc = DAG.getNode(ISD::TRUNCATE, DL, MVT::i8, OrigVal);
+            return DAG.getNode(ISD::SIGN_EXTEND, DL, MVT::i32, Trunc);
+          }
+        }
+      }
+    }
+  }
+
+  // Same pattern for i16: (sra (shl x, 8), 8) is sign-extend from i8 to i16
+  if (N->getOpcode() == ISD::SRA && VT == MVT::i16) {
+    unsigned ShiftAmt = C->getZExtValue();
+    SDValue ShiftIn = N->getOperand(0);
+
+    if (ShiftAmt == 8 && ShiftIn.getOpcode() == ISD::SHL) {
+      const ConstantSDNode *ShlAmt =
+          dyn_cast<ConstantSDNode>(ShiftIn.getOperand(1));
+      if (ShlAmt && ShlAmt->getZExtValue() == 8) {
+        SDValue OrigVal = ShiftIn.getOperand(0);
+        if (OrigVal.getOpcode() == ISD::ZERO_EXTEND ||
+            OrigVal.getOpcode() == ISD::ANY_EXTEND) {
+          SDValue ExtendIn = OrigVal.getOperand(0);
+          if (ExtendIn.getValueType() == MVT::i8) {
+            return DAG.getNode(ISD::SIGN_EXTEND, DL, MVT::i16, ExtendIn);
+          }
+        }
+        if (OrigVal.getValueType() == MVT::i16) {
+          SDValue Trunc = DAG.getNode(ISD::TRUNCATE, DL, MVT::i8, OrigVal);
+          return DAG.getNode(ISD::SIGN_EXTEND, DL, MVT::i16, Trunc);
+        }
+      }
+    }
+  }
+
+  return SDValue();
 }
 
 /// Return true if the addressing mode represented

@@ -53,6 +53,16 @@ void I8085ToolChain::addClangTargetOptions(
     llvm::opt::ArgStringList &CC1Args, Action::OffloadKind Kind) const {
   Generic_ELF::addClangTargetOptions(DriverArgs, CC1Args, Kind);
 
+  // Use very conservative inlining threshold for this 8-bit target.
+  // Default (225) causes massive code bloat due to aggressive inlining.
+  // Functions with loops (like software multiply) should stay as calls.
+  CC1Args.push_back("-mllvm");
+  CC1Args.push_back("-inline-threshold=30");
+
+  // Also limit unrolling to avoid code explosion.
+  CC1Args.push_back("-mllvm");
+  CC1Args.push_back("-unroll-threshold=50");
+
   const llvm::Triple &Triple = getTriple();
   if (const auto *A = DriverArgs.getLastArg(
           options::OPT_fexceptions, options::OPT_fcxx_exceptions,

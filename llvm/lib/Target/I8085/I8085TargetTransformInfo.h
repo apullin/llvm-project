@@ -115,6 +115,11 @@ public:
     int ISD = TLI->InstructionOpcodeToISD(Opcode);
 
     unsigned Scale = getTypeScale(Ty);
+    // For types larger than 16 bits, shifts are implemented as loops
+    // that iterate N times where N is the shift amount. This makes
+    // variable shifts extremely expensive on the i8085.
+    bool IsLargeType = Ty && Ty->isIntegerTy() &&
+                       Ty->getIntegerBitWidth() > 16;
     switch (ISD) {
     case ISD::MUL:
       return 16 * Scale * Base;
@@ -126,6 +131,9 @@ public:
     case ISD::SHL:
     case ISD::SRL:
     case ISD::SRA:
+      // Variable shifts on i32/i64 use loops - very expensive
+      if (IsLargeType)
+        return 32 * Scale * Base;
       return 2 * Scale * Base;
     default:
       break;
@@ -143,7 +151,20 @@ public:
                                    const Instruction *I = nullptr) {
     InstructionCost Base =
         BaseT::getCastInstrCost(Opcode, Dst, Src, CCH, CostKind, I);
-    return Base * std::max(getTypeScale(Dst), getTypeScale(Src));
+    InstructionCost Cost = Base * std::max(getTypeScale(Dst), getTypeScale(Src));
+
+    // Widening from 16-bit to 32-bit or larger is very expensive on the i8085
+    // because it triggers expensive loop-based operations for subsequent
+    // arithmetic. Strongly discourage the optimizer from widening types.
+    if (Dst && Src && Dst->isIntegerTy() && Src->isIntegerTy()) {
+      unsigned DstBits = Dst->getIntegerBitWidth();
+      unsigned SrcBits = Src->getIntegerBitWidth();
+      if (DstBits > 16 && SrcBits <= 16) {
+        // Widening to i32 or larger is very expensive - discourage it
+        Cost = Cost * 8;
+      }
+    }
+    return Cost;
   }
 
   InstructionCost getCmpSelInstrCost(unsigned Opcode, Type *ValTy, Type *CondTy,
@@ -171,10 +192,14 @@ public:
     // popcount instructions. These must be emulated via loops or library calls.
     // Report them as expensive to prevent loop idiom recognition from
     // transforming simple shift loops into these intrinsics.
+    //
+    // Also report abs as expensive since the optimizer may introduce it
+    // and it has no direct hardware support.
     switch (ICA.getID()) {
     case Intrinsic::ctlz:
     case Intrinsic::cttz:
     case Intrinsic::ctpop:
+    case Intrinsic::abs:
       return TTI::TCC_Expensive;
     default:
       break;

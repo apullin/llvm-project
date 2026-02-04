@@ -345,30 +345,43 @@ void I8085FrameLowering::processFunctionBeforeFrameFinalized(
   if (FuncInfo->hasGR32ScratchFI())
     return;
 
-  bool UsesGR32 = false;
+  // Track usage of both 32-bit pseudo registers separately
+  bool UsesIAX = false;
+  bool UsesIBX = false;
   for (auto &MBB : MF) {
     for (auto &MI : MBB) {
       for (auto &MO : MI.operands()) {
         if (!MO.isReg())
           continue;
         Register Reg = MO.getReg();
-        if (Reg == I8085::IAX || Reg == I8085::IBX) {
-          UsesGR32 = true;
-          break;
-        }
+        if (Reg == I8085::IAX)
+          UsesIAX = true;
+        else if (Reg == I8085::IBX)
+          UsesIBX = true;
       }
-      if (UsesGR32)
+      // Early exit if both are used
+      if (UsesIAX && UsesIBX)
         break;
     }
-    if (UsesGR32)
+    if (UsesIAX && UsesIBX)
       break;
   }
 
-  if (!UsesGR32)
+  if (!UsesIAX && !UsesIBX)
     return;
 
-  // MFI already available above.
-  int FI = MFI.CreateStackObject(8, Align(1), false);
+  // Optimization: Only allocate scratch space for registers that are used.
+  // IAX uses bytes 0-3, IBX uses bytes 4-7.
+  // If only one is used, we could theoretically allocate only 4 bytes,
+  // but the current pseudo expansion assumes IAX is at offset 0 and IBX at 4.
+  // For now, allocate the full 8 bytes if either is used to maintain
+  // compatibility with the expansion logic. A future optimization could
+  // modify the expansion pass to handle reduced scratch space.
+  //
+  // TODO: If only IAX is used, allocate 4 bytes and adjust expansion.
+  // TODO: If only IBX is used, allocate 4 bytes at offset 0 and remap.
+  int ScratchSize = 8; // Full size for now
+  int FI = MFI.CreateStackObject(ScratchSize, Align(1), false);
   FuncInfo->setGR32ScratchFI(FI);
   // Ensure we emit a frame adjustment even if there are no spills/allocas.
   FuncInfo->setHasSpills(true);
@@ -380,15 +393,57 @@ void I8085FrameLowering::processFunctionBeforeFrameFinalized(
 //  - a register has been spilled
 //  - has allocas
 //  - input arguments are passed using the stack
+//  - stack realignment is required
+//  - variable sized objects exist
+//
+// However, if the user explicitly requests -fomit-frame-pointer (via the
+// "frame-pointer" attribute set to "none"), we can eliminate the frame pointer
+// for leaf functions with small frames that don't need dynamic stack access.
 //
 // Notice that strictly this is not a frame pointer because it contains SP after
 // frame allocation instead of having the original SP in function entry.
 bool I8085FrameLowering::hasFP(const MachineFunction &MF) const {
+  const MachineFrameInfo &MFI = MF.getFrameInfo();
   const I8085MachineFunctionInfo *FuncInfo = MF.getInfo<I8085MachineFunctionInfo>();
+  const Function &F = MF.getFunction();
 
+  // Always need FP for stack realignment or variable-sized objects
+  if (FuncInfo->hasStackRealign() || MFI.hasVarSizedObjects())
+    return true;
+
+  // Check if the user requested frame pointer omission
+  // The "frame-pointer" attribute can be "all", "non-leaf", or "none"
+  Attribute FPAttr = F.getFnAttribute("frame-pointer");
+  StringRef FPKind = FPAttr.isValid() ? FPAttr.getValueAsString() : "";
+
+  // If frame-pointer=none, try to eliminate the frame pointer when possible
+  if (FPKind == "none") {
+    // We can omit the frame pointer if:
+    // 1. No spills are needed (or only callee-saved register saves via PUSH)
+    // 2. No allocas
+    // 3. No stack arguments are accessed
+    // 4. The frame is small enough that SP-relative addressing works
+
+    // For leaf functions with no local variables, we can definitely omit FP
+    if (!FuncInfo->getHasAllocas() && !FuncInfo->getHasStackArgs() &&
+        MFI.getStackSize() == 0 && !FuncInfo->getHasSpills()) {
+      return false;
+    }
+
+    // For functions with a small fixed frame (up to 255 bytes for efficient
+    // SP-relative addressing via LXI+DAD SP), we can also potentially omit FP
+    // if there are no allocas or stack args that need frame-relative access
+    if (!FuncInfo->getHasAllocas() && !FuncInfo->getHasStackArgs() &&
+        MFI.getStackSize() <= 255) {
+      // The i8085 uses SP-relative addressing (LXI H, offset; DAD SP)
+      // which works well without a dedicated frame pointer
+      return false;
+    }
+  }
+
+  // Default: need FP if there are spills, allocas, or stack args
   return (FuncInfo->getHasSpills() || FuncInfo->getHasAllocas() ||
-          FuncInfo->getHasStackArgs() || FuncInfo->hasStackRealign() ||
-          MF.getFrameInfo().hasVarSizedObjects());
+          FuncInfo->getHasStackArgs());
 }
 
 bool I8085FrameLowering::spillCalleeSavedRegisters(

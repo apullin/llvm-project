@@ -413,6 +413,7 @@ const char *I8085TargetLowering::getTargetNodeName(unsigned Opcode) const {
     NODE(CMPC);
     NODE(TST);
     NODE(SELECT_CC);
+    NODE(TRUNC32_HI);
 #undef NODE
   }
 }
@@ -1937,10 +1938,9 @@ I8085TargetLowering::LowerReturn(SDValue Chain, CallingConv::ID CallConv,
     if (Val.getValueType() == MVT::f32)
       Val = DAG.getNode(ISD::BITCAST, dl, MVT::i32, Val);
     SDValue Lo = DAG.getNode(ISD::TRUNCATE, dl, MVT::i16, Val);
-    SDValue Hi = DAG.getNode(
-        ISD::TRUNCATE, dl, MVT::i16,
-        DAG.getNode(ISD::SRL, dl, MVT::i32, Val,
-                    DAG.getConstant(16, dl, MVT::i32)));
+    // Use custom TRUNC32_HI node to extract high word directly without
+    // a costly SRL by 16 that gets expanded to a 16-iteration loop.
+    SDValue Hi = DAG.getNode(I8085ISD::TRUNC32_HI, dl, MVT::i16, Val);
 
     SDValue Flag;
     Chain = DAG.getCopyToReg(Chain, dl, I8085::BC, Lo, Flag);

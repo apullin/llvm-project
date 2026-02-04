@@ -673,6 +673,35 @@ template <> bool I8085ExpandPseudo32::expand<I8085::TRUNC32TO16>(Block &MBB, Blo
   return true;
 }
 
+// Extract high word (bytes 2-3) from a 32-bit value.
+// This avoids the costly SRL by 16 that corrupts values at O2.
+template <> bool I8085ExpandPseudo32::expand<I8085::TRUNC32TO16_HI>(Block &MBB, BlockIt MBBI) {
+  MachineInstr &MI = *MBBI;
+
+  unsigned destReg = MI.getOperand(0).getReg();
+  unsigned srcReg = MI.getOperand(1).getReg();
+
+  unsigned destLow = 0, destHigh = 0;
+
+  if(destReg==I8085::BC){  destLow=I8085::C;  destHigh=I8085::B; }
+  if(destReg==I8085::DE){  destLow=I8085::E;  destHigh=I8085::D; }
+  if(destReg==I8085::HL){  destLow=I8085::L;  destHigh=I8085::H; }
+
+  // Load bytes 2 and 3 (the high word) instead of bytes 0 and 1
+  if (destReg == I8085::HL) {
+    emitScratchLoad(MBB, MBBI, srcReg, 2, destLow);
+    emitScratchLoad(MBB, MBBI, srcReg, 3, destHigh);
+  } else {
+    emitScratchAddr(MBB, MBBI, srcReg, 2);
+    buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(destLow, RegState::Define);
+    emitScratchAdvance(MBB, MBBI, 1);
+    buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(destHigh, RegState::Define);
+  }
+
+  MI.eraseFromParent();
+  return true;
+}
+
 template <> bool I8085ExpandPseudo32::expand<I8085::SEXT16TO32>(Block &MBB, BlockIt MBBI) {
   MachineInstr &MI = *MBBI;
 
@@ -1397,6 +1426,7 @@ bool I8085ExpandPseudo32::expandMI(Block &MBB, BlockIt MBBI) {
     EXPAND(I8085::SEXT32_INREG_16);
     EXPAND(I8085::SEXT32_INREG_8);
     EXPAND(I8085::TRUNC32TO16);
+    EXPAND(I8085::TRUNC32TO16_HI);
     EXPAND(I8085::SEXT16TO32);
     EXPAND(I8085::AEXT16TO32);
     EXPAND(I8085::ZEXT16TO32);

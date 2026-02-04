@@ -192,7 +192,15 @@ def TRUNC32TO16
                       "trunc32to16 $dst, $src",
                       [(set i16
                         : $dst, (trunc i32
-                                 : $src))]>; 
+                                 : $src))]>;
+
+// Extract high word (bytes 2-3) from a 32-bit value without shifting.
+// Used for returning 32-bit values where the high word goes to DE.
+def TRUNC32TO16_HI
+    : I8085Pseudo<(outs GR16: $dst),
+                      (ins GR32: $src),
+                      "trunc32to16_hi $dst, $src",
+                      [(set i16: $dst, (I8085trunc32hi i32: $src))]>;
 
 def TRUNC32TO8
     : I8085Pseudo<(outs GR8: $dst),

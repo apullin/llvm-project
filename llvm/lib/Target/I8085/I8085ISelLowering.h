@@ -69,7 +69,11 @@ enum NodeType {
   /// is condition code and operand 3 is flag operand.
   SELECT_CC,
 
-  STORE_OFFSET_SP
+  STORE_OFFSET_SP,
+
+  /// Extract high word (bytes 2-3) from a 32-bit value.
+  /// Used for returning 32-bit values without costly SRL by 16.
+  TRUNC32_HI
 };
 
 } // end of namespace I8085ISD

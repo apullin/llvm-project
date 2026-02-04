@@ -29,6 +29,9 @@ def SDT_I8085SelectCC
     : SDTypeProfile<1, 3,
                     [SDTCisSameAs<0, 1>, SDTCisSameAs<1, 2>, SDTCisVT<3, i8>]>;
 
+// Type profile for TRUNC32_HI: takes i32, returns i16
+def SDT_I8085Trunc32Hi : SDTypeProfile<1, 1, [SDTCisVT<0, i16>, SDTCisVT<1, i32>]>;
+
 //===----------------------------------------------------------------------===//
 // I8085 Specific Node Definitions
 //===----------------------------------------------------------------------===//
@@ -56,6 +59,9 @@ def I8085cmp : SDNode<"I8085ISD::CMP", SDT_I8085Cmp, [SDNPOutGlue]>;
 def I8085cmpc : SDNode<"I8085ISD::CMPC", SDT_I8085Cmp, [SDNPInGlue, SDNPOutGlue]>;
 def I8085tst : SDNode<"I8085ISD::TST", SDT_I8085Tst, [SDNPOutGlue]>;
 def I8085selectcc : SDNode<"I8085ISD::SELECT_CC", SDT_I8085SelectCC, [SDNPInGlue]>;
+
+// Extract high word from 32-bit value (bytes 2-3)
+def I8085trunc32hi : SDNode<"I8085ISD::TRUNC32_HI", SDT_I8085Trunc32Hi>;
 
 // Shift nodes.
 def I8085lsl : SDNode<"I8085ISD::LSL", SDTIntUnaryOp>;

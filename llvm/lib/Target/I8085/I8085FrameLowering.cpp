@@ -191,13 +191,14 @@ void I8085FrameLowering::emitPrologue(MachineFunction &MF,
 
   if(FrameSize) {
       BuildMI(MBB, MBBI, DL, TII.get(I8085::GROW_STACK_BY))
-          .addImm(FrameSize);
+          .addImm(FrameSize)
+          .setMIFlag(MachineInstr::FrameSetup);
       if (EmitCFI) {
         buildCFI(MBB, MBBI, DL,
                  MCCFIInstruction::createAdjustCfaOffset(nullptr, FrameSize),
                  MachineInstr::FrameSetup, TII);
       }
-      
+
   }
 
   if (NeedsBasePtr) {
@@ -301,7 +302,8 @@ void I8085FrameLowering::emitEpilogue(MachineFunction &MF,
 
   if (FrameSize) {
     BuildMI(MBB, MBBI, DL, TII.get(I8085::SHRINK_STACK_BY))
-        .addImm(FrameSize);
+        .addImm(FrameSize)
+        .setMIFlag(MachineInstr::FrameDestroy);
     if (EmitCFI) {
       buildCFI(MBB, MBBI, DL,
                MCCFIInstruction::createAdjustCfaOffset(nullptr, -FrameSize),

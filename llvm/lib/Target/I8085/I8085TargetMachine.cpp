@@ -132,8 +132,10 @@ void I8085PassConfig::addPreRegAlloc() {
 }
 
 void I8085PassConfig::addPreSched2() {
-  addPass(createI8085ExpandPseudoPass());
+  // ExpandPseudo32 must run before ExpandPseudo so it can see GROW_STACK_BY
+  // and SHRINK_STACK_BY instructions for correct SP offset tracking.
   addPass(createI8085ExpandPseudo32Pass());
+  addPass(createI8085ExpandPseudoPass());
   addPass(createI8085ExpandCopiesPass());
   addPass(createI8085PeepholePass());
 }

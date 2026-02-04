@@ -123,9 +123,7 @@ I8085RegisterInfo::getLargestLegalSuperClass(const TargetRegisterClass *RC,
 
 bool I8085RegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
                                           int SPAdj, unsigned FIOperandNum,
-                                          RegScavenger *RS) const {                                      
-  assert(SPAdj == 0 && "Unexpected SPAdj value");
-
+                                          RegScavenger *RS) const {
   MachineInstr &MI = *II;
   DebugLoc dl = MI.getDebugLoc();
   MachineBasicBlock &MBB = *MI.getParent();
@@ -139,6 +137,8 @@ bool I8085RegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
   Offset += MFI.getStackSize() - TFI->getOffsetOfLocalArea();
   // Fold incoming offset.
   Offset += MI.getOperand(FIOperandNum + 1).getImm();
+  // Account for any mid-function stack pointer adjustment (e.g., outgoing args).
+  Offset += SPAdj;
 
   
 

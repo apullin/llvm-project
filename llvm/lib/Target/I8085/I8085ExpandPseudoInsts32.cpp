@@ -27,6 +27,7 @@
 #include "llvm/CodeGen/TargetRegisterInfo.h"
 #include "llvm/CodeGen/TargetFrameLowering.h"
 #include "llvm/CodeGen/TargetOpcodes.h"
+#include "llvm/Support/Debug.h"
 #include <stdint.h>
 
 #include <array>
@@ -65,9 +66,11 @@ private:
   int ScratchFI = -1;
   int64_t ScratchBaseOffset = 0;
   bool HaveScratch = false;
-
+  // Track mid-function SP adjustments (GROW_STACK_BY/SHRINK_STACK_BY for calls)
+  int64_t CurrentSPAdj = 0;
 
   bool expandMBB(Block &MBB);
+  int64_t computeSPAdjustment(Block &MBB, BlockIt UpTo);
   bool expandMI(Block &MBB, BlockIt MBBI);
   template <unsigned OP> bool expand(Block &MBB, BlockIt MBBI);
   bool binOperationWithImmediateOperand(unsigned opCode, Block &MBB, BlockIt MBBI);
@@ -160,7 +163,8 @@ int64_t I8085ExpandPseudo32::getScratchOffset(unsigned Reg,
                                               int ByteIndex) const {
   assert(HaveScratch && "GR32 scratch not initialized");
   int Base = (Reg == I8085::IBX) ? 4 : 0;
-  return ScratchBaseOffset + Base + ByteIndex;
+  // Add CurrentSPAdj to account for mid-function SP adjustments
+  return ScratchBaseOffset + Base + ByteIndex + CurrentSPAdj;
 }
 
 void I8085ExpandPseudo32::emitScratchAddr(Block &MBB, BlockIt MBBI,
@@ -213,8 +217,38 @@ void I8085ExpandPseudo32::emitScratchAdvance(Block &MBB, BlockIt MBBI,
     buildMI(MBB, MBBI, Opc).addReg(I8085::HL, RegState::Define);
 }
 
+/// Compute the cumulative SP adjustment from block start up to (but not
+/// including) the given instruction. GROW_STACK_BY decreases SP (increases
+/// offset), SHRINK_STACK_BY increases SP (decreases offset).
+/// We skip FrameSetup/FrameDestroy instructions as those are part of the
+/// prologue/epilogue and already accounted for in ScratchBaseOffset.
+int64_t I8085ExpandPseudo32::computeSPAdjustment(Block &MBB, BlockIt UpTo) {
+  int64_t Adj = 0;
+  for (BlockIt I = MBB.begin(); I != UpTo; ++I) {
+    // Skip prologue/epilogue instructions - they're already accounted for
+    if (I->getFlag(MachineInstr::FrameSetup) ||
+        I->getFlag(MachineInstr::FrameDestroy))
+      continue;
+
+    unsigned Opc = I->getOpcode();
+    if (Opc == I8085::GROW_STACK_BY) {
+      // GROW_STACK_BY decreases SP, so we need to add to our offset
+      int64_t Amount = I->getOperand(0).getImm();
+      Adj += Amount;
+    } else if (Opc == I8085::SHRINK_STACK_BY) {
+      // SHRINK_STACK_BY increases SP, so we subtract from our offset
+      int64_t Amount = I->getOperand(0).getImm();
+      Adj -= Amount;
+    }
+  }
+  return Adj;
+}
+
 bool I8085ExpandPseudo32::expandMBB(MachineBasicBlock &MBB) {
   for (BlockIt MBBI = MBB.begin(), E = MBB.end(); MBBI != E; ) {
+    // Compute SP adjustment up to this instruction for correct scratch offsets
+    CurrentSPAdj = computeSPAdjustment(MBB, MBBI);
+
     // Some expansions splice instructions into new blocks, which can invalidate
     // iterators. Restart the scan after any successful expansion.
     if (expandMI(MBB, MBBI))

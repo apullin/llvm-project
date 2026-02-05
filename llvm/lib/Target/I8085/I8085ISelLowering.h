@@ -73,7 +73,12 @@ enum NodeType {
 
   /// Extract high word (bytes 2-3) from a 32-bit value.
   /// Used for returning 32-bit values without costly SRL by 16.
-  TRUNC32_HI
+  TRUNC32_HI,
+
+  /// Atomically capture the i32 call result from BC:DE into a GR32.
+  /// Avoids intermediate virtual registers that cause register pressure
+  /// issues with the fast register allocator at O0.
+  PACK_CALL_RESULT_32
 };
 
 } // end of namespace I8085ISD

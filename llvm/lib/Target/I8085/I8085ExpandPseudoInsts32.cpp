@@ -876,6 +876,26 @@ template <> bool I8085ExpandPseudo32::expand<I8085::PACK_16_TO_32>(Block &MBB, B
   return true;
 }
 
+template <> bool I8085ExpandPseudo32::expand<I8085::PACK_BCDE_TO_32>(Block &MBB, BlockIt MBBI) {
+  MachineInstr &MI = *MBBI;
+
+  unsigned destReg = MI.getOperand(0).getReg();
+
+  // Hardcoded: BC is lo16, DE is hi16.
+  // Store C, B, E, D into scratch bytes 0-3.
+  emitScratchAddr(MBB, MBBI, destReg, 0);
+  buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::C);
+  emitScratchAdvance(MBB, MBBI, 1);
+  buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::B);
+  emitScratchAdvance(MBB, MBBI, 1);
+  buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::E);
+  emitScratchAdvance(MBB, MBBI, 1);
+  buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::D);
+
+  MI.eraseFromParent();
+  return true;
+}
+
 template <> bool I8085ExpandPseudo32::expand<I8085::BSWAP32>(Block &MBB, BlockIt MBBI) {
   MachineInstr &MI = *MBBI;
 
@@ -1486,6 +1506,7 @@ bool I8085ExpandPseudo32::expandMI(Block &MBB, BlockIt MBBI) {
     EXPAND(I8085::JMP_32_IF_ULT);
     EXPAND(I8085::MOV_32);
     EXPAND(I8085::PACK_16_TO_32);
+    EXPAND(I8085::PACK_BCDE_TO_32);
     EXPAND(I8085::BSWAP32);
     EXPAND(I8085::SUBI_32);
     EXPAND(I8085::SUB_32);

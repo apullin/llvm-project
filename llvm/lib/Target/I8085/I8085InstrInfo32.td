@@ -137,6 +137,14 @@ def PACK_16_TO_32 : I8085Pseudo<(outs GR32: $dst),
                        (ins GR16: $lo, GR16: $hi),
                        "PACK_16_TO_32 $dst, $lo, $hi", []>;
 
+// Atomically capture BC:DE (i32 call result) into GR32 scratch.
+// Uses BC and DE implicitly so the register allocator does NOT
+// insert intermediate COPYs that create register pressure.
+let Uses = [SP, BC, DE] in
+def PACK_BCDE_TO_32 : I8085Pseudo<(outs GR32: $dst),
+                       (ins),
+                       "PACK_BCDE_TO_32 $dst", []>;
+
 // BSWAP32 reverses all 4 bytes of an i32 value
 def BSWAP32 : I8085Pseudo<(outs GR32: $dst),
                           (ins GR32: $src),

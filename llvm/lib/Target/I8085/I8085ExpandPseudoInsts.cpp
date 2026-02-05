@@ -1360,26 +1360,81 @@ bool I8085ExpandPseudo::expand<I8085::SUB_8>(Block &MBB, BlockIt MBBI) {
   unsigned operandOne = MI.getOperand(1).getReg();
   MachineOperand &Op2 = MI.getOperand(2);
 
-  if (destReg != operandOne) {
-    buildMI(MBB, MBBI, TargetOpcode::COPY, destReg)
-        .addReg(operandOne);
-  }
-  
-  buildMI(MBB, MBBI, I8085::MOV)
-      .addReg(I8085::A, RegState::Define)
-      .addReg(destReg);
+  bool Op2IsImm = Op2.isImm();
+  bool Op2IsA = !Op2IsImm && Op2.getReg() == I8085::A;
 
-  if (Op2.isImm()) {
+  if (Op2IsImm) {
+    // Immediate case: straightforward
+    if (destReg != operandOne) {
+      buildMI(MBB, MBBI, TargetOpcode::COPY, destReg)
+          .addReg(operandOne);
+    }
+    buildMI(MBB, MBBI, I8085::MOV)
+        .addReg(I8085::A, RegState::Define)
+        .addReg(destReg);
     buildMI(MBB, MBBI, I8085::SUI)
         .addImm(static_cast<uint8_t>(Op2.getImm()));
+    buildMI(MBB, MBBI, I8085::MOV)
+        .addReg(destReg, RegState::Define)
+        .addReg(I8085::A);
+  } else if (Op2IsA) {
+    // Special case: Op2 is A register.
+    // We want to compute: dest = operandOne - A
+    // If we do the naive MOV A, operandOne; SUB A we get A - A = 0.
+    // Instead, compute A - operandOne and negate: -(A - operandOne) = operandOne - A
+    if (destReg == I8085::A) {
+      // dest == A: A = operandOne - A
+      // Compute A - operandOne, then negate
+      buildMI(MBB, MBBI, I8085::SUB)
+          .addReg(operandOne);
+      // Negate A: CMA + INR A gives -A (two's complement)
+      buildMI(MBB, MBBI, I8085::CMA);
+      buildMI(MBB, MBBI, I8085::INR)
+          .addReg(I8085::A, RegState::Define)
+          .addReg(I8085::A);
+    } else if (destReg == operandOne) {
+      // dest == operandOne != A
+      // dest = dest - A
+      // Compute A - dest, then negate and store
+      buildMI(MBB, MBBI, I8085::SUB)
+          .addReg(destReg);
+      buildMI(MBB, MBBI, I8085::CMA);
+      buildMI(MBB, MBBI, I8085::INR)
+          .addReg(I8085::A, RegState::Define)
+          .addReg(I8085::A);
+      buildMI(MBB, MBBI, I8085::MOV)
+          .addReg(destReg, RegState::Define)
+          .addReg(I8085::A);
+    } else {
+      // dest != operandOne, dest != A
+      // Use dest as temporary to save A
+      buildMI(MBB, MBBI, I8085::MOV)
+          .addReg(destReg, RegState::Define)
+          .addReg(I8085::A);
+      buildMI(MBB, MBBI, I8085::MOV)
+          .addReg(I8085::A, RegState::Define)
+          .addReg(operandOne);
+      buildMI(MBB, MBBI, I8085::SUB)
+          .addReg(destReg);
+      buildMI(MBB, MBBI, I8085::MOV)
+          .addReg(destReg, RegState::Define)
+          .addReg(I8085::A);
+    }
   } else {
+    // Normal case: Op2 is a register other than A
+    if (destReg != operandOne) {
+      buildMI(MBB, MBBI, TargetOpcode::COPY, destReg)
+          .addReg(operandOne);
+    }
+    buildMI(MBB, MBBI, I8085::MOV)
+        .addReg(I8085::A, RegState::Define)
+        .addReg(destReg);
     buildMI(MBB, MBBI, I8085::SUB)
         .addReg(Op2.getReg());
+    buildMI(MBB, MBBI, I8085::MOV)
+        .addReg(destReg, RegState::Define)
+        .addReg(I8085::A);
   }
-
-  buildMI(MBB, MBBI, I8085::MOV)
-      .addReg(destReg, RegState::Define)
-      .addReg(I8085::A);
 
   MI.eraseFromParent();
   return true;

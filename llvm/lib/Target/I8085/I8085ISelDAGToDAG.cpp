@@ -1219,6 +1219,22 @@ bool I8085DAGToDAGISel::trySelect(SDNode *N) {
     return select<ISD::LOAD>(N);
   case ISD::STORE:
     return select<ISD::STORE>(N);
+  case I8085ISD::PACK_CALL_RESULT_32: {
+    // Lower the PACK_CALL_RESULT_32 node into a PACK_BCDE_TO_32 MachineInstr.
+    // This atomically captures the i32 call result (BC:DE) into GR32 scratch
+    // without creating intermediate virtual registers.
+    SDValue Chain = N->getOperand(0);
+    SDValue InGlue = N->getOperand(1);
+    SDVTList VTs = CurDAG->getVTList(MVT::i32, MVT::Other, MVT::Glue);
+    SDNode *ResNode =
+        CurDAG->getMachineNode(I8085::PACK_BCDE_TO_32, DL, VTs,
+                               {Chain, InGlue});
+    ReplaceUses(SDValue(N, 0), SDValue(ResNode, 0));
+    ReplaceUses(SDValue(N, 1), SDValue(ResNode, 1));
+    ReplaceUses(SDValue(N, 2), SDValue(ResNode, 2));
+    CurDAG->RemoveDeadNode(N);
+    return true;
+  }
   default:
     return false;
   }

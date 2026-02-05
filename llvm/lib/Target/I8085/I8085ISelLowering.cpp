@@ -440,6 +440,7 @@ const char *I8085TargetLowering::getTargetNodeName(unsigned Opcode) const {
     NODE(TST);
     NODE(SELECT_CC);
     NODE(TRUNC32_HI);
+    NODE(PACK_CALL_RESULT_32);
 #undef NODE
   }
 }
@@ -2004,18 +2005,15 @@ SDValue I8085TargetLowering::LowerCallResult(
   }
 
   if (IsI32) {
-    SDValue Lo = DAG.getCopyFromReg(Chain, dl, I8085::BC, MVT::i16, InFlag);
-    Chain = Lo.getValue(1);
-    InFlag = Lo.getValue(2);
-    SDValue Hi = DAG.getCopyFromReg(Chain, dl, I8085::DE, MVT::i16, InFlag);
-    Chain = Hi.getValue(1);
-    InFlag = Hi.getValue(2);
-
-    SDValue LoZ = DAG.getNode(ISD::ZERO_EXTEND, dl, MVT::i32, Lo);
-    SDValue HiZ = DAG.getNode(ISD::ZERO_EXTEND, dl, MVT::i32, Hi);
-    SDValue HiShift = DAG.getNode(ISD::SHL, dl, MVT::i32, HiZ,
-                                  DAG.getConstant(16, dl, MVT::i32));
-    SDValue Val = DAG.getNode(ISD::OR, dl, MVT::i32, LoZ, HiShift);
+    // Use PACK_CALL_RESULT_32 to atomically capture BC:DE into a GR32.
+    // This avoids creating intermediate CopyFromReg + ZEXT + SHL + OR nodes
+    // that the fast register allocator (O0) can miscode when there is
+    // register pressure on HL.
+    SDVTList VTs = DAG.getVTList(MVT::i32, MVT::Other, MVT::Glue);
+    SDValue Ops[] = { Chain, InFlag };
+    SDValue Val = DAG.getNode(I8085ISD::PACK_CALL_RESULT_32, dl, VTs, Ops);
+    Chain = Val.getValue(1);
+    InFlag = Val.getValue(2);
 
     if (IsF32)
       Val = DAG.getNode(ISD::BITCAST, dl, MVT::f32, Val);

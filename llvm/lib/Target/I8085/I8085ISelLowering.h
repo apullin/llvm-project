@@ -154,6 +154,22 @@ public:
     return DL.isLittleEndian();
   }
 
+  bool shouldAvoidTransformToShift(EVT VT, unsigned Amount) const override {
+    // On the 8085, shifts on types > 16 bits are extremely expensive
+    // (loop-based or multi-byte-shuffle + rotations). Prevent the DAG
+    // combiner from creating large shifts to replace select patterns.
+    return VT.getSizeInBits() > 16;
+  }
+
+  bool shouldFoldSelectWithIdentityConstant(unsigned BinOpcode,
+                                            EVT VT) const override {
+    // On the 8085, branch-based selects are much cheaper than branchless
+    // arithmetic for types > 16 bits. Fold "X + (Cond ? Y : 0)" back to
+    // "Cond ? (X + Y) : X" so the branch-based SELECT_32 expansion can
+    // skip the expensive 32-bit operation when the condition is false.
+    return VT.getSizeInBits() > 16;
+  }
+
 private:
   SDValue getI8085Cmp(SDValue LHS, SDValue RHS, ISD::CondCode CC, SDValue &I8085cc,
                     SelectionDAG &DAG, SDLoc dl) const;
@@ -170,6 +186,7 @@ private:
   SDValue LowerVACOPY(SDValue Op, SelectionDAG &DAG) const;
   SDValue performSubCombine(SDNode *N, DAGCombinerInfo &DCI) const;
   SDValue performMulCombine(SDNode *N, DAGCombinerInfo &DCI) const;
+  SDValue performTruncMulCombine(SDNode *N, DAGCombinerInfo &DCI) const;
   SDValue performUDivCombine(SDNode *N, DAGCombinerInfo &DCI) const;
   SDValue performURemCombine(SDNode *N, DAGCombinerInfo &DCI) const;
   SDValue performAddSubCombine(SDNode *N, DAGCombinerInfo &DCI) const;

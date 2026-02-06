@@ -265,6 +265,15 @@ void I8085InstrInfo::loadRegFromStackSlot(MachineBasicBlock &MBB,
     llvm_unreachable("Cannot load this register from a stack slot!");
   }
 
+  // LOAD_8_WITH_ADDR uses HL as the address register (Defs=[HL]), so loading
+  // directly into H or L is unsafe: the loaded value would be clobbered by
+  // any subsequent LOAD_8_WITH_ADDR that also destroys HL.  Constrain the
+  // destination to GR8NoHL when possible.
+  if (Opcode == I8085::LOAD_8_WITH_ADDR && DestReg.isVirtual()) {
+    MachineRegisterInfo &MRI = MF.getRegInfo();
+    MRI.constrainRegClass(DestReg, &I8085::GR8NoHLRegClass);
+  }
+
   BuildMI(MBB, MI, DL, get(Opcode), DestReg)
       .addFrameIndex(FrameIndex)
       .addImm(0)

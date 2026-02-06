@@ -92,8 +92,70 @@ private:
         isPhysRegLive(MBB, MBBI, I8085::L)) {
       return true;
     }
-    return MBB.isLiveIn(I8085::HL) || MBB.isLiveIn(I8085::H) ||
-           MBB.isLiveIn(I8085::L);
+    if (MBB.isLiveIn(I8085::HL) || MBB.isLiveIn(I8085::H) ||
+        MBB.isLiveIn(I8085::L))
+      return true;
+
+    // The backwards liveness analysis can be confused by instructions with
+    // implicit-def $hl that appear between the current instruction and a
+    // later use of $h/$l.  For example:
+    //   $l = LOAD_8_WITH_ADDR ...  (implicit-def $hl)
+    //   ...
+    //   $d = LOAD_8_WITH_ADDR ...  (implicit-def $hl)  <-- MBBI
+    //   ...
+    //   ... = COPY $l              <-- $l is used here
+    //
+    // The backwards walk sees the second LOAD_8_WITH_ADDR's implicit-def $hl
+    // as defining $l, so it thinks $l is dead.  But $l actually holds a
+    // value from the first LOAD_8_WITH_ADDR that is used later.
+    //
+    // Do a forward scan from MBBI to detect if $h or $l is read before
+    // being redefined.  Skip over unexpanded pseudo instructions that will
+    // preserve HL via PUSH/POP when expanded (they also call
+    // isHLOrSubRegLive and will protect HL if it turns out to be live).
+    for (auto I = std::next(MBBI), E = MBB.end(); I != E; ++I) {
+      const MachineInstr &Inst = *I;
+      // Check uses first: if H or L is used, HL is live.
+      for (const MachineOperand &MO : Inst.operands()) {
+        if (!MO.isReg() || !MO.isUse())
+          continue;
+        Register Reg = MO.getReg();
+        if (Reg == I8085::H || Reg == I8085::L || Reg == I8085::HL)
+          return true;
+      }
+      // Check defs: if H, L, or HL is defined, the current value in HL
+      // may be dead -- but only if this is a real instruction or a pseudo
+      // that unconditionally clobbers HL.  Pseudos that use the
+      // PreserveHL pattern (PUSH/POP HL when live) will protect the value,
+      // so we skip them and keep scanning.
+      bool defsHL = false;
+      for (const MachineOperand &MO : Inst.operands()) {
+        if (!MO.isReg() || !MO.isDef())
+          continue;
+        Register Reg = MO.getReg();
+        if (Reg == I8085::H || Reg == I8085::L || Reg == I8085::HL) {
+          defsHL = true;
+          break;
+        }
+      }
+      if (defsHL) {
+        // These pseudos all use isHLOrSubRegLive + PUSH/POP HL in their
+        // expansion.  When they are expanded (later in this pass), they
+        // will preserve HL if it is live.  So their implicit-def $hl
+        // does not genuinely kill the HL value -- skip them.
+        unsigned Opc = Inst.getOpcode();
+        if (Opc == I8085::LOAD_8_WITH_ADDR ||
+            Opc == I8085::LOAD_16_WITH_ADDR ||
+            Opc == I8085::STORE_8 ||
+            Opc == I8085::STORE_16 ||
+            Opc == I8085::STORE_8_AT_OFFSET_WITH_SP ||
+            Opc == I8085::STORE_16_AT_OFFSET_WITH_SP)
+          continue;  // skip this pseudo, keep scanning
+        // Otherwise, HL is genuinely redefined; stop scanning.
+        return false;
+      }
+    }
+    return false;
   }
 
   bool shouldPreservePSW(Block &MBB, BlockIt MBBI) const {

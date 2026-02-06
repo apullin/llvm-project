@@ -64,6 +64,25 @@ public:
             Register Dst = Next->getOperand(0).getReg();
             Register Use = Next->getOperand(1).getReg();
 
+            // Reverse-pair elimination: MOV X,Y ; MOV Y,X -> MOV X,Y
+            // After "MOV X,Y", register X already holds Y's value and Y is
+            // unchanged, so "MOV Y,X" is redundant.
+            if (Use == Tmp && Dst == Src &&
+                Tmp != I8085::M && Src != I8085::M) {
+              bool CanElim = true;
+              if (Tmp.isVirtual()) {
+                if (!MRI.hasOneUse(Tmp))
+                  CanElim = false;
+              }
+              if (CanElim) {
+                auto NextAfter = std::next(Next);
+                Next->eraseFromParent();
+                Changed = true;
+                MI = NextAfter;
+                continue;
+              }
+            }
+
             bool CanFold = (Use == Tmp) && (Dst != Tmp);
             if (CanFold) {
               if (Tmp.isVirtual()) {

@@ -147,6 +147,7 @@ void I8085PassConfig::addPreSched2() {
   addPass(createI8085ExpandPseudoPass());
   addPass(createI8085ExpandCopiesPass());
   addPass(createI8085PeepholePass());
+  addPass(createI8085HLTrackingPass());
 }
 
 void I8085PassConfig::addPreEmitPass() {

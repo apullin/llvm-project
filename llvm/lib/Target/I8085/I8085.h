@@ -35,6 +35,7 @@ FunctionPass *createI8085PeepholePass();
 FunctionPass *createI8085FrameAnalyzerPass();
 FunctionPass *createI8085BranchSelectionPass();
 FunctionPass *createI8085SelectToBranchPass();
+FunctionPass *createI8085HLTrackingPass();
 
 void initializeI8085ExpandPseudoPass(PassRegistry &);
 void initializeI8085ExpandPseudo32Pass(PassRegistry &);
@@ -44,6 +45,7 @@ void initializeI8085PeepholePass(PassRegistry &);
 void initializeI8085FrameAnalyzerPass(PassRegistry &);
 void initializeI8085DAGToDAGISelLegacyPass(PassRegistry &);
 void initializeI8085SelectToBranchPass(PassRegistry &);
+void initializeI8085HLTrackingPass(PassRegistry &);
 
 /// Contains the I8085 backend.
 namespace I8085 {

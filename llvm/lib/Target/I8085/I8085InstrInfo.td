@@ -372,6 +372,11 @@ let Constraints = "$rs = $rd", Defs=[SREG]  in {
   let Defs=[SREG,A] in def ASR_16 : I8085Pseudo<(outs GR16: $rd), (ins GR16: $rs), "ASR_16 $rs", []>;
 }
 
+// i16 byte-shuffle shift pseudos (shift by 8 via register moves)
+let Defs=[SREG, A] in def SHL_16_BY_8  : I8085Pseudo<(outs GR16: $rd), (ins GR16: $rs), "SHL_16_BY_8 $rs", []>;
+let Defs=[SREG, A] in def SRL_16_BY_8  : I8085Pseudo<(outs GR16: $rd), (ins GR16: $rs), "SRL_16_BY_8 $rs", []>;
+let Defs=[SREG, A] in def ASR_16_BY_8  : I8085Pseudo<(outs GR16: $rd), (ins GR16: $rs), "ASR_16_BY_8 $rs", []>;
+
 let Defs=[SREG,A], Uses=[A] in def RLC : F1<0b00000111,(outs), (ins), "RLC", []>;
 let Defs=[SREG,A], Uses=[A] in def RRC : F1<0b00001111,(outs), (ins), "RRC", []>;
 

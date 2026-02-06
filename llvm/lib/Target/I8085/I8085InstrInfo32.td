@@ -72,7 +72,7 @@ let Constraints = "$src = $rd", Defs=[SREG, A, HL]  in {
       : I8085InserterPseudo<(outs GR32: $rd),
               (ins GR32: $src, GR8: $rr),
               "SRA_32\t$rd, $rr",
-              [(set i32: $rd, (sra i32: $src, i8: $rr))]>;                                   
+              [(set i32: $rd, (sra i32: $src, i8: $rr))]>;
   def SRL_32
       : I8085InserterPseudo<(outs GR32: $rd),
               (ins GR32: $src, GR8: $rr),
@@ -92,6 +92,19 @@ let Constraints = "$rs = $rd", Defs=[SREG, A, HL]  in {
   let Defs=[SREG, A, HL] in def RL_32 : I8085Pseudo<(outs GR32: $rd), (ins GR32: $rs), "RL_32 $rs", []>;
   let Defs=[SREG, A, HL] in def RR_32 : I8085Pseudo<(outs GR32: $rd), (ins GR32: $rs), "RR_32 $rs", []>;
   let Defs=[SREG, A, HL] in def ASR_32 : I8085Pseudo<(outs GR32: $rd), (ins GR32: $rs), "ASR_32 $rs", []>;
+
+  // Byte-shuffle shift pseudos: shift by 8/16/24 via byte moves instead of
+  // bit-level rotate loops.  Each reads from source byte offsets and writes
+  // to destination byte offsets in the GR32 scratch area.
+  // These use B, C, D as temporaries, so BC and DE must be in Defs.
+  let Defs=[SREG, A, HL, BC, DE, B, C, D, E] in def SHL_32_BY_8  : I8085Pseudo<(outs GR32: $rd), (ins GR32: $rs), "SHL_32_BY_8 $rs", []>;
+  let Defs=[SREG, A, HL, BC, B, C] in def SHL_32_BY_16 : I8085Pseudo<(outs GR32: $rd), (ins GR32: $rs), "SHL_32_BY_16 $rs", []>;
+  let Defs=[SREG, A, HL, BC, B, C] in def SHL_32_BY_24 : I8085Pseudo<(outs GR32: $rd), (ins GR32: $rs), "SHL_32_BY_24 $rs", []>;
+  let Defs=[SREG, A, HL, BC, DE, B, C, D, E] in def SRL_32_BY_8  : I8085Pseudo<(outs GR32: $rd), (ins GR32: $rs), "SRL_32_BY_8 $rs", []>;
+  let Defs=[SREG, A, HL, BC, B, C] in def SRL_32_BY_16 : I8085Pseudo<(outs GR32: $rd), (ins GR32: $rs), "SRL_32_BY_16 $rs", []>;
+  let Defs=[SREG, A, HL, BC, B, C] in def SRL_32_BY_24 : I8085Pseudo<(outs GR32: $rd), (ins GR32: $rs), "SRL_32_BY_24 $rs", []>;
+  let Defs=[SREG, A, HL, BC, DE, B, C, D, E] in def ASR_32_BY_8  : I8085Pseudo<(outs GR32: $rd), (ins GR32: $rs), "ASR_32_BY_8 $rs", []>;
+  let Defs=[SREG, A, HL, BC, B, C] in def ASR_32_BY_16 : I8085Pseudo<(outs GR32: $rd), (ins GR32: $rs), "ASR_32_BY_16 $rs", []>;
 }
 
 let Uses=[SP], Defs=[A, HL] in {
@@ -124,9 +137,15 @@ def LOAD_32_WITH_IMM_ADDR : I8085Pseudo<(outs GR32: $dst),
                        (ins imm16Addr: $src),
                        "LOAD_32_ADDR $dst, $src", []>;
 
+}
+// LOAD_32_ADDR_CONTENT may clobber BC when the source address is in HL,
+// since BC is used to preserve the address during scratch store operations.
+let Uses=[SP], Defs=[A, HL, BC, B, C] in {
 def LOAD_32_ADDR_CONTENT : I8085Pseudo<(outs GR32: $dst),
                        (ins GR16: $src),
                        "LOAD_32_ADDR_CONTENT $dst, $src", [(set i32: $dst, (load addr: $src))]>;
+}
+let Uses=[SP], Defs=[A, HL] in {
 
 def STORE_32_ADDR_CONTENT : I8085Pseudo<(outs),
                        (ins GR16: $addr, GR32: $src),

@@ -203,11 +203,27 @@ public:
       return TTI::TCC_Expensive;
     case Intrinsic::bswap:
       // bswap is cheap on i8085 - just byte reordering
-      // i16: ~4 instructions, i32: ~16 instructions
+      // i16: ~4 instructions, i32: ~16 instructions, i64: ~32 (two i32 bswaps)
       if (ICA.getReturnType()->isIntegerTy(16))
         return 4;
       if (ICA.getReturnType()->isIntegerTy(32))
         return 16;
+      if (ICA.getReturnType()->isIntegerTy(64))
+        return 32;
+      return TTI::TCC_Expensive;
+    case Intrinsic::sadd_sat:
+    case Intrinsic::uadd_sat:
+    case Intrinsic::ssub_sat:
+    case Intrinsic::usub_sat:
+      // Saturating ops expand to add/sub + compare + select
+      return TTI::TCC_Expensive;
+    case Intrinsic::sadd_with_overflow:
+    case Intrinsic::uadd_with_overflow:
+    case Intrinsic::ssub_with_overflow:
+    case Intrinsic::usub_with_overflow:
+    case Intrinsic::smul_with_overflow:
+    case Intrinsic::umul_with_overflow:
+      // Overflow ops expand to arithmetic + compare
       return TTI::TCC_Expensive;
     case Intrinsic::smin:
     case Intrinsic::smax:
@@ -230,6 +246,16 @@ public:
       break;
     }
     return BaseT::getIntrinsicInstrCost(ICA, CostKind);
+  }
+
+  bool hasDivRemOp(Type *DataType, bool IsSigned) {
+    // We have combined divmod routines (__udivmod8/__sdivmod8 for i8,
+    // __udivmod16/__sdivmod16 for i16) that return both quotient and
+    // remainder in registers, avoiding a second full division loop.
+    if (!DataType || !DataType->isIntegerTy())
+      return false;
+    unsigned BitWidth = DataType->getIntegerBitWidth();
+    return BitWidth == 8 || BitWidth == 16;
   }
 
   void getUnrollingPreferences(Loop *L, ScalarEvolution &SE,

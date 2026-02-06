@@ -85,6 +85,14 @@ void I8085PassConfig::addIRPasses() {
   // to a loop so that library calls are avoided.
 
   TargetPassConfig::addIRPasses();
+
+  // Convert select+add patterns to branches for types > 16 bits.
+  // This undoes InstCombine's transformation of branch-based conditional
+  // addition into branchless select+add arithmetic, which is catastrophically
+  // expensive on the 8085 where i32 operations cost ~200 instructions.
+  // Must run after standard IR passes (including InstCombine) so the select
+  // pattern is stable.
+  addPass(createI8085SelectToBranchPass());
 }
 
 extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializeI8085Target() {
@@ -99,6 +107,7 @@ extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializeI8085Target() {
   initializeI8085PeepholePass(PR);
   initializeI8085FrameAnalyzerPass(PR);
   initializeI8085DAGToDAGISelLegacyPass(PR);
+  initializeI8085SelectToBranchPass(PR);
 }
 
 const I8085Subtarget *I8085TargetMachine::getSubtargetImpl() const {

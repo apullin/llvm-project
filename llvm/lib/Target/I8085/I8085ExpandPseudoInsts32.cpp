@@ -22,6 +22,7 @@
 #include "llvm/CodeGen/MachineFunctionPass.h"
 #include "llvm/CodeGen/MachineInstrBuilder.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
+#include "llvm/ADT/DenseMap.h"
 #include "llvm/CodeGen/LivePhysRegs.h"
 #include "llvm/CodeGen/RegisterScavenging.h"
 #include "llvm/CodeGen/TargetRegisterInfo.h"
@@ -68,7 +69,10 @@ private:
   bool HaveScratch = false;
   // Track mid-function SP adjustments (GROW_STACK_BY/SHRINK_STACK_BY for calls)
   int64_t CurrentSPAdj = 0;
+  // Pre-scanned known-zero byte masks for GR32 operands (bit i = byte i is zero).
+  DenseMap<unsigned, unsigned> KnownZeroBytes;
 
+  void preScanKnownZeroBytes(Block &MBB);
   bool expandMBB(Block &MBB);
   int64_t computeSPAdjustment(Block &MBB, BlockIt UpTo);
   bool expandMI(Block &MBB, BlockIt MBBI);
@@ -244,6 +248,51 @@ int64_t I8085ExpandPseudo32::computeSPAdjustment(Block &MBB, BlockIt UpTo) {
   return Adj;
 }
 
+/// Compute the known-zero byte mask for a single GR32-defining instruction.
+/// Returns the mask (bit i set = byte i is known zero), or 0 for unrecognized
+/// instructions.
+static unsigned computeKnownZeroMask(const MachineInstr &MI) {
+  unsigned Opc = MI.getOpcode();
+  unsigned mask = 0;
+  if ((Opc == I8085::LOAD_32 || Opc == I8085::MVI_32) &&
+      MI.getNumOperands() >= 2 && MI.getOperand(1).isImm()) {
+    uint64_t imm = static_cast<uint64_t>(MI.getOperand(1).getImm()) & 0xFFFFFFFFULL;
+    for (int i = 0; i < 4; i++)
+      if (((imm >> (i * 8)) & 0xFF) == 0)
+        mask |= (1 << i);
+  } else if (Opc == I8085::ANDI_32 &&
+             MI.getNumOperands() >= 3 && MI.getOperand(2).isImm()) {
+    uint64_t imm = static_cast<uint64_t>(MI.getOperand(2).getImm()) & 0xFFFFFFFFULL;
+    for (int i = 0; i < 4; i++)
+      if (((imm >> (i * 8)) & 0xFF) == 0)
+        mask |= (1 << i);
+  } else if (Opc == I8085::ZEXT8TO32) {
+    mask = 0x0E; // bytes 1, 2, 3 are zero
+  } else if (Opc == I8085::ZEXT16TO32) {
+    mask = 0x0C; // bytes 2, 3 are zero
+  }
+  return mask;
+}
+
+void I8085ExpandPseudo32::preScanKnownZeroBytes(Block &MBB) {
+  KnownZeroBytes.clear();
+  for (BlockIt MBBI = MBB.begin(), E = MBB.end(); MBBI != E; ++MBBI) {
+    if (MBBI->getNumOperands() < 1 || !MBBI->getOperand(0).isReg())
+      continue;
+    // Only consider instructions that actually *define* operand 0.
+    // Instructions that merely use GR32 as input (e.g. JMP_32_IF_NOT_EQUAL,
+    // STORE_32_ADDR_CONTENT) have (outs) empty, so operand 0 is a use, not
+    // a def.  Treating those as defs would overwrite legitimate masks with 0.
+    if (!MBBI->getOperand(0).isDef())
+      continue;
+    unsigned DefReg = MBBI->getOperand(0).getReg();
+    if (DefReg != I8085::IAX && DefReg != I8085::IBX)
+      continue;
+    unsigned mask = computeKnownZeroMask(*MBBI);
+    KnownZeroBytes[DefReg] = mask;
+  }
+}
+
 bool I8085ExpandPseudo32::expandMBB(MachineBasicBlock &MBB) {
   for (BlockIt MBBI = MBB.begin(), E = MBB.end(); MBBI != E; ) {
     // Compute SP adjustment up to this instruction for correct scratch offsets
@@ -322,6 +371,10 @@ bool I8085ExpandPseudo32::runOnMachineFunction(MachineFunction &MF) {
   }
 
   for (Block &MBB : MF) {
+    // Pre-scan to track known-zero bytes for GR32 operands, used by
+    // JMP_32_IF_NOT_EQUAL to skip comparing bytes known to be zero.
+    preScanKnownZeroBytes(MBB);
+
     bool ContinueExpanding = true;
     unsigned ExpandCount = 0;
     unsigned MaxExpansions = static_cast<unsigned>(MBB.size()) + 16;
@@ -1055,9 +1108,45 @@ template <> bool I8085ExpandPseudo32::expand<I8085::MOV_32>(Block &MBB, BlockIt 
 
   unsigned destReg = MI.getOperand(0).getReg();
   unsigned srcReg = MI.getOperand(1).getReg();
-  for(int i=0;i<4;i++){
+
+  // Check if B, C, D, E are all dead after this instruction.
+  // If so, batch-load all 4 bytes into registers, then batch-store,
+  // using INX H between sequential accesses (saves 6 LXI+DAD pairs).
+  auto AfterMI = std::next(MBBI);
+  bool CanBatch = true;
+  for (MCRegister Reg : {I8085::B, I8085::C, I8085::D, I8085::E}) {
+    if (MBB.computeRegisterLiveness(TRI, Reg, AfterMI, 20) !=
+        MachineBasicBlock::LQR_Dead) {
+      CanBatch = false;
+      break;
+    }
+  }
+
+  if (CanBatch) {
+    // Load all 4 bytes from source into B/C/D/E
+    emitScratchAddr(MBB, MBBI, srcReg, 0);
+    buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::B, RegState::Define);
+    emitScratchAdvance(MBB, MBBI, 1);
+    buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::C, RegState::Define);
+    emitScratchAdvance(MBB, MBBI, 1);
+    buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::D, RegState::Define);
+    emitScratchAdvance(MBB, MBBI, 1);
+    buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::E, RegState::Define);
+
+    // Store all 4 bytes to destination from B/C/D/E
+    emitScratchAddr(MBB, MBBI, destReg, 0);
+    buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::B);
+    emitScratchAdvance(MBB, MBBI, 1);
+    buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::C);
+    emitScratchAdvance(MBB, MBBI, 1);
+    buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::D);
+    emitScratchAdvance(MBB, MBBI, 1);
+    buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::E);
+  } else {
+    for (int i = 0; i < 4; i++) {
       emitScratchLoad(MBB, MBBI, srcReg, i, I8085::A);
       emitScratchStore(MBB, MBBI, destReg, i, I8085::A);
+    }
   }
 
   MI.eraseFromParent();
@@ -1370,6 +1459,44 @@ template <> bool I8085ExpandPseudo32::expand<I8085::JMP_32_IF_NOT_EQUAL>(Block &
   unsigned operandTwo = MI.getOperand(1).getReg();
   MachineBasicBlock *TargetMBB = MI.getOperand(2).getMBB();
 
+  // Determine which bytes can be skipped (zero in both operands).
+  // First try a backward walk from the JMP for any surviving definition
+  // of each GR32 operand; fall back to the pre-scan map (which captured
+  // masks before earlier pseudos in this MBB were expanded and erased).
+  auto findKnownZeros = [&](unsigned Reg) -> unsigned {
+    for (auto I = std::prev(MBBI.getReverse()), E = MBB.rend(); I != E; ++I) {
+      if (I->getNumOperands() < 1 || !I->getOperand(0).isReg())
+        continue;
+      if (!I->getOperand(0).isDef())
+        continue;
+      if (I->getOperand(0).getReg() != Reg)
+        continue;
+      return computeKnownZeroMask(*I);
+    }
+    auto it = KnownZeroBytes.find(Reg);
+    if (it != KnownZeroBytes.end())
+      return it->second;
+    return 0;
+  };
+
+  unsigned zeroMask1 = findKnownZeros(operandOne);
+  unsigned zeroMask2 = findKnownZeros(operandTwo);
+  unsigned skipMask = zeroMask1 & zeroMask2;
+
+  LLVM_DEBUG(if (skipMask) dbgs() << "JMP_32_IF_NOT_EQUAL: skipMask=0x"
+                                   << Twine::utohexstr(skipMask) << "\n");
+
+  SmallVector<int, 4> compareBytes;
+  for (int i = 0; i < 4; ++i)
+    if (!(skipMask & (1 << i)))
+      compareBytes.push_back(i);
+
+  // If all bytes are known zero in both operands, they're always equal.
+  if (compareBytes.empty()) {
+    MI.eraseFromParent();
+    return true;
+  }
+
   LivePhysRegs LiveRegs(*TRI);
   LiveRegs.addLiveOuts(MBB);
   for (auto I = MBB.rbegin(), E = MBBI.getReverse(); I != E; ++I)
@@ -1383,8 +1510,9 @@ template <> bool I8085ExpandPseudo32::expand<I8085::JMP_32_IF_NOT_EQUAL>(Block &
   }
 
   const BasicBlock *LLVMBB = MBB.getBasicBlock();
+  int numCmpMBBs = compareBytes.size() - 1;
   SmallVector<MachineBasicBlock *, 3> CmpMBBs;
-  for (int i = 0; i < 3; ++i)
+  for (int i = 0; i < numCmpMBBs; ++i)
     CmpMBBs.push_back(MF->CreateMachineBasicBlock(LLVMBB));
   MachineBasicBlock *TailMBB = MF->CreateMachineBasicBlock(LLVMBB);
   MachineBasicBlock *DiffMBB = MF->CreateMachineBasicBlock(LLVMBB);
@@ -1394,7 +1522,6 @@ template <> bool I8085ExpandPseudo32::expand<I8085::JMP_32_IF_NOT_EQUAL>(Block &
     MF->insert(InsertPos, CmpMBB);
   MF->insert(InsertPos, TailMBB);
   MF->insert(InsertPos, DiffMBB);
-  // Renumber ALL blocks to avoid conflicts with existing block numbers.
   MF->RenumberBlocks();
 
   TailMBB->splice(TailMBB->begin(), &MBB, std::next(MBBI), MBB.end());
@@ -1404,35 +1531,38 @@ template <> bool I8085ExpandPseudo32::expand<I8085::JMP_32_IF_NOT_EQUAL>(Block &
     TargetMBB->replacePhiUsesWith(TailMBB, DiffMBB);
   }
 
-  MBB.addSuccessor(CmpMBBs[0]);
+  // Wire up successors: MBB → first CmpMBB (or TailMBB) + DiffMBB
+  MBB.addSuccessor(numCmpMBBs > 0 ? CmpMBBs[0] : TailMBB);
   MBB.addSuccessor(DiffMBB);
-  CmpMBBs[0]->addSuccessor(CmpMBBs[1]);
-  CmpMBBs[0]->addSuccessor(DiffMBB);
-  CmpMBBs[1]->addSuccessor(CmpMBBs[2]);
-  CmpMBBs[1]->addSuccessor(DiffMBB);
-  CmpMBBs[2]->addSuccessor(TailMBB);
-  CmpMBBs[2]->addSuccessor(DiffMBB);
+  for (int i = 0; i < numCmpMBBs; ++i) {
+    MachineBasicBlock *NextMBB = (i == numCmpMBBs - 1) ? TailMBB : CmpMBBs[i + 1];
+    CmpMBBs[i]->addSuccessor(NextMBB);
+    CmpMBBs[i]->addSuccessor(DiffMBB);
+  }
   DiffMBB->addSuccessor(TargetMBB);
 
-  addLiveIns(*CmpMBBs[0], LiveRegs);
-  addLiveIns(*CmpMBBs[1], LiveRegs);
-  addLiveIns(*CmpMBBs[2], LiveRegs);
+  for (MachineBasicBlock *CmpMBB : CmpMBBs)
+    addLiveIns(*CmpMBB, LiveRegs);
   addLiveIns(*TailMBB, LiveRegs);
   addLiveIns(*DiffMBB, LiveRegs);
 
-  emitScratchLoad(MBB, MBBI, operandTwo, 0, I8085::A);
-  emitScratchAddr(MBB, MBBI, operandOne, 0);
+  // First comparison byte in MBB
+  int firstByte = compareBytes[0];
+  emitScratchLoad(MBB, MBBI, operandTwo, firstByte, I8085::A);
+  emitScratchAddr(MBB, MBBI, operandOne, firstByte);
   buildMI(MBB, MBBI, I8085::CMP_M);
   buildMI(MBB, MBBI, I8085::JNZ).addMBB(DiffMBB);
-  buildMI(MBB, MBBI, I8085::JMP).addMBB(CmpMBBs[0]);
+  buildMI(MBB, MBBI, I8085::JMP).addMBB(numCmpMBBs > 0 ? CmpMBBs[0] : TailMBB);
 
-  for (int i = 1; i < 4; ++i) {
+  // Remaining comparison bytes in CmpMBBs
+  for (int i = 1; i < (int)compareBytes.size(); ++i) {
+    int byteIdx = compareBytes[i];
     MachineBasicBlock *CurMBB = CmpMBBs[i - 1];
-    emitScratchLoad(*CurMBB, DL, operandTwo, i, I8085::A);
-    emitScratchAddr(*CurMBB, DL, operandOne, i);
+    emitScratchLoad(*CurMBB, DL, operandTwo, byteIdx, I8085::A);
+    emitScratchAddr(*CurMBB, DL, operandOne, byteIdx);
     BuildMI(CurMBB, DL, TII->get(I8085::CMP_M));
     BuildMI(CurMBB, DL, TII->get(I8085::JNZ)).addMBB(DiffMBB);
-    MachineBasicBlock *NextMBB = (i == 3) ? TailMBB : CmpMBBs[i];
+    MachineBasicBlock *NextMBB = (i == (int)compareBytes.size() - 1) ? TailMBB : CmpMBBs[i];
     BuildMI(CurMBB, DL, TII->get(I8085::JMP)).addMBB(NextMBB);
   }
 

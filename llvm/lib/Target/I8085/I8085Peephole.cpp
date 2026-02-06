@@ -126,6 +126,18 @@ public:
           continue;
         }
 
+        // ORI 0 -> ORA A (1 byte shorter, equivalent flag-setting).
+        if (MI->getOpcode() == I8085::ORI && MI->getNumOperands() >= 1 &&
+            MI->getOperand(0).isImm() && MI->getOperand(0).getImm() == 0) {
+          const MCInstrDesc &Desc = MF.getSubtarget().getInstrInfo()->get(I8085::ORA);
+          MI->setDesc(Desc);
+          MI->removeOperand(0);
+          MI->addOperand(MachineOperand::CreateReg(I8085::A, false));
+          Changed = true;
+          MI = Next;
+          continue;
+        }
+
         if (MI->getOpcode() != I8085::LXI || Next->getNumOperands() == 0) {
           ++MI;
           continue;

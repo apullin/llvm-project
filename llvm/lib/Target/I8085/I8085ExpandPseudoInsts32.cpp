@@ -365,13 +365,50 @@ bool I8085ExpandPseudo32::binOperationWithImmediateOperand(unsigned opCode, Bloc
 
   auto values = splitImm32(immToAdd);
 
-  emitScratchAddr(MBB, MBBI, destReg, 0);
+  // Track whether we've emitted the initial address computation.
+  bool addrEmitted = false;
+  int lastByteIdx = -1;
+
   for (int i = 0; i < 4; ++i) {
+      uint8_t byteVal = values[i];
+
+      // Optimize away no-op bytes:
+      // - ANI 0xFF is identity (A & 0xFF = A)
+      // - ORI 0x00 is identity (A | 0x00 = A)
+      // - XRI 0x00 is identity (A ^ 0x00 = A)
+      if ((opCode == I8085::ANI && byteVal == 0xFF) ||
+          (opCode == I8085::ORI && byteVal == 0x00) ||
+          (opCode == I8085::XRI && byteVal == 0x00))
+        continue;
+
+      // Emit address for this byte.
+      if (!addrEmitted) {
+        emitScratchAddr(MBB, MBBI, destReg, i);
+        addrEmitted = true;
+        lastByteIdx = i;
+      } else {
+        int delta = i - lastByteIdx;
+        for (int d = 0; d < delta; ++d)
+          emitScratchAdvance(MBB, MBBI, 1);
+        lastByteIdx = i;
+      }
+
+      // Optimize constant-result bytes:
+      // - ANI 0x00 always gives 0 (A & 0 = 0) -> MVI M, 0
+      // - ORI 0xFF always gives 0xFF (A | 0xFF = 0xFF) -> MVI M, 0xFF
+      if (opCode == I8085::ANI && byteVal == 0x00) {
+        buildMI(MBB, MBBI, I8085::MVI_M).addImm(0);
+        continue;
+      }
+      if (opCode == I8085::ORI && byteVal == 0xFF) {
+        buildMI(MBB, MBBI, I8085::MVI_M).addImm(0xFF);
+        continue;
+      }
+
+      // General case: load, operate, store.
       buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::A, RegState::Define);
-      buildMI(MBB, MBBI, opCode).addImm(values[i]);
+      buildMI(MBB, MBBI, opCode).addImm(byteVal);
       buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::A);
-      if (i != 3)
-        emitScratchAdvance(MBB, MBBI, 1);
   }
 
   MI.eraseFromParent();
@@ -430,8 +467,8 @@ template <> bool I8085ExpandPseudo32::expand<I8085::RR_32>(Block &MBB, BlockIt M
   }
 
   // Clear carry before rotate-through-carry sequence.
-  buildMI(MBB, MBBI, I8085::STC);
-  buildMI(MBB, MBBI, I8085::CMC);
+  // ORA A is a single-instruction way to clear CY (A = A | A, CY = 0).
+  buildMI(MBB, MBBI, I8085::ORA).addReg(I8085::A);
 
   emitScratchAddr(MBB, MBBI, destReg, 3);
   for(int i=3;i>-1;i--){
@@ -752,8 +789,8 @@ template <> bool I8085ExpandPseudo32::expand<I8085::RL_32>(Block &MBB, BlockIt M
   }
 
   // Clear carry before rotate-through-carry sequence.
-  buildMI(MBB, MBBI, I8085::STC);
-  buildMI(MBB, MBBI, I8085::CMC);
+  // ORA A is a single-instruction way to clear CY (A = A | A, CY = 0).
+  buildMI(MBB, MBBI, I8085::ORA).addReg(I8085::A);
 
   emitScratchAddr(MBB, MBBI, destReg, 0);
   for(int i=0;i<4;i++){

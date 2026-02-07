@@ -482,30 +482,37 @@ def LOAD_16 : I8085Pseudo<(outs GR16: $dst),
                                              : $dst, imm
                                              : $src)]>; 
 
-let Defs=[HL] in def STORE_16 : I8085Pseudo<(outs),
+// NOTE: These pseudos use HL as a scratch register internally, but they
+// conditionally preserve HL via PUSH/POP when isHLOrSubRegLive() returns true
+// during expansion.  We intentionally do NOT declare HL in Defs so that
+// post-RA passes (especially Machine Copy Propagation) see HL as preserved
+// across these instructions.  If the register allocator assigns a value to HL
+// that is live across one of these pseudos, the expansion will detect this
+// and emit PUSH/POP to save and restore HL.
+def STORE_16 : I8085Pseudo<(outs),
                             (ins mspibdsp: $dst, GR16: $src),
                             "STORE_16 $dst, $src", [(store i16: $src, addr: $dst)]>;
 
-let Defs=[HL] in def STORE_8 : I8085Pseudo<(outs),
+def STORE_8 : I8085Pseudo<(outs),
                         (ins mspibdsp: $memri,
                          GR8NoHL: $reg),
                         "STORE $memri, $reg", [(store i8: $reg, addr: $memri)]>;
 
-
-let Defs=[HL, A] in def LOAD_16_WITH_ADDR : I8085Pseudo<(outs GR16: $dst),
+// LOAD_16_WITH_ADDR still clobbers A (used when dest is HL to shuffle bytes).
+let Defs=[A] in def LOAD_16_WITH_ADDR : I8085Pseudo<(outs GR16: $dst),
                        (ins mspi: $src),
-                       "LOAD $dst, $src", [(set i16: $dst, (load addr: $src))]>;    
+                       "LOAD $dst, $src", [(set i16: $dst, (load addr: $src))]>;
 
-let Defs=[HL] in def LOAD_8_WITH_ADDR : I8085Pseudo<(outs GR8: $dst),
+def LOAD_8_WITH_ADDR : I8085Pseudo<(outs GR8: $dst),
                        (ins mspi: $src),
                        "LOAD $dst, $src", [(set i8: $dst, (load addr: $src))]>;
 
 
-let Defs=[HL] in def STORE_8_AT_OFFSET_WITH_SP : I8085Pseudo<(outs),
+def STORE_8_AT_OFFSET_WITH_SP : I8085Pseudo<(outs),
                        (ins GR8NoHL: $src, I8085Imm16: $offset),
                        "STORE_8_SP_AT_OFFSET\t$offset, $src", [(store i8: $src, imm: $offset)]>;
 
-let Defs=[HL] in def STORE_16_AT_OFFSET_WITH_SP : I8085Pseudo<(outs),
+def STORE_16_AT_OFFSET_WITH_SP : I8085Pseudo<(outs),
                        (ins GR16: $src, I8085Imm16: $offset),
                        "STORE_16_SP_AT_OFFSET\t$offset, $src", [(store i16: $src, imm: $offset)]>;                       
 

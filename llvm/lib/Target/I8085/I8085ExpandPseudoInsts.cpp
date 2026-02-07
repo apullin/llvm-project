@@ -96,23 +96,13 @@ private:
         MBB.isLiveIn(I8085::L))
       return true;
 
-    // The backwards liveness analysis can be confused by instructions with
-    // implicit-def $hl that appear between the current instruction and a
-    // later use of $h/$l.  For example:
-    //   $l = LOAD_8_WITH_ADDR ...  (implicit-def $hl)
-    //   ...
-    //   $d = LOAD_8_WITH_ADDR ...  (implicit-def $hl)  <-- MBBI
-    //   ...
-    //   ... = COPY $l              <-- $l is used here
-    //
-    // The backwards walk sees the second LOAD_8_WITH_ADDR's implicit-def $hl
-    // as defining $l, so it thinks $l is dead.  But $l actually holds a
-    // value from the first LOAD_8_WITH_ADDR that is used later.
-    //
     // Do a forward scan from MBBI to detect if $h or $l is read before
-    // being redefined.  Skip over unexpanded pseudo instructions that will
-    // preserve HL via PUSH/POP when expanded (they also call
-    // isHLOrSubRegLive and will protect HL if it turns out to be live).
+    // being redefined.  This catches cases where the backwards walk might
+    // miss liveness due to intervening definitions.  Skip over unexpanded
+    // pseudo instructions that will preserve HL via PUSH/POP when expanded
+    // (they also call isHLOrSubRegLive and will protect HL if it turns out
+    // to be live).  Note: these pseudos no longer declare HL in Defs, so
+    // the skip is mostly a safety net.
     for (auto I = std::next(MBBI), E = MBB.end(); I != E; ++I) {
       const MachineInstr &Inst = *I;
       // Check uses first: if H or L is used, HL is live.

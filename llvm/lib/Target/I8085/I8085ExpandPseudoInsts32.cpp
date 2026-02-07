@@ -73,6 +73,13 @@ private:
   // Pre-scanned known-zero byte masks for GR32 operands (bit i = byte i is zero).
   DenseMap<unsigned, unsigned> KnownZeroBytes;
 
+  // Cross-operation register forwarding: after a batch-mode operation stores
+  // its result in B/C/D/E to scratch, the NEXT pseudo may immediately load
+  // the same bytes back. This set tracks pseudos where B/C/D/E already hold
+  // the source value, so Phase 1 (load from scratch) can be skipped.
+  // The unsigned value is the GR32 register that B/C/D/E hold.
+  DenseMap<MachineInstr *, unsigned> BCDEForwarded;
+
   void preScanKnownZeroBytes(Block &MBB);
   bool expandMBB(Block &MBB);
   int64_t computeSPAdjustment(Block &MBB, BlockIt UpTo);
@@ -91,6 +98,11 @@ private:
   void emitScratchStore(Block &MBB, BlockIt MBBI, unsigned Reg, int ByteIndex,
                         unsigned SrcReg);
   void emitScratchAdvance(Block &MBB, BlockIt MBBI, int Delta);
+
+  /// Check whether the next GR32 pseudo after MBBI can consume forwarded
+  /// B/C/D/E holding destReg's value, and if so, register it in
+  /// BCDEForwarded and return true (meaning Phase 3 store should be skipped).
+  bool tryForwardBCDE(Block &MBB, BlockIt MBBI, unsigned destReg);
 
   MachineInstrBuilder buildMI(Block &MBB, BlockIt MBBI, unsigned Opcode) {
     return BuildMI(MBB, MBBI, MBBI->getDebugLoc(), TII->get(Opcode));
@@ -379,6 +391,9 @@ bool I8085ExpandPseudo32::runOnMachineFunction(MachineFunction &MF) {
     // JMP_32_IF_NOT_EQUAL to skip comparing bytes known to be zero.
     preScanKnownZeroBytes(MBB);
 
+    // Clear cross-operation forwarding state for each new MBB.
+    BCDEForwarded.clear();
+
     bool ContinueExpanding = true;
     unsigned ExpandCount = 0;
     unsigned MaxExpansions = static_cast<unsigned>(MBB.size()) + 16;
@@ -412,6 +427,64 @@ bool I8085ExpandPseudo32::runOnMachineFunction(MachineFunction &MF) {
   }
 
   return Modified;
+}
+
+bool I8085ExpandPseudo32::tryForwardBCDE(Block &MBB, BlockIt MBBI,
+                                          unsigned destReg) {
+  // Find the next GR32 pseudo immediately after MBBI in the MBB.
+  // Only forward to binOperation consumers (XOR_32/OR_32/AND_32) because
+  // they always write back to the same scratch slot (destReg == operandOne
+  // == forwarded reg). Other consumers (MOV_32, STORE_32) would leave the
+  // forwarded register's scratch stale if any later instruction reads it.
+  auto NextIt = std::next(MBBI);
+
+  // The next instruction must be immediately the consumer pseudo.
+  // We don't scan past non-pseudo instructions because they could
+  // clobber B/C/D/E or change control flow in ways that are hard to verify.
+  if (NextIt == MBB.end())
+    return false;
+
+  MachineInstr *NextPseudo = &*NextIt;
+  unsigned NextOpc = NextPseudo->getOpcode();
+
+  // Only allow binOperation consumers.
+  if (NextOpc != I8085::XOR_32 && NextOpc != I8085::OR_32 &&
+      NextOpc != I8085::AND_32)
+    return false;
+
+  // Check the consumer reads from the forwarded register.
+  unsigned ConsumerDest = NextPseudo->getOperand(0).getReg();
+  unsigned ConsumerOp1 = NextPseudo->getOperand(1).getReg();
+  unsigned ConsumerOp2 = NextPseudo->getOperand(2).getReg();
+
+  // Batch mode requires dest == op1 (tied constraint).
+  if (ConsumerDest != ConsumerOp1)
+    return false;
+
+  // The consumer's Phase 1 loads op1 into B/C/D/E. For forwarding,
+  // op1 must equal the forwarded reg.
+  if (ConsumerOp1 != destReg)
+    return false;
+
+  // The consumer's Phase 2 reads op2 from scratch. If op2 == destReg,
+  // the scratch is stale (we skipped writing it). Bail out.
+  if (ConsumerOp2 == destReg)
+    return false;
+
+  // Check that B/C/D/E are dead after the consumer too (so it can batch).
+  auto AfterNext = std::next(BlockIt(NextPseudo));
+  for (MCRegister Reg : {I8085::B, I8085::C, I8085::D, I8085::E}) {
+    if (MBB.computeRegisterLiveness(TRI, Reg, AfterNext, 20) !=
+        MachineBasicBlock::LQR_Dead)
+      return false;
+  }
+
+  // All checks passed. Register the consumer for forwarding.
+  LLVM_DEBUG(dbgs() << "BCDE forwarding: skip Phase 3 store of "
+                    << (destReg == I8085::IAX ? "IAX" : "IBX")
+                    << ", consumer will use B/C/D/E directly\n");
+  BCDEForwarded[NextPseudo] = destReg;
+  return true;
 }
 
 bool I8085ExpandPseudo32::binOperationWithImmediateOperand(unsigned opCode, Block &MBB, BlockIt MBBI) {
@@ -499,15 +572,27 @@ bool I8085ExpandPseudo32::binOperation(unsigned opCode, Block &MBB, BlockIt MBBI
   }
 
   if (CanBatch) {
-    // Phase 1: Load all 4 bytes of op1 into B, C, D, E
-    emitScratchAddr(MBB, MBBI, operandOne, 0);
-    buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::B, RegState::Define);
-    emitScratchAdvance(MBB, MBBI, 1);
-    buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::C, RegState::Define);
-    emitScratchAdvance(MBB, MBBI, 1);
-    buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::D, RegState::Define);
-    emitScratchAdvance(MBB, MBBI, 1);
-    buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::E, RegState::Define);
+    // Check if B/C/D/E already hold operandOne via forwarding.
+    auto FwdIt = BCDEForwarded.find(&MI);
+    bool Forwarded = (FwdIt != BCDEForwarded.end() && FwdIt->second == operandOne);
+    if (Forwarded) {
+      LLVM_DEBUG(dbgs() << "BCDE forwarding: skip Phase 1 load of "
+                        << (operandOne == I8085::IAX ? "IAX" : "IBX")
+                        << " in binOperation\n");
+      BCDEForwarded.erase(FwdIt);
+    }
+
+    if (!Forwarded) {
+      // Phase 1: Load all 4 bytes of op1 into B, C, D, E
+      emitScratchAddr(MBB, MBBI, operandOne, 0);
+      buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::B, RegState::Define);
+      emitScratchAdvance(MBB, MBBI, 1);
+      buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::C, RegState::Define);
+      emitScratchAdvance(MBB, MBBI, 1);
+      buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::D, RegState::Define);
+      emitScratchAdvance(MBB, MBBI, 1);
+      buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::E, RegState::Define);
+    }
 
     // Phase 2: ALU each byte with op2, results back into B/C/D/E
     emitScratchAddr(MBB, MBBI, operandTwo, 0);
@@ -547,15 +632,18 @@ bool I8085ExpandPseudo32::binOperation(unsigned opCode, Block &MBB, BlockIt MBBI
         .addReg(I8085::E, RegState::Define)
         .addReg(I8085::A);
 
-    // Phase 3: Store all 4 result bytes back to dest
-    emitScratchAddr(MBB, MBBI, destReg, 0);
-    buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::B);
-    emitScratchAdvance(MBB, MBBI, 1);
-    buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::C);
-    emitScratchAdvance(MBB, MBBI, 1);
-    buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::D);
-    emitScratchAdvance(MBB, MBBI, 1);
-    buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::E);
+    // Phase 3: Store all 4 result bytes back to dest, unless we can
+    // forward B/C/D/E to the next pseudo.
+    if (!tryForwardBCDE(MBB, MBBI, destReg)) {
+      emitScratchAddr(MBB, MBBI, destReg, 0);
+      buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::B);
+      emitScratchAdvance(MBB, MBBI, 1);
+      buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::C);
+      emitScratchAdvance(MBB, MBBI, 1);
+      buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::D);
+      emitScratchAdvance(MBB, MBBI, 1);
+      buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::E);
+    }
   } else {
     // Fallback: original per-byte approach with full address recomputation
     for(int i=0;i<4;i++){
@@ -1217,15 +1305,18 @@ template <> bool I8085ExpandPseudo32::expand<I8085::MOV_32>(Block &MBB, BlockIt 
     emitScratchAdvance(MBB, MBBI, 1);
     buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::E, RegState::Define);
 
-    // Store all 4 bytes to destination from B/C/D/E
-    emitScratchAddr(MBB, MBBI, destReg, 0);
-    buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::B);
-    emitScratchAdvance(MBB, MBBI, 1);
-    buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::C);
-    emitScratchAdvance(MBB, MBBI, 1);
-    buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::D);
-    emitScratchAdvance(MBB, MBBI, 1);
-    buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::E);
+    // Store all 4 bytes to destination from B/C/D/E, unless we can
+    // forward to the next pseudo.
+    if (!tryForwardBCDE(MBB, MBBI, destReg)) {
+      emitScratchAddr(MBB, MBBI, destReg, 0);
+      buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::B);
+      emitScratchAdvance(MBB, MBBI, 1);
+      buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::C);
+      emitScratchAdvance(MBB, MBBI, 1);
+      buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::D);
+      emitScratchAdvance(MBB, MBBI, 1);
+      buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::E);
+    }
   } else {
     for (int i = 0; i < 4; i++) {
       emitScratchLoad(MBB, MBBI, srcReg, i, I8085::A);
@@ -1353,13 +1444,51 @@ template <> bool I8085ExpandPseudo32::expand<I8085::STORE_32>(Block &MBB, BlockI
     return true;
   }
 
-  for (int i = 0; i < 4; ++i) {
-    emitScratchLoad(MBB, MBBI, srcReg, i, I8085::A);
-    buildMI(MBB, MBBI, I8085::LXI)
-        .addReg(I8085::HL, RegState::Define)
-        .addImm(offsetToStore + i);
-    buildMI(MBB, MBBI, I8085::DAD).addReg(baseReg);
-    buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::A);
+  // Check if B, C, D, E are all dead after this instruction.
+  // If so, batch-load from scratch into B/C/D/E, then batch-store to dest.
+  {
+    auto AfterMI = std::next(MBBI);
+    bool CanBatch = true;
+    for (MCRegister Reg : {I8085::B, I8085::C, I8085::D, I8085::E}) {
+      if (MBB.computeRegisterLiveness(TRI, Reg, AfterMI, 20) !=
+          MachineBasicBlock::LQR_Dead) {
+        CanBatch = false;
+        break;
+      }
+    }
+
+    if (CanBatch) {
+      // Phase 1: Load 4 bytes from scratch into B/C/D/E
+      emitScratchAddr(MBB, MBBI, srcReg, 0);
+      buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::B, RegState::Define);
+      emitScratchAdvance(MBB, MBBI, 1);
+      buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::C, RegState::Define);
+      emitScratchAdvance(MBB, MBBI, 1);
+      buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::D, RegState::Define);
+      emitScratchAdvance(MBB, MBBI, 1);
+      buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::E, RegState::Define);
+
+      // Phase 2: Store B/C/D/E to [baseReg+offset] via one LXI+DAD + INX chain
+      buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL, RegState::Define).addImm(offsetToStore);
+      buildMI(MBB, MBBI, I8085::DAD).addReg(baseReg);
+      buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::B);
+      emitScratchAdvance(MBB, MBBI, 1);
+      buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::C);
+      emitScratchAdvance(MBB, MBBI, 1);
+      buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::D);
+      emitScratchAdvance(MBB, MBBI, 1);
+      buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::E);
+    } else {
+      // Fallback: original per-byte approach with full address recomputation
+      for (int i = 0; i < 4; ++i) {
+        emitScratchLoad(MBB, MBBI, srcReg, i, I8085::A);
+        buildMI(MBB, MBBI, I8085::LXI)
+            .addReg(I8085::HL, RegState::Define)
+            .addImm(offsetToStore + i);
+        buildMI(MBB, MBBI, I8085::DAD).addReg(baseReg);
+        buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::A);
+      }
+    }
   }
 
   MI.eraseFromParent();
@@ -1499,11 +1628,50 @@ template <> bool I8085ExpandPseudo32::expand<I8085::LOAD_32_WITH_ADDR>(Block &MB
   unsigned baseReg = MI.getOperand(1).getReg();
   int64_t offsetToLoad = MI.getOperand(2).getImm();
 
-  for(int i=0;i<4;i++){
+  // Check if B, C, D, E are all dead after this instruction.
+  // If so, batch-load all 4 bytes into registers via one LXI+DAD + INX chain,
+  // then batch-store to scratch via one LXI+DAD + INX chain.
+  auto AfterMI = std::next(MBBI);
+  bool CanBatch = true;
+  for (MCRegister Reg : {I8085::B, I8085::C, I8085::D, I8085::E}) {
+    if (MBB.computeRegisterLiveness(TRI, Reg, AfterMI, 20) !=
+        MachineBasicBlock::LQR_Dead) {
+      CanBatch = false;
+      break;
+    }
+  }
+
+  if (CanBatch) {
+    // Phase 1: Load 4 bytes from [baseReg+offset] into B/C/D/E
+    buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL, RegState::Define).addImm(offsetToLoad);
+    buildMI(MBB, MBBI, I8085::DAD).addReg(baseReg);
+    buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::B, RegState::Define);
+    emitScratchAdvance(MBB, MBBI, 1);
+    buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::C, RegState::Define);
+    emitScratchAdvance(MBB, MBBI, 1);
+    buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::D, RegState::Define);
+    emitScratchAdvance(MBB, MBBI, 1);
+    buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::E, RegState::Define);
+
+    // Phase 2: Store B/C/D/E to scratch slot, unless we can forward.
+    if (!tryForwardBCDE(MBB, MBBI, destReg)) {
+      emitScratchAddr(MBB, MBBI, destReg, 0);
+      buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::B);
+      emitScratchAdvance(MBB, MBBI, 1);
+      buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::C);
+      emitScratchAdvance(MBB, MBBI, 1);
+      buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::D);
+      emitScratchAdvance(MBB, MBBI, 1);
+      buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::E);
+    }
+  } else {
+    // Fallback: original per-byte approach with full address recomputation
+    for(int i=0;i<4;i++){
       buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(offsetToLoad+i);
       buildMI(MBB, MBBI, I8085::DAD).addReg(baseReg);
       buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::A,RegState::Define);
       emitScratchStore(MBB, MBBI, destReg, i, I8085::A);
+    }
   }
 
   MI.eraseFromParent();
@@ -1798,12 +1966,48 @@ template <> bool I8085ExpandPseudo32::expand<I8085::STORE_32_AT_OFFSET_WITH_SP>(
 
   unsigned srcReg = MI.getOperand(0).getReg();
   unsigned offsetToStore = MI.getOperand(1).getImm();
-  
-  for(int i=0;i<4;i++){
+
+  // Check if B, C, D, E are all dead after this instruction.
+  // If so, batch-load from scratch into B/C/D/E, then batch-store to dest.
+  auto AfterMI = std::next(MBBI);
+  bool CanBatch = true;
+  for (MCRegister Reg : {I8085::B, I8085::C, I8085::D, I8085::E}) {
+    if (MBB.computeRegisterLiveness(TRI, Reg, AfterMI, 20) !=
+        MachineBasicBlock::LQR_Dead) {
+      CanBatch = false;
+      break;
+    }
+  }
+
+  if (CanBatch) {
+    // Phase 1: Load 4 bytes from scratch into B/C/D/E
+    emitScratchAddr(MBB, MBBI, srcReg, 0);
+    buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::B, RegState::Define);
+    emitScratchAdvance(MBB, MBBI, 1);
+    buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::C, RegState::Define);
+    emitScratchAdvance(MBB, MBBI, 1);
+    buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::D, RegState::Define);
+    emitScratchAdvance(MBB, MBBI, 1);
+    buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::E, RegState::Define);
+
+    // Phase 2: Store B/C/D/E to [SP+offset] via one LXI+DAD + INX chain
+    buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL, RegState::Define).addImm(offsetToStore);
+    buildMI(MBB, MBBI, I8085::DAD).addReg(I8085::SP);
+    buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::B);
+    emitScratchAdvance(MBB, MBBI, 1);
+    buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::C);
+    emitScratchAdvance(MBB, MBBI, 1);
+    buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::D);
+    emitScratchAdvance(MBB, MBBI, 1);
+    buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::E);
+  } else {
+    // Fallback: original per-byte approach
+    for(int i=0;i<4;i++){
       emitScratchLoad(MBB, MBBI, srcReg, i, I8085::A);
       buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(offsetToStore+i);
       buildMI(MBB, MBBI, I8085::DAD).addReg(I8085::SP);
       buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::A);
+    }
   }
 
   MI.eraseFromParent();
@@ -1816,12 +2020,51 @@ template <> bool I8085ExpandPseudo32::expand<I8085::LOAD_32_OFFSET_WITH_SP>(Bloc
 
   unsigned destReg = MI.getOperand(0).getReg();
   uint16_t offsetToLoad = MI.getOperand(1).getImm();
-  
-  for(int i=0;i<4;i++){
+
+  // Check if B, C, D, E are all dead after this instruction.
+  // If so, batch-load all 4 bytes into registers via one LXI+DAD + INX chain,
+  // then batch-store to scratch via one LXI+DAD + INX chain.
+  auto AfterMI = std::next(MBBI);
+  bool CanBatch = true;
+  for (MCRegister Reg : {I8085::B, I8085::C, I8085::D, I8085::E}) {
+    if (MBB.computeRegisterLiveness(TRI, Reg, AfterMI, 20) !=
+        MachineBasicBlock::LQR_Dead) {
+      CanBatch = false;
+      break;
+    }
+  }
+
+  if (CanBatch) {
+    // Phase 1: Load 4 bytes from [SP+offset] into B/C/D/E
+    buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL, RegState::Define).addImm(offsetToLoad);
+    buildMI(MBB, MBBI, I8085::DAD).addReg(I8085::SP);
+    buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::B, RegState::Define);
+    emitScratchAdvance(MBB, MBBI, 1);
+    buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::C, RegState::Define);
+    emitScratchAdvance(MBB, MBBI, 1);
+    buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::D, RegState::Define);
+    emitScratchAdvance(MBB, MBBI, 1);
+    buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::E, RegState::Define);
+
+    // Phase 2: Store B/C/D/E to scratch slot, unless we can forward.
+    if (!tryForwardBCDE(MBB, MBBI, destReg)) {
+      emitScratchAddr(MBB, MBBI, destReg, 0);
+      buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::B);
+      emitScratchAdvance(MBB, MBBI, 1);
+      buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::C);
+      emitScratchAdvance(MBB, MBBI, 1);
+      buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::D);
+      emitScratchAdvance(MBB, MBBI, 1);
+      buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::E);
+    }
+  } else {
+    // Fallback: original per-byte approach
+    for(int i=0;i<4;i++){
       buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(offsetToLoad+i);
       buildMI(MBB, MBBI, I8085::DAD).addReg(I8085::SP);
       buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::A,RegState::Define);
       emitScratchStore(MBB, MBBI, destReg, i, I8085::A);
+    }
   }
 
   MI.eraseFromParent();
@@ -1834,13 +2077,55 @@ template <> bool I8085ExpandPseudo32::expand<I8085::LOAD_32_WITH_IMM_ADDR>(Block
   unsigned destReg = MI.getOperand(0).getReg();
 
   const MachineOperand &AddrMO = MI.getOperand(1);
-  
-  for(int i=0;i<4;i++){
+
+  // Check if B, C, D, E are all dead after this instruction.
+  // If so, batch-load all 4 bytes into registers via one LXI + INX chain,
+  // then batch-store to scratch via one LXI+DAD + INX chain.
+  auto AfterMI = std::next(MBBI);
+  bool CanBatch = true;
+  for (MCRegister Reg : {I8085::B, I8085::C, I8085::D, I8085::E}) {
+    if (MBB.computeRegisterLiveness(TRI, Reg, AfterMI, 20) !=
+        MachineBasicBlock::LQR_Dead) {
+      CanBatch = false;
+      break;
+    }
+  }
+
+  if (CanBatch) {
+    // Phase 1: Load 4 bytes from [immAddr] into B/C/D/E
+    {
+      MachineInstrBuilder Addr =
+          buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL, RegState::Define);
+      addAddrOperand(Addr, AddrMO, 0);
+    }
+    buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::B, RegState::Define);
+    emitScratchAdvance(MBB, MBBI, 1);
+    buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::C, RegState::Define);
+    emitScratchAdvance(MBB, MBBI, 1);
+    buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::D, RegState::Define);
+    emitScratchAdvance(MBB, MBBI, 1);
+    buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::E, RegState::Define);
+
+    // Phase 2: Store B/C/D/E to scratch slot, unless we can forward.
+    if (!tryForwardBCDE(MBB, MBBI, destReg)) {
+      emitScratchAddr(MBB, MBBI, destReg, 0);
+      buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::B);
+      emitScratchAdvance(MBB, MBBI, 1);
+      buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::C);
+      emitScratchAdvance(MBB, MBBI, 1);
+      buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::D);
+      emitScratchAdvance(MBB, MBBI, 1);
+      buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::E);
+    }
+  } else {
+    // Fallback: original per-byte approach
+    for(int i=0;i<4;i++){
       MachineInstrBuilder Addr =
           buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL, RegState::Define);
       addAddrOperand(Addr, AddrMO, i);
       buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::A,RegState::Define);
       emitScratchStore(MBB, MBBI, destReg, i, I8085::A);
+    }
   }
 
   MI.eraseFromParent();

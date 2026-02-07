@@ -67,6 +67,7 @@ private:
   int ScratchFI = -1;
   int64_t ScratchBaseOffset = 0;
   bool HaveScratch = false;
+  bool IBXRemapped = false;
   // Track mid-function SP adjustments (GROW_STACK_BY/SHRINK_STACK_BY for calls)
   int64_t CurrentSPAdj = 0;
   // Pre-scanned known-zero byte masks for GR32 operands (bit i = byte i is zero).
@@ -166,7 +167,9 @@ static bool getPairRegs(unsigned Pair, unsigned &LowReg, unsigned &HighReg) {
 int64_t I8085ExpandPseudo32::getScratchOffset(unsigned Reg,
                                               int ByteIndex) const {
   assert(HaveScratch && "GR32 scratch not initialized");
-  int Base = (Reg == I8085::IBX) ? 4 : 0;
+  // IBX normally lives at base+4, but when only IBX is used the scratch
+  // slot is only 4 bytes and IBX is remapped to base+0.
+  int Base = (Reg == I8085::IBX && !IBXRemapped) ? 4 : 0;
   // Add CurrentSPAdj to account for mid-function SP adjustments
   return ScratchBaseOffset + Base + ByteIndex + CurrentSPAdj;
 }
@@ -322,6 +325,7 @@ bool I8085ExpandPseudo32::runOnMachineFunction(MachineFunction &MF) {
   TII = STI.getInstrInfo();
   I8085MachineFunctionInfo *AFI = MF.getInfo<I8085MachineFunctionInfo>();
   ScratchFI = AFI->getGR32ScratchFI();
+  IBXRemapped = AFI->isIBXRemappedToZero();
   if (ScratchFI >= 0) {
     const MachineFrameInfo &MFI = MF.getFrameInfo();
     const TargetFrameLowering *TFI = STI.getFrameLowering();

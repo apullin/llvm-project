@@ -370,17 +370,21 @@ void I8085FrameLowering::processFunctionBeforeFrameFinalized(
   if (!UsesIAX && !UsesIBX)
     return;
 
-  // Optimization: Only allocate scratch space for registers that are used.
-  // IAX uses bytes 0-3, IBX uses bytes 4-7.
-  // If only one is used, we could theoretically allocate only 4 bytes,
-  // but the current pseudo expansion assumes IAX is at offset 0 and IBX at 4.
-  // For now, allocate the full 8 bytes if either is used to maintain
-  // compatibility with the expansion logic. A future optimization could
-  // modify the expansion pass to handle reduced scratch space.
-  //
-  // TODO: If only IAX is used, allocate 4 bytes and adjust expansion.
-  // TODO: If only IBX is used, allocate 4 bytes at offset 0 and remap.
-  int ScratchSize = 8; // Full size for now
+  // Allocate scratch space only for registers that are actually used.
+  // IAX uses bytes 0-3, IBX uses bytes 4-7 in the full 8-byte layout.
+  // When only one register is used, we save 4 bytes of stack space.
+  int ScratchSize;
+  if (UsesIAX && UsesIBX) {
+    ScratchSize = 8; // Both used: IAX at offset 0, IBX at offset 4
+  } else {
+    ScratchSize = 4; // Only one used: single register at offset 0
+    if (UsesIBX) {
+      // IBX normally lives at offset 4, but with a 4-byte scratch slot
+      // it must be remapped to offset 0. Tell the expansion pass.
+      FuncInfo->setIBXRemappedToZero(true);
+    }
+    // If only IAX: it's already at offset 0, no remapping needed.
+  }
   int FI = MFI.CreateStackObject(ScratchSize, Align(1), false);
   FuncInfo->setGR32ScratchFI(FI);
   // Ensure we emit a frame adjustment even if there are no spills/allocas.

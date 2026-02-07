@@ -45,6 +45,9 @@ class I8085MachineFunctionInfo : public MachineFunctionInfo {
   int VarArgsFrameIndex;
   /// FrameIndex for per-function GR32 scratch storage (IAX/IBX bytes).
   int GR32ScratchFI;
+  /// When only IBX is used (no IAX), the scratch slot is only 4 bytes
+  /// and IBX is remapped to offset 0 instead of its usual offset 4.
+  bool IBXRemappedToZero;
   /// FrameIndex for saved original SP when stack realignment is used.
   int StackRealignSaveFI;
   /// Indicates whether this function realigns the stack.
@@ -54,7 +57,8 @@ class I8085MachineFunctionInfo : public MachineFunctionInfo {
   I8085MachineFunctionInfo(const Function &F, const TargetSubtargetInfo *STI)
       : HasSpills(false), HasAllocas(false), HasStackArgs(false),
         CalleeSavedFrameSize(0), VarArgsFrameIndex(0), GR32ScratchFI(-1),
-        StackRealignSaveFI(-1), HasStackRealign(false) {
+        IBXRemappedToZero(false), StackRealignSaveFI(-1),
+        HasStackRealign(false) {
     CallingConv::ID CallConv = F.getCallingConv();
 
     this->IsInterruptHandler =
@@ -89,6 +93,9 @@ class I8085MachineFunctionInfo : public MachineFunctionInfo {
   int getGR32ScratchFI() const { return GR32ScratchFI; }
   void setGR32ScratchFI(int Idx) { GR32ScratchFI = Idx; }
   bool hasGR32ScratchFI() const { return GR32ScratchFI >= 0; }
+
+  bool isIBXRemappedToZero() const { return IBXRemappedToZero; }
+  void setIBXRemappedToZero(bool B) { IBXRemappedToZero = B; }
 
   int getStackRealignSaveFI() const { return StackRealignSaveFI; }
   void setStackRealignSaveFI(int Idx) { StackRealignSaveFI = Idx; }

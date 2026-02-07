@@ -474,12 +474,92 @@ bool I8085ExpandPseudo32::binOperation(unsigned opCode, Block &MBB, BlockIt MBBI
   unsigned destReg = MI.getOperand(0).getReg();
   unsigned operandOne = MI.getOperand(1).getReg();
   unsigned operandTwo = MI.getOperand(2).getReg();
-  
-  for(int i=0;i<4;i++){
-      emitScratchLoad(MBB, MBBI, operandOne, i, I8085::A);
-      emitScratchAddr(MBB, MBBI, operandTwo, i);
-      buildMI(MBB, MBBI, opCode);
-      emitScratchStore(MBB, MBBI, destReg, i, I8085::A);
+
+  // Optimized path: when B/C/D/E are dead after this instruction and
+  // dest == operandOne (tied constraint), batch the operations to avoid
+  // redundant LXI+DAD pairs. Instead of 8 LXI+DAD (current), use only 3.
+  //
+  // Phase 1: Load all 4 bytes of op1 into B/C/D/E via scratch + INX
+  // Phase 2: For each byte, ALU with op2 via scratch + INX, store in B/C/D/E
+  // Phase 3: Store all 4 result bytes back to dest via scratch + INX
+  auto AfterMI = std::next(MBBI);
+  bool CanBatch = (destReg == operandOne);
+  if (CanBatch) {
+    for (MCRegister Reg : {I8085::B, I8085::C, I8085::D, I8085::E}) {
+      if (MBB.computeRegisterLiveness(TRI, Reg, AfterMI, 20) !=
+          MachineBasicBlock::LQR_Dead) {
+        CanBatch = false;
+        break;
+      }
+    }
+  }
+
+  if (CanBatch) {
+    // Phase 1: Load all 4 bytes of op1 into B, C, D, E
+    emitScratchAddr(MBB, MBBI, operandOne, 0);
+    buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::B, RegState::Define);
+    emitScratchAdvance(MBB, MBBI, 1);
+    buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::C, RegState::Define);
+    emitScratchAdvance(MBB, MBBI, 1);
+    buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::D, RegState::Define);
+    emitScratchAdvance(MBB, MBBI, 1);
+    buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::E, RegState::Define);
+
+    // Phase 2: ALU each byte with op2, results back into B/C/D/E
+    emitScratchAddr(MBB, MBBI, operandTwo, 0);
+    // Byte 0: B = B op [HL]
+    buildMI(MBB, MBBI, I8085::MOV)
+        .addReg(I8085::A, RegState::Define)
+        .addReg(I8085::B);
+    buildMI(MBB, MBBI, opCode);
+    buildMI(MBB, MBBI, I8085::MOV)
+        .addReg(I8085::B, RegState::Define)
+        .addReg(I8085::A);
+    emitScratchAdvance(MBB, MBBI, 1);
+    // Byte 1: C = C op [HL]
+    buildMI(MBB, MBBI, I8085::MOV)
+        .addReg(I8085::A, RegState::Define)
+        .addReg(I8085::C);
+    buildMI(MBB, MBBI, opCode);
+    buildMI(MBB, MBBI, I8085::MOV)
+        .addReg(I8085::C, RegState::Define)
+        .addReg(I8085::A);
+    emitScratchAdvance(MBB, MBBI, 1);
+    // Byte 2: D = D op [HL]
+    buildMI(MBB, MBBI, I8085::MOV)
+        .addReg(I8085::A, RegState::Define)
+        .addReg(I8085::D);
+    buildMI(MBB, MBBI, opCode);
+    buildMI(MBB, MBBI, I8085::MOV)
+        .addReg(I8085::D, RegState::Define)
+        .addReg(I8085::A);
+    emitScratchAdvance(MBB, MBBI, 1);
+    // Byte 3: E = E op [HL]
+    buildMI(MBB, MBBI, I8085::MOV)
+        .addReg(I8085::A, RegState::Define)
+        .addReg(I8085::E);
+    buildMI(MBB, MBBI, opCode);
+    buildMI(MBB, MBBI, I8085::MOV)
+        .addReg(I8085::E, RegState::Define)
+        .addReg(I8085::A);
+
+    // Phase 3: Store all 4 result bytes back to dest
+    emitScratchAddr(MBB, MBBI, destReg, 0);
+    buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::B);
+    emitScratchAdvance(MBB, MBBI, 1);
+    buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::C);
+    emitScratchAdvance(MBB, MBBI, 1);
+    buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::D);
+    emitScratchAdvance(MBB, MBBI, 1);
+    buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::E);
+  } else {
+    // Fallback: original per-byte approach with full address recomputation
+    for(int i=0;i<4;i++){
+        emitScratchLoad(MBB, MBBI, operandOne, i, I8085::A);
+        emitScratchAddr(MBB, MBBI, operandTwo, i);
+        buildMI(MBB, MBBI, opCode);
+        emitScratchStore(MBB, MBBI, destReg, i, I8085::A);
+    }
   }
 
   MI.eraseFromParent();

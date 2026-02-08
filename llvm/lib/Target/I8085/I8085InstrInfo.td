@@ -498,8 +498,11 @@ def STORE_8 : I8085Pseudo<(outs),
                          GR8NoHL: $reg),
                         "STORE $memri, $reg", [(store i8: $reg, addr: $memri)]>;
 
-// LOAD_16_WITH_ADDR still clobbers A (used when dest is HL to shuffle bytes).
-let Defs=[A] in def LOAD_16_WITH_ADDR : I8085Pseudo<(outs GR16: $dst),
+// LOAD_16_WITH_ADDR: A is NOT declared as clobbered because most expansion
+// paths (dest=BC/DE) do not touch A. When dest=HL, the expansion uses A as a
+// temp but handles preservation via shouldPreservePSW/pushPSW. Declaring
+// Defs=[A] here caused MCP to incorrectly remove $a = COPY $b as dead.
+def LOAD_16_WITH_ADDR : I8085Pseudo<(outs GR16: $dst),
                        (ins mspi: $src),
                        "LOAD $dst, $src", [(set i16: $dst, (load addr: $src))]>;
 

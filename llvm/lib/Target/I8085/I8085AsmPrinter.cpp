@@ -200,7 +200,7 @@ const MCExpr *I8085AsmPrinter::lowerConstant(const Constant *CV) {
 }
 
 void I8085AsmPrinter::emitXXStructor(const DataLayout &DL, const Constant *CV) {
-
+  AsmPrinter::emitXXStructor(DL, CV);
 }
 
 bool I8085AsmPrinter::doFinalization(Module &M) {

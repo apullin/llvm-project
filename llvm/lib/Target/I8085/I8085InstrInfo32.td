@@ -107,27 +107,23 @@ let Constraints = "$rs = $rd", Defs=[SREG, A, HL]  in {
   let Defs=[SREG, A, HL, BC, B, C] in def ASR_32_BY_16 : I8085Pseudo<(outs GR32: $rd), (ins GR32: $rs), "ASR_32_BY_16 $rs", []>;
 }
 
-let Uses=[SP], Defs=[A, HL] in {
+// LOAD_32_WITH_ADDR, LOAD_32_OFFSET_WITH_SP, LOAD_32_WITH_IMM_ADDR, LOAD_32:
+// A is NOT declared as clobbered.  The batch expansion path (dest registers
+// B/C/D/E dead) never touches A; the fallback path does use A as a temp but
+// the expansion handles preservation.  Declaring Defs=[A] caused the register
+// allocator to freely insert spill reloads at points where $a was live,
+// because it believed the clobber was "expected", but the reload would then
+// destroy a live flag value used by a subsequent JMP_8_IF.
+let Uses=[SP], Defs=[HL] in {
 def LOAD_32 : I8085Pseudo<(outs GR32: $dst),
                        (ins i32imm: $src),
                        "LOAD_32 $dst, $src", [(set i32
                                              : $dst, imm
-                                             : $src)]>; 
-
-def STORE_32 : I8085Pseudo<(outs),
-                            (ins mspibdsp: $dst, GR32: $src),
-                            "STORE_32 $dst, $src", [(store i32: $src, addr: $dst)]>;
-                            
+                                             : $src)]>;
 
 def LOAD_32_WITH_ADDR : I8085Pseudo<(outs GR32: $dst),
                        (ins mspi: $src),
-                       "LOAD $dst, $src", [(set i32: $dst, (load addr: $src))]>;    
-
-
-def STORE_32_AT_OFFSET_WITH_SP : I8085Pseudo<(outs),
-                       (ins GR32: $src, I8085Imm16: $offset),
-                       "STORE_32_SP_AT_OFFSET\t$offset, $src", [(store i32: $src, imm: $offset)]>;                    
-
+                       "LOAD $dst, $src", [(set i32: $dst, (load addr: $src))]>;
 
 def LOAD_32_OFFSET_WITH_SP : I8085Pseudo<(outs GR32: $dst),
                        (ins I8085Imm16: $offset),
@@ -136,7 +132,17 @@ def LOAD_32_OFFSET_WITH_SP : I8085Pseudo<(outs GR32: $dst),
 def LOAD_32_WITH_IMM_ADDR : I8085Pseudo<(outs GR32: $dst),
                        (ins imm16Addr: $src),
                        "LOAD_32_ADDR $dst, $src", []>;
+}
 
+let Uses=[SP], Defs=[A, HL] in {
+def STORE_32 : I8085Pseudo<(outs),
+                            (ins mspibdsp: $dst, GR32: $src),
+                            "STORE_32 $dst, $src", [(store i32: $src, addr: $dst)]>;
+
+
+def STORE_32_AT_OFFSET_WITH_SP : I8085Pseudo<(outs),
+                       (ins GR32: $src, I8085Imm16: $offset),
+                       "STORE_32_SP_AT_OFFSET\t$offset, $src", [(store i32: $src, imm: $offset)]>;
 }
 // LOAD_32_ADDR_CONTENT may clobber BC when the source address is in HL,
 // since BC is used to preserve the address during scratch store operations.

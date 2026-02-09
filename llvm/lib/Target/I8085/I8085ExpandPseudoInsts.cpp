@@ -1185,19 +1185,28 @@ bool I8085ExpandPseudo::expand<I8085::AND_8>(Block &MBB, BlockIt MBBI) {
 
   unsigned destReg = MI.getOperand(0).getReg();
   unsigned operandOne = MI.getOperand(1).getReg();
-  uint16_t operandTwo = MI.getOperand(2).getReg();    
+  uint16_t operandTwo = MI.getOperand(2).getReg();
+  bool Op2IsA = (operandTwo == I8085::A);
 
-  if (destReg != operandOne) {
+  // Don't emit a COPY into destReg if it would clobber A when we need it.
+  if (destReg != operandOne && !(Op2IsA && destReg == I8085::A)) {
     buildMI(MBB, MBBI, TargetOpcode::COPY, destReg)
         .addReg(operandOne);
   }
-  
-  buildMI(MBB, MBBI, I8085::MOV)
-      .addReg(I8085::A,RegState::Define)
-      .addReg(operandOne);
 
-  buildMI(MBB, MBBI, I8085::ANA)
-      .addReg(operandTwo);
+  // AND is commutative. If operandTwo is A, swap operands so that
+  // MOV A,<x> doesn't clobber the value already in A.
+  if (Op2IsA) {
+    buildMI(MBB, MBBI, I8085::ANA)
+        .addReg(operandOne);
+  } else {
+    buildMI(MBB, MBBI, I8085::MOV)
+        .addReg(I8085::A, RegState::Define)
+        .addReg(operandOne);
+
+    buildMI(MBB, MBBI, I8085::ANA)
+        .addReg(operandTwo);
+  }
 
   buildMI(MBB, MBBI, I8085::MOV)
       .addReg(destReg,RegState::Define)
@@ -1213,14 +1222,21 @@ bool I8085ExpandPseudo::expand<I8085::OR_8>(Block &MBB, BlockIt MBBI) {
 
   unsigned destReg = MI.getOperand(0).getReg();
   unsigned operandOne = MI.getOperand(1).getReg();
-  uint16_t operandTwo = MI.getOperand(2).getReg();    
-  
-  buildMI(MBB, MBBI, I8085::MOV)
-      .addReg(I8085::A,RegState::Define)
-      .addReg(operandOne);
+  uint16_t operandTwo = MI.getOperand(2).getReg();
 
-  buildMI(MBB, MBBI, I8085::ORA)
-      .addReg(operandTwo);
+  // OR is commutative. If operandTwo is A, swap operands so that
+  // MOV A,<x> doesn't clobber the value already in A.
+  if (operandTwo == I8085::A) {
+    buildMI(MBB, MBBI, I8085::ORA)
+        .addReg(operandOne);
+  } else {
+    buildMI(MBB, MBBI, I8085::MOV)
+        .addReg(I8085::A, RegState::Define)
+        .addReg(operandOne);
+
+    buildMI(MBB, MBBI, I8085::ORA)
+        .addReg(operandTwo);
+  }
 
   buildMI(MBB, MBBI, I8085::MOV)
       .addReg(destReg,RegState::Define)
@@ -1238,12 +1254,19 @@ bool I8085ExpandPseudo::expand<I8085::XOR_8>(Block &MBB, BlockIt MBBI) {
   unsigned operandOne = MI.getOperand(1).getReg();
   uint16_t operandTwo = MI.getOperand(2).getReg();
 
-  buildMI(MBB, MBBI, I8085::MOV)
-      .addReg(I8085::A,RegState::Define)
-      .addReg(operandOne);
+  // XOR is commutative. If operandTwo is A, swap operands so that
+  // MOV A,<x> doesn't clobber the value already in A.
+  if (operandTwo == I8085::A) {
+    buildMI(MBB, MBBI, I8085::XRA)
+        .addReg(operandOne);
+  } else {
+    buildMI(MBB, MBBI, I8085::MOV)
+        .addReg(I8085::A, RegState::Define)
+        .addReg(operandOne);
 
-  buildMI(MBB, MBBI, I8085::XRA)
-      .addReg(operandTwo);
+    buildMI(MBB, MBBI, I8085::XRA)
+        .addReg(operandTwo);
+  }
 
   buildMI(MBB, MBBI, I8085::MOV)
       .addReg(destReg,RegState::Define)

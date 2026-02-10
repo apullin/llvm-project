@@ -489,6 +489,15 @@ def LOAD_16 : I8085Pseudo<(outs GR16: $dst),
 // across these instructions.  If the register allocator assigns a value to HL
 // that is live across one of these pseudos, the expansion will detect this
 // and emit PUSH/POP to save and restore HL.
+//
+// SREG is NOT declared in Defs.  Although the expansion may use DAD SP to
+// compute the stack address (and DAD clobbers carry), we handle this at
+// expansion time: isPhysRegLive(SREG) detects when flags are live across the
+// pseudo and emits PUSH PSW / POP PSW around the DAD.  Declaring Defs=[SREG]
+// here would make the register allocator treat each pseudo as a legitimate
+// SREG definition, breaking liveness: if three consecutive spills sit between
+// SUB and JC, only the last one would see SREG as live (the earlier ones
+// "kill" it), leaving the first two DADs unprotected.
 def STORE_16 : I8085Pseudo<(outs),
                             (ins mspibdsp: $dst, GR16: $src),
                             "STORE_16 $dst, $src", [(store i16: $src, addr: $dst)]>;

@@ -587,9 +587,21 @@ bool I8085ExpandPseudo::expand<I8085::STORE_8>(Block &MBB, BlockIt MBBI) {
                           isHLOrSubRegLive(MBB, MBBI);
   const bool PreserveHLFromSP = PreserveHL && (baseReg == I8085::SP);
 
+  // DAD clobbers carry.  When flags are live across this pseudo (e.g. a
+  // register spill inserted between SUB and JC/JNC), we must preserve PSW
+  // around the DAD.  The HL-path (INX/DCX) is flag-safe and needs no save.
+  const bool UseDAD = (baseReg != I8085::HL);
+  const bool PreservePSW = UseDAD && isPhysRegLive(MBB, MBBI, I8085::SREG);
+
   if (PreserveHL) {
     buildMI(MBB, MBBI, I8085::PUSH).addReg(I8085::HL);
     if (PreserveHLFromSP)
+      offsetToStore += 2;
+  }
+
+  if (PreservePSW) {
+    buildMI(MBB, MBBI, I8085::PUSH).addReg(I8085::PSW);
+    if (baseReg == I8085::SP)
       offsetToStore += 2;
   }
 
@@ -612,9 +624,15 @@ bool I8085ExpandPseudo::expand<I8085::STORE_8>(Block &MBB, BlockIt MBBI) {
     buildMI(MBB, MBBI, I8085::DAD)
         .addReg(baseReg);
   }
-  
+
+  // Restore PSW (A + flags) after DAD but before the store.
+  // LXI and DAD do not touch A, so A still holds its pre-PUSH value;
+  // POP PSW restores it to the same value plus the original flags.
+  if (PreservePSW)
+    buildMI(MBB, MBBI, I8085::POP).addReg(I8085::PSW, RegState::Define);
+
   /* Store the register value pointed by HL reg */
-  
+
   buildMI(MBB, MBBI, I8085::MOV_M)
       .addReg(srcReg);
 
@@ -623,7 +641,7 @@ bool I8085ExpandPseudo::expand<I8085::STORE_8>(Block &MBB, BlockIt MBBI) {
 
   if (PreserveHL)
     buildMI(MBB, MBBI, I8085::POP).addReg(I8085::HL, RegState::Define);
-  
+
   MI.eraseFromParent();
   return true;
 }
@@ -775,12 +793,21 @@ bool I8085ExpandPseudo::expand<I8085::STORE_16>(Block &MBB, BlockIt MBBI) {
 
   if (destReg == I8085::HL) {
     const bool SrcIsKill = MI.getOperand(2).isKill();
+    // DAD clobbers carry.  Preserve PSW when flags are live.
+    const bool UseDAD = (baseReg != I8085::HL);
+    const bool PreservePSW16HL = UseDAD && isPhysRegLive(MBB, MBBI, I8085::SREG);
     int64_t addrOffset = offsetToStore;
     if (baseReg == I8085::SP)
       addrOffset += 4;
 
     buildMI(MBB, MBBI, I8085::PUSH).addReg(I8085::BC);
     buildMI(MBB, MBBI, I8085::PUSH).addReg(I8085::HL);
+
+    if (PreservePSW16HL) {
+      buildMI(MBB, MBBI, I8085::PUSH).addReg(I8085::PSW);
+      if (baseReg == I8085::SP)
+        addrOffset += 2;
+    }
 
     if (baseReg == I8085::HL) {
       addOffsetToHL(addrOffset);
@@ -790,6 +817,9 @@ bool I8085ExpandPseudo::expand<I8085::STORE_16>(Block &MBB, BlockIt MBBI) {
           .addImm(addrOffset);
       buildMI(MBB, MBBI, I8085::DAD).addReg(baseReg);
     }
+
+    if (PreservePSW16HL)
+      buildMI(MBB, MBBI, I8085::POP).addReg(I8085::PSW, RegState::Define);
 
     buildMI(MBB, MBBI, I8085::POP).addReg(I8085::BC, RegState::Define);
     buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::C);
@@ -821,10 +851,19 @@ bool I8085ExpandPseudo::expand<I8085::STORE_16>(Block &MBB, BlockIt MBBI) {
   }
   
   if (destReg == I8085::SP) {
+    // DAD clobbers carry.  Preserve PSW when flags are live.
+    // Note: PUSH PSW changes SP by -2, so we must compensate the read value.
+    const bool PreservePSW16SP = isPhysRegLive(MBB, MBBI, I8085::SREG);
+    if (PreservePSW16SP)
+      buildMI(MBB, MBBI, I8085::PUSH).addReg(I8085::PSW);
+    // LXI H, offset / DAD SP captures current SP into HL.
+    // If we pushed PSW, SP is 2 lower, so add 2 to compensate.
     buildMI(MBB, MBBI, I8085::LXI)
         .addReg(I8085::HL, RegState::Define)
-        .addImm(0);
+        .addImm(PreservePSW16SP ? 2 : 0);
     buildMI(MBB, MBBI, I8085::DAD).addReg(I8085::SP);
+    if (PreservePSW16SP)
+      buildMI(MBB, MBBI, I8085::POP).addReg(I8085::PSW, RegState::Define);
     lowReg = I8085::L;
     highReg = I8085::H;
   } else if (!getPairRegs(destReg, lowReg, highReg)) {
@@ -915,9 +954,21 @@ bool I8085ExpandPseudo::expand<I8085::LOAD_8_WITH_ADDR>(Block &MBB, BlockIt MBBI
   const bool PreserveHLFromHL =
       (baseReg == I8085::HL && destReg != I8085::H && destReg != I8085::L);
 
+  // DAD clobbers carry.  When flags are live across this pseudo (e.g. a
+  // register reload inserted between SUB and JC/JNC), we must preserve PSW
+  // around the DAD.  The HL-path (INX/DCX) is flag-safe and needs no save.
+  const bool UseDAD = (baseReg != I8085::HL);
+  const bool PreservePSW = UseDAD && isPhysRegLive(MBB, MBBI, I8085::SREG);
+
   if (PreserveHL) {
     buildMI(MBB, MBBI, I8085::PUSH).addReg(I8085::HL);
     if (PreserveHLFromSP)
+      offsetToLoad += 2;
+  }
+
+  if (PreservePSW) {
+    buildMI(MBB, MBBI, I8085::PUSH).addReg(I8085::PSW);
+    if (baseReg == I8085::SP)
       offsetToLoad += 2;
   }
 
@@ -940,12 +991,16 @@ bool I8085ExpandPseudo::expand<I8085::LOAD_8_WITH_ADDR>(Block &MBB, BlockIt MBBI
     buildMI(MBB, MBBI, I8085::DAD)
         .addReg(baseReg);
   }
-  
-  /* Store the register value pointed by HL reg */
-  
+
+  // Restore PSW (A + flags) after DAD but before the load.
+  if (PreservePSW)
+    buildMI(MBB, MBBI, I8085::POP).addReg(I8085::PSW, RegState::Define);
+
+  /* Load the register value pointed by HL reg */
+
   buildMI(MBB, MBBI, I8085::MOV_FROM_M)
       .addReg(destReg,RegState::Define);
-  
+
   if (baseReg == I8085::HL && PreserveHLFromHL)
     addOffsetToHL(-offsetToLoad);
 
@@ -1028,11 +1083,20 @@ bool I8085ExpandPseudo::expand<I8085::LOAD_16_WITH_ADDR>(Block &MBB, BlockIt MBB
     return false;
 
   if (PreserveHL) {
+    // DAD clobbers carry.  Preserve PSW when flags are live.
+    const bool PreservePSWCarry = isPhysRegLive(MBB, MBBI, I8085::SREG);
+    if (PreservePSWCarry) {
+      buildMI(MBB, MBBI, I8085::PUSH).addReg(I8085::PSW);
+      if (baseReg == I8085::SP)
+        offsetToLoad += 2;
+    }
     buildMI(MBB, MBBI, I8085::LXI)
         .addReg(I8085::HL, RegState::Define)
         .addImm(offsetToLoad);
     buildMI(MBB, MBBI, I8085::DAD)
         .addReg(baseReg);
+    if (PreservePSWCarry)
+      buildMI(MBB, MBBI, I8085::POP).addReg(I8085::PSW, RegState::Define);
     buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(lowReg, RegState::Define);
     buildMI(MBB, MBBI, I8085::INX).addReg(I8085::HL, RegState::Define);
     buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(highReg, RegState::Define);

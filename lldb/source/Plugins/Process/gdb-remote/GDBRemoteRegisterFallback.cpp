@@ -20,6 +20,7 @@ namespace process_gdb_remote {
 #define R64(name) REG(name, 8)
 #define R32(name) REG(name, 4)
 #define R16(name) REG(name, 2)
+#define R8(name) REG(name, 1)
 
 static std::vector<DynamicRegisterInfo::Register> GetRegisters_aarch64() {
   ConstString empty_alt_name;
@@ -44,6 +45,20 @@ static std::vector<DynamicRegisterInfo::Register> GetRegisters_msp430() {
       R16(pc),  R16(sp),  R16(r2),  R16(r3), R16(fp),  R16(r5),
       R16(r6),  R16(r7),  R16(r8),  R16(r9), R16(r10), R16(r11),
       R16(r12), R16(r13), R16(r14), R16(r15)};
+
+  return registers;
+}
+
+static std::vector<DynamicRegisterInfo::Register> GetRegisters_i8085() {
+  ConstString empty_alt_name;
+  ConstString reg_set{"general purpose registers"};
+
+  // DWARF order: B(0), C(1), D(2), E(3), H(4), L(5), M(6), A(7),
+  //              SP(8), FLAGS(9), PSW(10), PC(11), BC(12), DE(13), HL(14)
+  std::vector<DynamicRegisterInfo::Register> registers{
+      R8(B),    R8(C),    R8(D),     R8(E),    R8(H),   R8(L),
+      R8(M),    R8(A),    R16(SP),   R8(FLAGS), R16(PSW),
+      R16(PC),  R16(BC),  R16(DE),   R16(HL)};
 
   return registers;
 }
@@ -75,6 +90,7 @@ static std::vector<DynamicRegisterInfo::Register> GetRegisters_x86_64() {
   return registers;
 }
 
+#undef R8
 #undef R32
 #undef R64
 #undef REG
@@ -86,6 +102,8 @@ GetFallbackRegisters(const ArchSpec &arch_to_use) {
     return GetRegisters_aarch64();
   case llvm::Triple::msp430:
     return GetRegisters_msp430();
+  case llvm::Triple::i8085:
+    return GetRegisters_i8085();
   case llvm::Triple::x86:
     return GetRegisters_x86();
   case llvm::Triple::x86_64:

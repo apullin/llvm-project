@@ -73,6 +73,7 @@ llvm::Triple::ArchType stringTo<llvm::Triple::ArchType>(llvm::StringRef Str) {
       .Cases("arm64", "arm64e", Triple::aarch64)
       .Case("mips", Triple::mips)
       .Case("msp430", Triple::msp430)
+      .Case("i8085", Triple::i8085)
       .Case("ppc", Triple::ppc)
       .Case("ppc64", Triple::ppc64)
       .Case("s390", Triple::systemz)

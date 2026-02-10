@@ -70,6 +70,7 @@ public:
   void addIRPasses() override;
   bool addInstSelector() override;
   void addPreRegAlloc() override;
+  void addMachineLateOptimization() override;
   void addPreSched2() override;
   void addPreEmitPass() override;
 };
@@ -138,6 +139,26 @@ bool I8085PassConfig::addInstSelector() {
 
 void I8085PassConfig::addPreRegAlloc() {
   addPass(createI8085StoreRegClassPass());
+}
+
+void I8085PassConfig::addMachineLateOptimization() {
+  // Override the default addMachineLateOptimization to omit the late Machine
+  // Copy Propagation pass.  The i8085 GR32 pseudo instructions (LOAD_32,
+  // STORE_32, etc.) declare implicit-def $hl because their expansion uses HL
+  // for stack access.  The expansion pass (in addPreSched2) detects when HL is
+  // live and wraps the expansion in PUSH H / POP H to preserve it.  However,
+  // Machine Copy Propagation runs BEFORE pseudo expansion and sees the
+  // implicit-def $hl as a clobber, incorrectly eliminating COPY instructions
+  // that set HL to a value needed by successor blocks.  This causes miscompiles
+  // at -O1 (e.g. lz_stress2 LZ77 roundtrip tests).
+  //
+  // We keep MachineLateInstrsCleanup, BranchFolder, and TailDuplicate but
+  // skip the second MachineCopyPropagation pass.
+  addPass(&MachineLateInstrsCleanupID);
+  addPass(&BranchFolderPassID);
+  if (!TM->requiresStructuredCFG())
+    addPass(&TailDuplicateID);
+  // MachineCopyPropagationID intentionally omitted — see above.
 }
 
 void I8085PassConfig::addPreSched2() {

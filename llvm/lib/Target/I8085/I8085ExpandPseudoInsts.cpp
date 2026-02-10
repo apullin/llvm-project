@@ -593,17 +593,35 @@ bool I8085ExpandPseudo::expand<I8085::STORE_8>(Block &MBB, BlockIt MBBI) {
   const bool UseDAD = (baseReg != I8085::HL);
   const bool PreservePSW = UseDAD && isPhysRegLive(MBB, MBBI, I8085::SREG);
 
+  // If srcReg is H or L and we're going to clobber HL with LXI+DAD, we must
+  // copy the source value to A before the LXI destroys it.  The register
+  // allocator's coalescer can widen GR8NoHL to GR8 and assign H/L despite
+  // the operand constraint.
+  const bool SrcIsHL = (srcReg == I8085::H || srcReg == I8085::L) &&
+                       (baseReg != I8085::HL);
+  // When SrcIsHL, we need A as a temporary.  If A is live (or SREG is live),
+  // we must preserve PSW.  Subsumes the existing PreservePSW logic.
+  const bool NeedPSWSave = SrcIsHL
+      ? (PreservePSW || isPhysRegLive(MBB, MBBI, I8085::A))
+      : PreservePSW;
+
   if (PreserveHL) {
     buildMI(MBB, MBBI, I8085::PUSH).addReg(I8085::HL);
     if (PreserveHLFromSP)
       offsetToStore += 2;
   }
 
-  if (PreservePSW) {
+  if (NeedPSWSave) {
     buildMI(MBB, MBBI, I8085::PUSH).addReg(I8085::PSW);
     if (baseReg == I8085::SP)
       offsetToStore += 2;
   }
+
+  // If the source is H or L, copy it to A now, before LXI clobbers HL.
+  if (SrcIsHL)
+    buildMI(MBB, MBBI, I8085::MOV)
+        .addReg(I8085::A, RegState::Define)
+        .addReg(srcReg);
 
   auto addOffsetToHL = [&](int64_t Offset) {
     if (Offset > 0) {
@@ -625,16 +643,19 @@ bool I8085ExpandPseudo::expand<I8085::STORE_8>(Block &MBB, BlockIt MBBI) {
         .addReg(baseReg);
   }
 
-  // Restore PSW (A + flags) after DAD but before the store.
-  // LXI and DAD do not touch A, so A still holds its pre-PUSH value;
-  // POP PSW restores it to the same value plus the original flags.
-  if (PreservePSW)
+  /* Store the register value pointed by HL reg.
+   * If SrcIsHL, the value has been moved to A; use A as the source.
+   * Otherwise, restore PSW (A + flags) before the store if needed. */
+
+  if (!SrcIsHL && NeedPSWSave)
     buildMI(MBB, MBBI, I8085::POP).addReg(I8085::PSW, RegState::Define);
 
-  /* Store the register value pointed by HL reg */
-
   buildMI(MBB, MBBI, I8085::MOV_M)
-      .addReg(srcReg);
+      .addReg(SrcIsHL ? (unsigned)I8085::A : srcReg);
+
+  // When SrcIsHL, restore PSW *after* the store (A held the source value).
+  if (SrcIsHL && NeedPSWSave)
+    buildMI(MBB, MBBI, I8085::POP).addReg(I8085::PSW, RegState::Define);
 
   if (baseReg == I8085::HL)
     addOffsetToHL(-offsetToStore);
@@ -941,15 +962,28 @@ bool I8085ExpandPseudo::expand<I8085::GROW_STACK_BY>(Block &MBB, BlockIt MBBI) {
 template <>
 bool I8085ExpandPseudo::expand<I8085::LOAD_8_WITH_ADDR>(Block &MBB, BlockIt MBBI) {
   MachineInstr &MI = *MBBI;
- 
+
 
   unsigned destReg = MI.getOperand(0).getReg();
   unsigned baseReg = MI.getOperand(1).getReg();
   int64_t offsetToLoad = MI.getOperand(2).getImm();
 
+  // When destReg is H or L and the base requires LXI+DAD (base != HL),
+  // the "other" sub-register of HL is clobbered by the address computation.
+  // If that other sub-register is live, we must preserve it by loading via A
+  // as a temporary, then POP H to restore the other half, then MOV dest, A.
+  const bool DestIsH = (destReg == I8085::H);
+  const bool DestIsL = (destReg == I8085::L);
+  const bool DestIsSubHL = (DestIsH || DestIsL) && (baseReg != I8085::HL);
+  // Check if the "other" sub-register is live.
+  const bool OtherSubLive = DestIsSubHL &&
+      (DestIsH ? (isPhysRegLive(MBB, MBBI, I8085::L))
+               : (isPhysRegLive(MBB, MBBI, I8085::H)));
+
   const bool PreserveHL =
-      (baseReg != I8085::HL && destReg != I8085::H &&
-       destReg != I8085::L && isHLOrSubRegLive(MBB, MBBI));
+      OtherSubLive ||
+      (baseReg != I8085::HL && !DestIsH && !DestIsL &&
+       isHLOrSubRegLive(MBB, MBBI));
   const bool PreserveHLFromSP = PreserveHL && (baseReg == I8085::SP);
   const bool PreserveHLFromHL =
       (baseReg == I8085::HL && destReg != I8085::H && destReg != I8085::L);
@@ -960,16 +994,40 @@ bool I8085ExpandPseudo::expand<I8085::LOAD_8_WITH_ADDR>(Block &MBB, BlockIt MBBI
   const bool UseDAD = (baseReg != I8085::HL);
   const bool PreservePSW = UseDAD && isPhysRegLive(MBB, MBBI, I8085::SREG);
 
-  if (PreserveHL) {
-    buildMI(MBB, MBBI, I8085::PUSH).addReg(I8085::HL);
-    if (PreserveHLFromSP)
-      offsetToLoad += 2;
-  }
+  // When OtherSubLive, we use A as a temp to shuttle the loaded value.
+  // If A is also live (or SREG), we need PSW preservation.
+  const bool NeedPSWSave = OtherSubLive
+      ? (PreservePSW || isPhysRegLive(MBB, MBBI, I8085::A))
+      : PreservePSW;
 
-  if (PreservePSW) {
-    buildMI(MBB, MBBI, I8085::PUSH).addReg(I8085::PSW);
-    if (baseReg == I8085::SP)
-      offsetToLoad += 2;
+  // When OtherSubLive is true, we use A as a temp and need PUSH/POP in the
+  // order: PUSH PSW, PUSH H ... POP H, MOV dest,A, POP PSW (LIFO).
+  // When OtherSubLive is false, the normal path pops PSW right after DAD
+  // and POP H at the end: PUSH H, PUSH PSW ... POP PSW, MOV dest,M, POP H.
+  if (OtherSubLive) {
+    // OtherSubLive path: push PSW first, then H (LIFO: pop H first, PSW last)
+    if (NeedPSWSave) {
+      buildMI(MBB, MBBI, I8085::PUSH).addReg(I8085::PSW);
+      if (baseReg == I8085::SP)
+        offsetToLoad += 2;
+    }
+    if (PreserveHL) {
+      buildMI(MBB, MBBI, I8085::PUSH).addReg(I8085::HL);
+      if (PreserveHLFromSP)
+        offsetToLoad += 2;
+    }
+  } else {
+    // Normal path: push H first, then PSW (LIFO: pop PSW first, H last)
+    if (PreserveHL) {
+      buildMI(MBB, MBBI, I8085::PUSH).addReg(I8085::HL);
+      if (PreserveHLFromSP)
+        offsetToLoad += 2;
+    }
+    if (NeedPSWSave) {
+      buildMI(MBB, MBBI, I8085::PUSH).addReg(I8085::PSW);
+      if (baseReg == I8085::SP)
+        offsetToLoad += 2;
+    }
   }
 
   auto addOffsetToHL = [&](int64_t Offset) {
@@ -992,20 +1050,35 @@ bool I8085ExpandPseudo::expand<I8085::LOAD_8_WITH_ADDR>(Block &MBB, BlockIt MBBI
         .addReg(baseReg);
   }
 
-  // Restore PSW (A + flags) after DAD but before the load.
-  if (PreservePSW)
-    buildMI(MBB, MBBI, I8085::POP).addReg(I8085::PSW, RegState::Define);
+  if (OtherSubLive) {
+    // Load into A (temp), restore HL (gets back the other sub-reg),
+    // move A into dest, then restore PSW.
+    // Stack order (LIFO): PSW was pushed first, H second.
+    // So POP H comes first, POP PSW comes last.
+    buildMI(MBB, MBBI, I8085::MOV_FROM_M)
+        .addReg(I8085::A, RegState::Define);
 
-  /* Load the register value pointed by HL reg */
-
-  buildMI(MBB, MBBI, I8085::MOV_FROM_M)
-      .addReg(destReg,RegState::Define);
-
-  if (baseReg == I8085::HL && PreserveHLFromHL)
-    addOffsetToHL(-offsetToLoad);
-
-  if (PreserveHL)
     buildMI(MBB, MBBI, I8085::POP).addReg(I8085::HL, RegState::Define);
+    buildMI(MBB, MBBI, I8085::MOV)
+        .addReg(destReg, RegState::Define)
+        .addReg(I8085::A);
+
+    if (NeedPSWSave)
+      buildMI(MBB, MBBI, I8085::POP).addReg(I8085::PSW, RegState::Define);
+  } else {
+    // Normal path: restore PSW after DAD, then load directly into destReg.
+    if (NeedPSWSave)
+      buildMI(MBB, MBBI, I8085::POP).addReg(I8085::PSW, RegState::Define);
+
+    buildMI(MBB, MBBI, I8085::MOV_FROM_M)
+        .addReg(destReg, RegState::Define);
+
+    if (baseReg == I8085::HL && PreserveHLFromHL)
+      addOffsetToHL(-offsetToLoad);
+
+    if (PreserveHL)
+      buildMI(MBB, MBBI, I8085::POP).addReg(I8085::HL, RegState::Define);
+  }
 
   MI.eraseFromParent();
   return true;

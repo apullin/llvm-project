@@ -2318,15 +2318,43 @@ bool I8085ExpandPseudo32::expandMI(Block &MBB, BlockIt MBBI) {
   // that clobbers HL (implicit-def $hl).  We detect this by checking if the
   // implicit-def of $hl is NOT dead.  If so, we wrap the expansion in
   // PUSH H / POP H and adjust all SP-relative offsets via HLSaveBias.
+  //
+  // Additionally, we perform a defensive liveness check: the Machine LICM
+  // pass can hoist instructions to loop preheaders, preserving a stale
+  // "dead" flag on implicit-def $hl even though HL becomes live-out in the
+  // new position.  To catch this, we recompute HL liveness from block
+  // live-outs when the dead flag is set but HL appears live.
+  //
   // Skip branch/terminator pseudos — they may split blocks and HL is
   // unlikely to be live across them.
   bool NeedHLSave = false;
   if (!MI.isBranch() && !MI.isTerminator()) {
+    bool HasHLImplicitDef = false;
+    bool HLImplicitDefIsDead = false;
     for (const MachineOperand &MO : MI.implicit_operands()) {
-      if (MO.isReg() && MO.isDef() && MO.getReg() == I8085::HL &&
-          !MO.isDead()) {
-        NeedHLSave = true;
+      if (MO.isReg() && MO.isDef() && MO.getReg() == I8085::HL) {
+        HasHLImplicitDef = true;
+        HLImplicitDefIsDead = MO.isDead();
+        if (!HLImplicitDefIsDead) {
+          NeedHLSave = true;
+        }
         break;
+      }
+    }
+    // Defensive check: if the implicit-def is marked dead, verify that HL
+    // is truly dead by recomputing liveness from block live-outs.  Machine
+    // LICM can hoist instructions and leave stale dead flags.
+    if (HasHLImplicitDef && HLImplicitDefIsDead && !NeedHLSave) {
+      LivePhysRegs LiveRegs(*TRI);
+      LiveRegs.addLiveOuts(MBB);
+      for (auto I = MBB.rbegin(), E = MBBI.getReverse(); I != E; ++I)
+        LiveRegs.stepBackward(*I);
+      if (LiveRegs.contains(I8085::HL) ||
+          LiveRegs.contains(I8085::H) ||
+          LiveRegs.contains(I8085::L)) {
+        NeedHLSave = true;
+        LLVM_DEBUG(dbgs() << "HL-save: stale dead flag on implicit-def $hl, "
+                          << "HL is actually live — wrapping with PUSH/POP\n");
       }
     }
   }

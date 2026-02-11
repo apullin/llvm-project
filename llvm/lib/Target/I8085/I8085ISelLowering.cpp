@@ -205,12 +205,18 @@ I8085TargetLowering::I8085TargetLowering(const I8085TargetMachine &TM,
   setTruncStoreAction(MVT::i16, MVT::i8, Expand);
   setTruncStoreAction(MVT::i32, MVT::i8, Expand);
   setTruncStoreAction(MVT::i32, MVT::i16, Expand);
-  setOperationAction(ISD::LOAD, MVT::i64, Custom);
-  setOperationAction(ISD::STORE, MVT::i64, Custom);
-  setOperationAction(ISD::ZERO_EXTEND, MVT::i64, Custom);
-  setOperationAction(ISD::SIGN_EXTEND, MVT::i64, Custom);
-  setOperationAction(ISD::ANY_EXTEND, MVT::i64, Custom);
-  setOperationAction(ISD::TRUNCATE, MVT::i32, Custom);
+  // Let LLVM's type legalizer split i64 loads/stores into two i32 halves.
+  // Custom lowering created BUILD_PAIR MVT::i64 which survived to ISel.
+  setOperationAction(ISD::LOAD, MVT::i64, Expand);
+  setOperationAction(ISD::STORE, MVT::i64, Expand);
+  // Let LLVM's type legalizer handle i64 extends by splitting into i32 pairs.
+  // Custom lowering would create BUILD_PAIR MVT::i64 which can't be selected
+  // since i64 is not a register class.
+  setOperationAction(ISD::ZERO_EXTEND, MVT::i64, Expand);
+  setOperationAction(ISD::SIGN_EXTEND, MVT::i64, Expand);
+  setOperationAction(ISD::ANY_EXTEND, MVT::i64, Expand);
+  // TRUNCATE i32 is Legal — the type legalizer handles i64→i32 truncation
+  // via ExpandOp_TRUNCATE before we reach operation legalization.
 
   // Ensure sign/zero/any extension to i32 uses efficient pseudo instructions
   // instead of being expanded to shift sequences.
@@ -258,7 +264,7 @@ I8085TargetLowering::I8085TargetLowering(const I8085TargetMachine &TM,
   setOperationAction(ISD::MUL, MVT::i8, LibCall);
   setOperationAction(ISD::MUL, MVT::i16, Custom);
   setOperationAction(ISD::MUL, MVT::i32, Custom);
-  setOperationAction(ISD::MUL, MVT::i64, Custom);
+  setOperationAction(ISD::MUL, MVT::i64, Expand);
   for (MVT VT : {MVT::i8, MVT::i16, MVT::i32, MVT::i64}) {
     setOperationAction(ISD::MULHS, VT, Expand);
     setOperationAction(ISD::MULHU, VT, Expand);
@@ -269,36 +275,43 @@ I8085TargetLowering::I8085TargetLowering(const I8085TargetMachine &TM,
   setOperationAction(ISD::SDIV, MVT::i8, LibCall);
   setOperationAction(ISD::SDIV, MVT::i16, LibCall);
   setOperationAction(ISD::SDIV, MVT::i32, LibCall);
-  setOperationAction(ISD::SDIV, MVT::i64, Custom);
+  setOperationAction(ISD::SDIV, MVT::i64, Expand);
 
   setOperationAction(ISD::SREM, MVT::i8, LibCall);
   setOperationAction(ISD::SREM, MVT::i16, LibCall);
   setOperationAction(ISD::SREM, MVT::i32, LibCall);
-  setOperationAction(ISD::SREM, MVT::i64, Custom);
+  setOperationAction(ISD::SREM, MVT::i64, Expand);
 
   setOperationAction(ISD::UDIV, MVT::i8, LibCall);
   setOperationAction(ISD::UDIV, MVT::i16, LibCall);
   setOperationAction(ISD::UDIV, MVT::i32, LibCall);
-  setOperationAction(ISD::UDIV, MVT::i64, Custom);
+  setOperationAction(ISD::UDIV, MVT::i64, Expand);
 
   setOperationAction(ISD::UREM, MVT::i8, LibCall);
   setOperationAction(ISD::UREM, MVT::i16, LibCall);
   setOperationAction(ISD::UREM, MVT::i32, LibCall);
-  setOperationAction(ISD::UREM, MVT::i64, Custom);
+  setOperationAction(ISD::UREM, MVT::i64, Expand);
 
   // Combined DIVREM: emit a single __udivmod/__sdivmod call that returns
   // both quotient and remainder, avoiding two separate division loops.
   setOperationAction(ISD::UDIVREM, MVT::i8, Custom);
   setOperationAction(ISD::UDIVREM, MVT::i16, Custom);
+  setOperationAction(ISD::UDIVREM, MVT::i32, Expand);
+  setOperationAction(ISD::UDIVREM, MVT::i64, Expand);
   setOperationAction(ISD::SDIVREM, MVT::i8, Custom);
   setOperationAction(ISD::SDIVREM, MVT::i16, Custom);
+  setOperationAction(ISD::SDIVREM, MVT::i32, Expand);
+  setOperationAction(ISD::SDIVREM, MVT::i64, Expand);
 
-  setOperationAction(ISD::ADD, MVT::i64, Custom);
-  setOperationAction(ISD::SUB, MVT::i64, Custom);
+  // Let LLVM's type legalizer expand i64 arithmetic into i32 pairs.
+  // ADD/SUB use comparison-based carry detection (no ADDC/ADDE needed).
+  // AND/OR/XOR split trivially into two i32 operations.
+  setOperationAction(ISD::ADD, MVT::i64, Expand);
+  setOperationAction(ISD::SUB, MVT::i64, Expand);
 
-  setOperationAction(ISD::AND, MVT::i64, Custom);
-  setOperationAction(ISD::OR, MVT::i64, Custom);
-  setOperationAction(ISD::XOR, MVT::i64, Custom);
+  setOperationAction(ISD::AND, MVT::i64, Expand);
+  setOperationAction(ISD::OR, MVT::i64, Expand);
+  setOperationAction(ISD::XOR, MVT::i64, Expand);
 
   // Hybrid i32 shifts: constant shifts are handled inline in ISel
   // (byte-shuffle + rotates), variable shifts go to library calls.
@@ -306,9 +319,9 @@ I8085TargetLowering::I8085TargetLowering(const I8085TargetMachine &TM,
   setOperationAction(ISD::SRL, MVT::i32, Custom);
   setOperationAction(ISD::SRA, MVT::i32, Custom);
 
-  setOperationAction(ISD::SHL, MVT::i64, Custom);
-  setOperationAction(ISD::SRA, MVT::i64, Custom);
-  setOperationAction(ISD::SRL, MVT::i64, Custom);
+  setOperationAction(ISD::SHL, MVT::i64, Expand);
+  setOperationAction(ISD::SRA, MVT::i64, Expand);
+  setOperationAction(ISD::SRL, MVT::i64, Expand);
   setOperationAction(ISD::SHL_PARTS, MVT::i32, Expand);
   setOperationAction(ISD::SRA_PARTS, MVT::i32, Expand);
   setOperationAction(ISD::SRL_PARTS, MVT::i32, Expand);
@@ -335,8 +348,7 @@ I8085TargetLowering::I8085TargetLowering(const I8085TargetMachine &TM,
   // the default shift-based expansion.
   setOperationAction(ISD::BSWAP, MVT::i16, Legal);
   setOperationAction(ISD::BSWAP, MVT::i32, Legal);
-  // Tier 2: BSWAP i64 via Custom split into two i32 BSWAPs
-  setOperationAction(ISD::BSWAP, MVT::i64, Custom);
+  setOperationAction(ISD::BSWAP, MVT::i64, Expand);
 
   // Tier 3: Rotates — Custom for all widths
   setOperationAction(ISD::ROTL, MVT::i8, Custom);
@@ -345,8 +357,8 @@ I8085TargetLowering::I8085TargetLowering(const I8085TargetMachine &TM,
   setOperationAction(ISD::ROTR, MVT::i16, Custom);
   setOperationAction(ISD::ROTL, MVT::i32, Custom);
   setOperationAction(ISD::ROTR, MVT::i32, Custom);
-  setOperationAction(ISD::ROTL, MVT::i64, Custom);
-  setOperationAction(ISD::ROTR, MVT::i64, Custom);
+  setOperationAction(ISD::ROTL, MVT::i64, Expand);
+  setOperationAction(ISD::ROTR, MVT::i64, Expand);
 
   // Custom lowering for funnel shifts - efficient for specific cases
   setOperationAction(ISD::FSHL, MVT::i8, Custom);
@@ -363,15 +375,15 @@ I8085TargetLowering::I8085TargetLowering(const I8085TargetMachine &TM,
   // Bit counting
   setOperationAction(ISD::CTLZ, MVT::i32, Custom);
   setOperationAction(ISD::CTLZ_ZERO_UNDEF, MVT::i32, Custom);
-  setOperationAction(ISD::CTLZ, MVT::i64, Custom);
-  setOperationAction(ISD::CTLZ_ZERO_UNDEF, MVT::i64, Custom);
+  setOperationAction(ISD::CTLZ, MVT::i64, Expand);
+  setOperationAction(ISD::CTLZ_ZERO_UNDEF, MVT::i64, Expand);
   setOperationAction(ISD::CTTZ, MVT::i32, Custom);
   setOperationAction(ISD::CTTZ_ZERO_UNDEF, MVT::i32, Custom);
-  setOperationAction(ISD::CTTZ, MVT::i64, Custom);
-  setOperationAction(ISD::CTTZ_ZERO_UNDEF, MVT::i64, Custom);
-  // Tier 1: CTPOP i32/i64 via Custom (manual libcall, no RTLIB enum)
+  setOperationAction(ISD::CTTZ, MVT::i64, Expand);
+  setOperationAction(ISD::CTTZ_ZERO_UNDEF, MVT::i64, Expand);
+  // CTPOP i32 via Custom (manual libcall), i64 via Expand
   setOperationAction(ISD::CTPOP, MVT::i32, Custom);
-  setOperationAction(ISD::CTPOP, MVT::i64, Custom);
+  setOperationAction(ISD::CTPOP, MVT::i64, Expand);
 
   // Custom lowering for ABS to avoid expensive shift-based expansion.
   // We expand abs(x) to: x < 0 ? -x : x
@@ -1164,6 +1176,60 @@ static SDValue emitMul32I64LibCall(SelectionDAG &DAG, const SDLoc &DL,
   return Load;
 }
 
+// Like emitMul32I64LibCall, but returns {lo32, hi32} as separate i32 loads.
+// This avoids creating i64 DAG nodes, which is critical during operation
+// legalization when i64 has already been type-legalized away.
+static std::pair<SDValue, SDValue>
+emitMul32LoHi(SelectionDAG &DAG, const SDLoc &DL, const char *Name,
+              SDValue Arg0, SDValue Arg1,
+              const I8085TargetLowering &TLI) {
+  TargetLowering::ArgListTy Args;
+  TargetLowering::ArgListEntry Entry;
+
+  Type *I32Ty = Type::getInt32Ty(*DAG.getContext());
+  Type *I64Ty = Type::getInt64Ty(*DAG.getContext());
+  auto PtrVT = TLI.getPointerTy(DAG.getDataLayout());
+
+  MachineFrameInfo &MFI = DAG.getMachineFunction().getFrameInfo();
+  int RetFI = MFI.CreateStackObject(8, Align(1), false);
+  SDValue RetPtr = DAG.getFrameIndex(RetFI, PtrVT);
+
+  TargetLowering::ArgListEntry RetEntry;
+  RetEntry.Node = RetPtr;
+  RetEntry.Ty = PointerType::getUnqual(I64Ty);
+  RetEntry.IsSRet = true;
+  RetEntry.IndirectType = I64Ty;
+  Args.push_back(RetEntry);
+
+  Entry.Node = Arg0;
+  Entry.Ty = I32Ty;
+  Args.push_back(Entry);
+
+  Entry.Node = Arg1;
+  Entry.Ty = I32Ty;
+  Args.push_back(Entry);
+
+  Type *VoidTy = Type::getVoidTy(*DAG.getContext());
+  SDValue Callee = DAG.getExternalSymbol(Name, PtrVT);
+
+  TargetLowering::CallLoweringInfo CLI(DAG);
+  CLI.setDebugLoc(DL)
+      .setChain(DAG.getEntryNode())
+      .setLibCallee(CallingConv::C, VoidTy, Callee, std::move(Args));
+
+  std::pair<SDValue, SDValue> CallInfo = TLI.LowerCallTo(CLI);
+  SDValue Chain = CallInfo.second;
+
+  // Load lo32 and hi32 separately (little-endian: lo at offset 0, hi at +4).
+  SDValue Lo = DAG.getLoad(MVT::i32, DL, Chain, RetPtr,
+                           MachinePointerInfo());
+  SDValue HiPtr = DAG.getNode(ISD::ADD, DL, PtrVT, RetPtr,
+                              DAG.getConstant(4, DL, PtrVT));
+  SDValue Hi = DAG.getLoad(MVT::i32, DL, Lo.getValue(1), HiPtr,
+                           MachinePointerInfo());
+  return {Lo, Hi};
+}
+
 SDValue I8085TargetLowering::LowerOperation(SDValue Op, SelectionDAG &DAG) const {
   SDLoc DL(Op);
   EVT VT = Op.getValueType();
@@ -1532,13 +1598,6 @@ SDValue I8085TargetLowering::LowerOperation(SDValue Op, SelectionDAG &DAG) const
       SDValue Sign = DAG.getSetCC(DL, MVT::i1, Lo, Zero, ISD::SETLT);
       SDValue Hi = DAG.getSelect(DL, MVT::i32, Sign, NegOne, Zero);
       return buildI64Value(Lo, Hi, DAG, DL);
-    }
-    break;
-  case ISD::TRUNCATE:
-    if (VT == MVT::i32 && Op.getOperand(0).getValueType() == MVT::i64) {
-      SDValue Lo, Hi;
-      splitI64Value(Op.getOperand(0), Lo, Hi, DAG, DL);
-      return Lo;
     }
     break;
   case ISD::CTLZ:
@@ -2112,16 +2171,13 @@ SDValue I8085TargetLowering::LowerOperation(SDValue Op, SelectionDAG &DAG) const
       return DAG.getMergeValues({Res, Overflow}, DL);
     }
     if (VT == MVT::i32) {
-      SDValue AExt = DAG.getNode(ISD::ZERO_EXTEND, DL, MVT::i64, A);
-      SDValue BExt = DAG.getNode(ISD::ZERO_EXTEND, DL, MVT::i64, B);
-      SDValue Wide = DAG.getNode(ISD::MUL, DL, MVT::i64, AExt, BExt);
-      SDValue Res = DAG.getNode(ISD::TRUNCATE, DL, MVT::i32, Wide);
-      SDValue Hi = DAG.getNode(ISD::SRL, DL, MVT::i64, Wide,
-                               DAG.getConstant(32, DL, MVT::i32));
-      SDValue HiTrunc = DAG.getNode(ISD::TRUNCATE, DL, MVT::i32, Hi);
+      // Use __mului32 (32x32->64 unsigned multiply) via sret, loading
+      // the result as two i32 halves to avoid creating i64 DAG nodes
+      // during operation legalization.
+      auto [Lo, Hi] = emitMul32LoHi(DAG, DL, "__mului32", A, B, *this);
       SDValue Zero = DAG.getConstant(0, DL, MVT::i32);
-      SDValue Overflow = DAG.getSetCC(DL, CCVT, HiTrunc, Zero, ISD::SETNE);
-      return DAG.getMergeValues({Res, Overflow}, DL);
+      SDValue Overflow = DAG.getSetCC(DL, CCVT, Hi, Zero, ISD::SETNE);
+      return DAG.getMergeValues({Lo, Overflow}, DL);
     }
     break;
   }
@@ -2156,13 +2212,14 @@ SDValue I8085TargetLowering::LowerOperation(SDValue Op, SelectionDAG &DAG) const
       return DAG.getMergeValues({Res, Overflow}, DL);
     }
     if (VT == MVT::i32) {
-      SDValue AExt = DAG.getNode(ISD::SIGN_EXTEND, DL, MVT::i64, A);
-      SDValue BExt = DAG.getNode(ISD::SIGN_EXTEND, DL, MVT::i64, B);
-      SDValue Wide = DAG.getNode(ISD::MUL, DL, MVT::i64, AExt, BExt);
-      SDValue Res = DAG.getNode(ISD::TRUNCATE, DL, MVT::i32, Wide);
-      SDValue ResSext = DAG.getNode(ISD::SIGN_EXTEND, DL, MVT::i64, Res);
-      SDValue Overflow = DAG.getSetCC(DL, CCVT, Wide, ResSext, ISD::SETNE);
-      return DAG.getMergeValues({Res, Overflow}, DL);
+      // Use __mulsi32 (32x32->64 signed multiply) via sret, loading
+      // the result as two i32 halves to avoid creating i64 DAG nodes.
+      auto [Lo, Hi] = emitMul32LoHi(DAG, DL, "__mulsi32", A, B, *this);
+      // Overflow if hi32 != sign-extension of lo32 (i.e. hi != lo >> 31).
+      SDValue SignExt = DAG.getNode(ISD::SRA, DL, MVT::i32, Lo,
+                                    DAG.getConstant(31, DL, MVT::i8));
+      SDValue Overflow = DAG.getSetCC(DL, CCVT, Hi, SignExt, ISD::SETNE);
+      return DAG.getMergeValues({Lo, Overflow}, DL);
     }
     break;
   }
@@ -3488,10 +3545,7 @@ bool I8085TargetLowering::CanLowerReturn(
     return CCInfo.CheckReturn(Outs, RetCC_I8085_BUILTIN);
   }
 
-  bool IsI64 =
-      (!Outs.empty() && Outs[0].VT == MVT::i64) ||
-      (Outs.size() == 2 && Outs[0].VT == MVT::i32 && Outs[1].VT == MVT::i32);
-  if (Outs.size() > 1 && !IsI64)
+  if (Outs.size() > 1)
     return false;
   for (const auto &Out : Outs) {
     if (!(Out.VT.isInteger() || Out.VT == MVT::f32))
@@ -3499,7 +3553,9 @@ bool I8085TargetLowering::CanLowerReturn(
   }
 
   unsigned TotalBytes = getTotalArgumentsSizeInBytes(Outs);
-  return TotalBytes <= 8;
+  // Only 4 return registers (B,C,D,E) available — max 4 bytes in registers.
+  // i64 returns must use sret (indirect return via pointer).
+  return TotalBytes <= 4;
 }
 
 SDValue

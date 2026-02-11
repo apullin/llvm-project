@@ -377,6 +377,9 @@ let Defs=[SREG, A] in def SHL_16_BY_8  : I8085Pseudo<(outs GR16: $rd), (ins GR16
 let Defs=[SREG, A] in def SRL_16_BY_8  : I8085Pseudo<(outs GR16: $rd), (ins GR16: $rs), "SRL_16_BY_8 $rs", []>;
 let Defs=[SREG, A] in def ASR_16_BY_8  : I8085Pseudo<(outs GR16: $rd), (ins GR16: $rs), "ASR_16_BY_8 $rs", []>;
 
+// Sign extension: ashr i16, 15 → 0x0000 or 0xFFFF based on sign bit
+let Defs=[SREG, A] in def SIGN_EXTEND_16 : I8085Pseudo<(outs GR16: $rd), (ins GR16: $rs), "SIGN_EXTEND_16 $rs", []>;
+
 let Defs=[SREG,A], Uses=[A] in def RLC : F1<0b00000111,(outs), (ins), "RLC", []>;
 let Defs=[SREG,A], Uses=[A] in def RRC : F1<0b00001111,(outs), (ins), "RRC", []>;
 

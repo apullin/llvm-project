@@ -488,6 +488,13 @@ template <> bool I8085DAGToDAGISel::select<ISD::SRA>(SDNode *N) {
       uint64_t ShiftAmt = C->getZExtValue();
       if (ShiftAmt > 0 && ShiftAmt < 16) {
         SDValue Result = LHS;
+        if (ShiftAmt == 15) {
+          // Sign extension: 0x0000 or 0xFFFF (5 insns instead of ~61)
+          Result = SDValue(CurDAG->getMachineNode(I8085::SIGN_EXTEND_16, dl, MVT::i16, Result), 0);
+          ReplaceUses(SDValue(N, 0), Result);
+          CurDAG->RemoveDeadNode(N);
+          return true;
+        }
         if (ShiftAmt >= 8) {
           Result = SDValue(CurDAG->getMachineNode(I8085::ASR_16_BY_8, dl, MVT::i16, Result), 0);
           ShiftAmt -= 8;

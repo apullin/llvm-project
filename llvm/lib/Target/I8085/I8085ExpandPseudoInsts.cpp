@@ -2318,6 +2318,53 @@ template <> bool I8085ExpandPseudo::expand<I8085::ASR_16_BY_8>(Block &MBB, Block
   return true;
 }
 
+// ashr i16, 15: sign extension → 0x0000 or 0xFFFF
+template <> bool I8085ExpandPseudo::expand<I8085::SIGN_EXTEND_16>(Block &MBB, BlockIt MBBI) {
+  MachineInstr &MI = *MBBI;
+
+  unsigned destReg = MI.getOperand(0).getReg();
+  unsigned srcReg = MI.getOperand(1).getReg();
+
+  unsigned regLow, regHigh;
+  if (!getPairRegs(destReg, regLow, regHigh))
+    return false;
+
+  unsigned srcHigh;
+  if (destReg == srcReg) {
+    srcHigh = regHigh;
+  } else {
+    unsigned srcLow;
+    if (!getPairRegs(srcReg, srcLow, srcHigh))
+      return false;
+  }
+
+  // MOV A, srcHigh  — get the byte containing the sign bit
+  buildMI(MBB, MBBI, I8085::MOV)
+    .addReg(I8085::A, RegState::Define)
+    .addReg(srcHigh);
+
+  // ADI 128  — sets carry if bit7 was 1 (negative)
+  buildMI(MBB, MBBI, I8085::ADI)
+    .addImm(128);
+
+  // SBB A  — A = 0xFF if carry (negative), 0x00 if no carry (positive)
+  buildMI(MBB, MBBI, I8085::SBB)
+    .addReg(I8085::A);
+
+  // MOV regLow, A
+  buildMI(MBB, MBBI, I8085::MOV)
+    .addReg(regLow, RegState::Define)
+    .addReg(I8085::A);
+
+  // MOV regHigh, A
+  buildMI(MBB, MBBI, I8085::MOV)
+    .addReg(regHigh, RegState::Define)
+    .addReg(I8085::A);
+
+  MI.eraseFromParent();
+  return true;
+}
+
 template <> bool I8085ExpandPseudo::expand<I8085::RL_8>(Block &MBB, BlockIt MBBI) {
   MachineInstr &MI = *MBBI;
   
@@ -2681,6 +2728,7 @@ bool I8085ExpandPseudo::expandMI(Block &MBB, BlockIt MBBI) {
     EXPAND(I8085::SHL_16_BY_8);
     EXPAND(I8085::SRL_16_BY_8);
     EXPAND(I8085::ASR_16_BY_8);
+    EXPAND(I8085::SIGN_EXTEND_16);
     EXPAND(I8085::RL_8);
     EXPAND(I8085::RR_8);
     EXPAND(I8085::ASR_8);

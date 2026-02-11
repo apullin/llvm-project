@@ -53,7 +53,7 @@ class I8085TTIImpl : public BasicTTIImplBase<I8085TTIImpl> {
     if (Bytes <= 1)
       return 1;
     if (Bytes <= 2)
-      return 2;
+      return 4;
     if (Bytes <= 4)
       return 4;
     if (Bytes <= 8)
@@ -134,7 +134,9 @@ public:
       // Variable shifts on i32/i64 use loops - very expensive
       if (IsLargeType)
         return 32 * Scale * Base;
-      return 2 * Scale * Base;
+      // i16 shifts expand to ~8 machine instructions per rotate step
+      // (carry chain through 2 bytes). i8 shifts are ~4 instructions.
+      return 8 * Scale * Base;
     default:
       break;
     }

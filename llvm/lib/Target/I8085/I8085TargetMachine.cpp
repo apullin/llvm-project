@@ -15,7 +15,9 @@
 #include "llvm/CodeGen/Passes.h"
 #include "llvm/CodeGen/TargetPassConfig.h"
 #include "llvm/IR/Module.h"
+#include "llvm/IR/PassManager.h"
 #include "llvm/MC/TargetRegistry.h"
+#include "llvm/Passes/PassBuilder.h"
 
 #include "I8085.h"
 #include "I8085MachineFunctionInfo.h"
@@ -78,6 +80,37 @@ public:
 
 TargetPassConfig *I8085TargetMachine::createPassConfig(PassManagerBase &PM) {
   return new I8085PassConfig(*this, PM);
+}
+
+/// Annotate size-optimized functions with a conservative inline threshold.
+/// The LLVM inliner's IR-level cost model (InstrCost=5 per IR instruction)
+/// underestimates machine code expansion on the 8-bit i8085 where each IR
+/// instruction expands to 4-10 machine instructions but a CALL is only 3 bytes.
+/// Setting threshold=0 (effective threshold=1 due to max(1,Threshold) clamp)
+/// ensures only net-beneficial inlines (cost <= 0) occur under -Os/-Oz.
+struct I8085AnnotateInlineThresholdPass
+    : public PassInfoMixin<I8085AnnotateInlineThresholdPass> {
+  PreservedAnalyses run(Module &M, ModuleAnalysisManager &AM) {
+    bool Changed = false;
+    for (Function &F : M) {
+      if (F.isDeclaration())
+        continue;
+      if (F.hasOptSize() || F.hasMinSize()) {
+        F.addFnAttr("function-inline-threshold", "0");
+        Changed = true;
+      }
+    }
+    return Changed ? PreservedAnalyses::none() : PreservedAnalyses::all();
+  }
+};
+
+void I8085TargetMachine::registerPassBuilderCallbacks(PassBuilder &PB) {
+  PB.registerPipelineEarlySimplificationEPCallback(
+      [](ModulePassManager &PM, OptimizationLevel Level) {
+        if (Level == OptimizationLevel::O0)
+          return;
+        PM.addPass(I8085AnnotateInlineThresholdPass());
+      });
 }
 
 void I8085PassConfig::addIRPasses() {

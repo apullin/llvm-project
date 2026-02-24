@@ -1,0 +1,206 @@
+# RUN: llc -mtriple=tms9900 -run-pass=tms9900-peephole %s -o - | FileCheck %s
+#
+# Extended tests for CI Rx,0 optimizations in the peephole pass.
+#
+# Tier 1 (full elimination): CI Rx,0 is deleted when the preceding
+# instruction already set flags on TestReg.
+#
+# Tier 2 (strength reduction): CI Rx,0 -> MOV Rx,Rx when full
+# elimination is not possible.  MOV Rx,Rx is 2 bytes vs 4 bytes,
+# same cycle count (14), same flag semantics for zero-test.
+#
+# Test cases:
+#   - CI after a store (cannot fully eliminate -> MOV Rx,Rx)
+#   - CI after inline asm (cannot fully eliminate -> MOV Rx,Rx)
+#   - CI at start of BB (cannot fully eliminate -> MOV Rx,Rx)
+#   - CI Rx,0 with dead ST (cannot fully eliminate -> MOV Rx,Rx dead ST)
+#   - CI with non-zero immediate (unchanged -- not CI Rx,0)
+#   - CI after a MOV load (fully eliminated)
+#   - CI after NEG (fully eliminated)
+
+--- |
+  define i16 @ci_to_mov_store() { ret i16 0 }
+  define i16 @ci_to_mov_inline_asm() { ret i16 0 }
+  define i16 @ci_to_mov_bb_start() { ret i16 0 }
+  define i16 @ci_to_mov_dead_st() { ret i16 0 }
+  define i16 @ci_nonzero_unchanged() { ret i16 0 }
+  define i16 @ci_elim_mov_load() { ret i16 0 }
+  define i16 @ci_elim_neg() { ret i16 0 }
+...
+
+# CI after a store should NOT be fully eliminated, but should become MOV Rx,Rx.
+# MOVmi writes to memory via operand 0 (address register); its operand 0
+# is a def of the address register, not the value being tested.
+---
+name: ci_to_mov_store
+tracksRegLiveness: true
+body: |
+  bb.0:
+    successors: %bb.1, %bb.2
+    renamable $r0 = IMPLICIT_DEF
+    renamable $r1 = IMPLICIT_DEF
+    renamable $r5 = IMPLICIT_DEF
+    MOVmi $r0, killed $r1, implicit-def dead $st
+    CI killed $r5, 0, implicit-def $st
+    JEQ %bb.1, implicit $st
+
+  bb.2:
+    RET
+
+  bb.1:
+    RET
+...
+
+# CHECK-LABEL: name: ci_to_mov_store
+# The store defines R0 (address), but CI tests R5 -- different register.
+# CI Rx,0 cannot be fully eliminated, replaced with MOV Rx,Rx.
+# CHECK: MOVmi
+# CHECK-NOT: CI killed
+# CHECK: $r5 = MOVrr killed $r5, implicit-def $st
+# CHECK: JEQ
+
+# CI after INLINEASM should NOT be fully eliminated, but becomes MOV Rx,Rx.
+# Inline asm may or may not modify ST -- we cannot know.
+---
+name: ci_to_mov_inline_asm
+tracksRegLiveness: true
+body: |
+  bb.0:
+    successors: %bb.1, %bb.2
+    renamable $r3 = IMPLICIT_DEF
+    INLINEASM &"nop", 1 /* sideeffect */
+    CI killed $r3, 0, implicit-def $st
+    JNE %bb.1, implicit $st
+
+  bb.2:
+    RET
+
+  bb.1:
+    RET
+...
+
+# CHECK-LABEL: name: ci_to_mov_inline_asm
+# Inline asm does not guarantee ST modification for R3.
+# CHECK: INLINEASM
+# CHECK-NOT: CI killed
+# CHECK: $r3 = MOVrr killed $r3, implicit-def $st
+# CHECK: JNE
+
+# CI at start of BB should NOT be fully eliminated, but becomes MOV Rx,Rx.
+---
+name: ci_to_mov_bb_start
+tracksRegLiveness: true
+body: |
+  bb.0:
+    successors: %bb.1, %bb.2
+    liveins: $r2
+    CI killed $r2, 0, implicit-def $st
+    JEQ %bb.1, implicit $st
+
+  bb.2:
+    RET
+
+  bb.1:
+    RET
+...
+
+# CHECK-LABEL: name: ci_to_mov_bb_start
+# No preceding instruction, so CI cannot be fully eliminated.
+# CHECK-NOT: CI killed
+# CHECK: $r2 = MOVrr killed $r2, implicit-def $st
+# CHECK: JEQ
+
+# CI Rx,0 with dead ST should still be replaced with MOV Rx,Rx (dead ST).
+---
+name: ci_to_mov_dead_st
+tracksRegLiveness: true
+body: |
+  bb.0:
+    renamable $r4 = IMPLICIT_DEF
+    CI killed $r4, 0, implicit-def dead $st
+    RET
+...
+
+# CHECK-LABEL: name: ci_to_mov_dead_st
+# CI has dead ST (nobody reads flags), but CI cannot be eliminated.
+# Replaced with MOV Rx,Rx with dead ST.
+# CHECK-NOT: CI killed
+# CHECK: $r4 = MOVrr killed $r4, implicit-def dead $st
+# CHECK: RET
+
+# CI with non-zero immediate should NOT be changed.
+---
+name: ci_nonzero_unchanged
+tracksRegLiveness: true
+body: |
+  bb.0:
+    successors: %bb.1, %bb.2
+    renamable $r1 = IMPLICIT_DEF
+    CI killed $r1, 42, implicit-def $st
+    JEQ %bb.1, implicit $st
+
+  bb.2:
+    RET
+
+  bb.1:
+    RET
+...
+
+# CHECK-LABEL: name: ci_nonzero_unchanged
+# CI with non-zero immediate is not eligible for any optimization.
+# CHECK: CI killed $r1, 42
+# CHECK: JEQ
+
+# CI after a MOV load (reg-to-reg) should be fully eliminated.
+# MOVrr defines Rd and sets ST based on the result.
+---
+name: ci_elim_mov_load
+tracksRegLiveness: true
+body: |
+  bb.0:
+    successors: %bb.1, %bb.2
+    renamable $r0 = IMPLICIT_DEF
+    renamable $r4 = MOVrr killed $r0, implicit-def dead $st
+    CI killed $r4, 0, implicit-def $st
+    JEQ %bb.1, implicit $st
+
+  bb.2:
+    RET
+
+  bb.1:
+    RET
+...
+
+# CHECK-LABEL: name: ci_elim_mov_load
+# MOVrr defines R4 and sets ST -- CI Rx,0 is redundant (fully eliminated).
+# CHECK: MOVrr
+# CHECK-NOT: CI killed
+# CHECK-NOT: MOVrr
+# CHECK: JEQ
+
+# CI after NEG should be fully eliminated.
+# NEG defines Rd and sets status flags.
+---
+name: ci_elim_neg
+tracksRegLiveness: true
+body: |
+  bb.0:
+    successors: %bb.1, %bb.2
+    renamable $r6 = IMPLICIT_DEF
+    renamable $r6 = NEGr killed $r6, implicit-def dead $st
+    CI killed $r6, 0, implicit-def $st
+    JNE %bb.1, implicit $st
+
+  bb.2:
+    RET
+
+  bb.1:
+    RET
+...
+
+# CHECK-LABEL: name: ci_elim_neg
+# NEG defines R6 and sets ST -- CI is redundant (fully eliminated).
+# CHECK: NEGr
+# CHECK-NOT: CI killed
+# CHECK-NOT: MOVrr
+# CHECK: JNE

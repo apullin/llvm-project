@@ -71,6 +71,8 @@ void elf::setTarget(Ctx &ctx) {
     return setMipsTargetInfo(ctx);
   case EM_MSP430:
     return setMSP430TargetInfo(ctx);
+  case EM_TMS9900:
+    return setTMS9900TargetInfo(ctx);
   case EM_PPC:
     return setPPCTargetInfo(ctx);
   case EM_PPC64:

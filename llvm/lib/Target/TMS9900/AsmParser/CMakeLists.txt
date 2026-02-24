@@ -1,0 +1,13 @@
+add_llvm_component_library(LLVMTMS9900AsmParser
+  TMS9900AsmParser.cpp
+
+  LINK_COMPONENTS
+  MC
+  MCParser
+  Support
+  TMS9900Desc
+  TMS9900Info
+
+  ADD_TO_COMPONENT
+  TMS9900
+  )

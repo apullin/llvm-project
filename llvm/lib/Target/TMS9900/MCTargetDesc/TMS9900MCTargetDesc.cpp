@@ -176,11 +176,11 @@ public:
                                 unsigned OpIdx, unsigned PrintMethodIdx,
                                 raw_ostream &OS);
 
-  std::pair<const char *, uint64_t> getMnemonic(const MCInst *MI) override;
+  std::pair<const char *, uint64_t> getMnemonic(const MCInst &MI) const override;
 
   void printOperand(const MCInst *MI, unsigned OpNo, raw_ostream &O);
   void printBranchTarget16(const MCInst *MI, unsigned OpNo, raw_ostream &O);
-  void printRegName(raw_ostream &OS, MCRegister Reg) const override {
+  void printRegName(raw_ostream &OS, MCRegister Reg) override {
     OS << getRegisterName(Reg);
   }
 };

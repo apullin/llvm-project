@@ -27,6 +27,7 @@
 #include "Targets/M68k.h"
 #include "Targets/MSP430.h"
 #include "Targets/Mips.h"
+#include "Targets/TMS9900.h"
 #include "Targets/NVPTX.h"
 #include "Targets/OSTargets.h"
 #include "Targets/PNaCl.h"
@@ -271,6 +272,9 @@ std::unique_ptr<TargetInfo> AllocateTarget(const llvm::Triple &Triple,
 
   case llvm::Triple::msp430:
     return std::make_unique<MSP430TargetInfo>(Triple, Opts);
+
+  case llvm::Triple::tms9900:
+    return std::make_unique<TMS9900TargetInfo>(Triple, Opts);
 
   case llvm::Triple::mips:
     switch (os) {

@@ -50,9 +50,15 @@ public:
   }
 
   // Check if a fixup needs relaxation (branch out of range)
-  bool fixupNeedsRelaxation(const MCFixup &Fixup, uint64_t Value,
-                            const MCRelaxableFragment *DF,
-                            const MCAsmLayout &Layout) const override {
+  bool fixupNeedsRelaxationAdvanced(const MCAssembler &Asm,
+                                    const MCFixup &Fixup, bool Resolved,
+                                    uint64_t Value,
+                                    const MCRelaxableFragment *DF,
+                                    const bool WasForced) const override {
+    // Only relax when the offset is known to be out of range.
+    if (!Resolved && !WasForced)
+      return false;
+
     // Only relax 8-bit PC-relative branch fixups
     if (static_cast<unsigned>(Fixup.getKind()) !=
         static_cast<unsigned>(TMS9900::fixup_tms9900_pcrel_8))
@@ -68,18 +74,6 @@ public:
 
     // Check if out of 8-bit signed range (-128 to +127 words)
     return Offset < -128 || Offset > 127;
-  }
-
-  bool fixupNeedsRelaxationAdvanced(const MCFixup &Fixup, bool Resolved,
-                                    uint64_t Value,
-                                    const MCRelaxableFragment *DF,
-                                    const MCAsmLayout &Layout,
-                                    const bool WasForced) const override {
-    // Only relax when the offset is known to be out of range.
-    if (!Resolved && !WasForced)
-      return false;
-
-    return fixupNeedsRelaxation(Fixup, Value, DF, Layout);
   }
 
   // Relax a branch instruction to a longer form

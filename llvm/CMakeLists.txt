@@ -506,6 +506,7 @@ set(LLVM_ALL_EXPERIMENTAL_TARGETS
   CSKY
   DirectX
   M68k
+  TMS9900
   Xtensa
 )
 

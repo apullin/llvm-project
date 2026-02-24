@@ -115,7 +115,7 @@ void TMS9900DAGToDAGISel::SelectBR_CC(SDNode *N) {
     Ops.push_back(CmpLHS);
     if (RHSImm) {
       auto *CN = cast<ConstantSDNode>(CmpRHS);
-      Ops.push_back(CurDAG->getTargetConstant(CN->getSExtValue(), DL, MVT::i16));
+      Ops.push_back(CurDAG->getSignedTargetConstant(CN->getSExtValue(), DL, MVT::i16));
     } else {
       Ops.push_back(CmpRHS);
     }

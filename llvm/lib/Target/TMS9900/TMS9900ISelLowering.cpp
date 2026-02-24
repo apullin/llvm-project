@@ -16,7 +16,7 @@
 #include "TMS9900Subtarget.h"
 #include "TMS9900TargetMachine.h"
 #include "llvm/CodeGen/CallingConvLower.h"
-#include "llvm/CodeGen/RuntimeLibcalls.h"
+#include "llvm/IR/RuntimeLibcalls.h"
 #include "llvm/CodeGen/MachineFrameInfo.h"
 #include "llvm/CodeGen/MachineFunction.h"
 #include "llvm/CodeGen/MachineInstrBuilder.h"

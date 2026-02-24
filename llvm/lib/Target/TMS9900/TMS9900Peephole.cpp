@@ -139,7 +139,7 @@ static bool tryFoldPostInc(MachineInstr &IncMI,
     MIB.addReg(ValueReg, ValFlags);
   }
 
-  if (int STIdx = MIB->findRegisterDefOperandIdx(TMS9900::ST, true);
+  if (int STIdx = MIB->findRegisterDefOperandIdx(TMS9900::ST, TRI, true);
       STIdx != -1 && DeadST) {
     MIB->getOperand(STIdx).setIsDead();
   }
@@ -285,7 +285,7 @@ public:
           MIB.addReg(Reg, RegState::Define | (DeadDef ? RegState::Dead : 0));
           MIB.addReg(Reg, KillUse ? RegState::Kill : 0);
 
-          if (int STIdx = MIB->findRegisterDefOperandIdx(TMS9900::ST, true);
+          if (int STIdx = MIB->findRegisterDefOperandIdx(TMS9900::ST, TRI, true);
               STIdx != -1 &&
               MI.registerDefIsDead(TMS9900::ST, TRI)) {
             MIB->getOperand(STIdx).setIsDead();
@@ -397,6 +397,7 @@ public:
           // The preceding instruction's ST def is no longer dead --
           // the consumer(s) of ST now read it directly from Prev.
           if (int STIdx = Prev->findRegisterDefOperandIdx(TMS9900::ST,
+                                                          TRI,
                                                           /*isDead=*/true);
               STIdx != -1) {
             Prev->getOperand(STIdx).setIsDead(false);
@@ -484,6 +485,7 @@ public:
             // Update ST liveness: the preceding instruction's ST def is
             // no longer dead since the branch now reads it directly.
             if (int STIdx = Prev->findRegisterDefOperandIdx(TMS9900::ST,
+                                                            TRI,
                                                             /*isDead=*/true);
                 STIdx != -1) {
               Prev->getOperand(STIdx).setIsDead(false);
@@ -514,6 +516,7 @@ public:
             if (MI.registerDefIsDead(TMS9900::ST, TRI)) {
               if (int STIdx =
                       MIB->findRegisterDefOperandIdx(TMS9900::ST,
+                                                     TRI,
                                                      /*isDead=*/false,
                                                      /*Overlap=*/true);
                   STIdx != -1)
@@ -653,6 +656,7 @@ public:
 
             // Safe to delete the Crr. Update ST liveness on Prev.
             if (int STIdx = Prev->findRegisterDefOperandIdx(TMS9900::ST,
+                                                            TRI,
                                                             /*isDead=*/true);
                 STIdx != -1) {
               Prev->getOperand(STIdx).setIsDead(false);

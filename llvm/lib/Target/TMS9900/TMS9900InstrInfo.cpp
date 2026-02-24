@@ -99,7 +99,9 @@ TMS9900InstrInfo::TMS9900InstrInfo(const TMS9900Subtarget &STI)
 void TMS9900InstrInfo::copyPhysReg(MachineBasicBlock &MBB,
                                     MachineBasicBlock::iterator I,
                                     const DebugLoc &DL, MCRegister DestReg,
-                                    MCRegister SrcReg, bool KillSrc) const {
+                                    MCRegister SrcReg, bool KillSrc,
+                                    bool RenamableDest,
+                                    bool RenamableSrc) const {
   // Use MOV instruction for register copy
   // MOV Rs,Rd copies Rs to Rd
   BuildMI(MBB, I, DL, get(TMS9900::MOVrr), DestReg)
@@ -109,7 +111,8 @@ void TMS9900InstrInfo::copyPhysReg(MachineBasicBlock &MBB,
 void TMS9900InstrInfo::storeRegToStackSlot(
     MachineBasicBlock &MBB, MachineBasicBlock::iterator MI, Register SrcReg,
     bool isKill, int FrameIndex, const TargetRegisterClass *RC,
-    const TargetRegisterInfo *TRI, Register VReg) const {
+    const TargetRegisterInfo *TRI, Register VReg,
+    MachineInstr::MIFlag Flags) const {
   DebugLoc DL;
   if (MI != MBB.end())
     DL = MI->getDebugLoc();
@@ -135,7 +138,8 @@ void TMS9900InstrInfo::storeRegToStackSlot(
 void TMS9900InstrInfo::loadRegFromStackSlot(
     MachineBasicBlock &MBB, MachineBasicBlock::iterator MI, Register DestReg,
     int FrameIndex, const TargetRegisterClass *RC,
-    const TargetRegisterInfo *TRI, Register VReg) const {
+    const TargetRegisterInfo *TRI, Register VReg,
+    MachineInstr::MIFlag Flags) const {
   DebugLoc DL;
   if (MI != MBB.end())
     DL = MI->getDebugLoc();

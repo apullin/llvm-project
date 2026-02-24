@@ -72,7 +72,7 @@ public:
                         MacroBuilder &Builder) const override;
 
   ArrayRef<Builtin::Info> getTargetBuiltins() const override {
-    return std::nullopt;
+    return {};
   }
 
   bool allowsLargerPreferedTypeAlignment() const override { return false; }

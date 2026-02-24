@@ -20,6 +20,9 @@ namespace llvm {
 class TMS9900Subtarget;
 
 class TMS9900FrameLowering : public TargetFrameLowering {
+protected:
+  bool hasFPImpl(const MachineFunction &MF) const override;
+
 public:
   explicit TMS9900FrameLowering(const TMS9900Subtarget &STI);
 
@@ -29,8 +32,6 @@ public:
                     MachineBasicBlock &MBB) const override;
   void emitEpilogue(MachineFunction &MF,
                     MachineBasicBlock &MBB) const override;
-
-  bool hasFP(const MachineFunction &MF) const override;
 
   MachineBasicBlock::iterator
   eliminateCallFramePseudoInstr(MachineFunction &MF, MachineBasicBlock &MBB,

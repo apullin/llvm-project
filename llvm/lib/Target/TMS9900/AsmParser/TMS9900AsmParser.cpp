@@ -127,7 +127,7 @@ public:
     return Tok;
   }
 
-  unsigned getReg() const override {
+  MCRegister getReg() const override {
     assert((Kind == k_Reg || Kind == k_IndReg || Kind == k_PostIndReg) &&
            "Invalid access!");
     return RegNum;
@@ -269,7 +269,7 @@ private:
   BumpPtrAllocator Allocator;
   StringSaver Saver{Allocator};
 
-  bool MatchAndEmitInstruction(SMLoc IDLoc, unsigned &Opcode,
+  bool matchAndEmitInstruction(SMLoc IDLoc, unsigned &Opcode,
                                OperandVector &Operands, MCStreamer &Out,
                                uint64_t &ErrorInfo,
                                bool MatchingInlineAsm) override;
@@ -278,7 +278,7 @@ private:
   ParseStatus tryParseRegister(MCRegister &Reg, SMLoc &StartLoc,
                                SMLoc &EndLoc) override;
 
-  bool ParseInstruction(ParseInstructionInfo &Info, StringRef Name,
+  bool parseInstruction(ParseInstructionInfo &Info, StringRef Name,
                         SMLoc NameLoc, OperandVector &Operands) override;
 
   ParseStatus parseDirective(AsmToken DirectiveID) override;
@@ -711,7 +711,7 @@ ParseStatus TMS9900AsmParser::parseBranchTarget(OperandVector &Operands) {
   return ParseStatus::Success;
 }
 
-bool TMS9900AsmParser::ParseInstruction(ParseInstructionInfo &Info,
+bool TMS9900AsmParser::parseInstruction(ParseInstructionInfo &Info,
                                          StringRef Name, SMLoc NameLoc,
                                          OperandVector &Operands) {
   // Check for xas99-style directives (no '.' prefix)
@@ -843,7 +843,7 @@ bool TMS9900AsmParser::ParseInstruction(ParseInstructionInfo &Info,
   return false;
 }
 
-bool TMS9900AsmParser::MatchAndEmitInstruction(SMLoc IDLoc, unsigned &Opcode,
+bool TMS9900AsmParser::matchAndEmitInstruction(SMLoc IDLoc, unsigned &Opcode,
                                                 OperandVector &Operands,
                                                 MCStreamer &Out,
                                                 uint64_t &ErrorInfo,

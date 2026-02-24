@@ -51,7 +51,7 @@ TMS9900FrameLowering::TMS9900FrameLowering(const TMS9900Subtarget &STI)
 // 4-byte stack alignment. With 2-byte alignment, non-4-byte-aligned stack
 // addresses cause ORI to be a no-op, reading the high word twice.
 
-bool TMS9900FrameLowering::hasFP(const MachineFunction &MF) const {
+bool TMS9900FrameLowering::hasFPImpl(const MachineFunction &MF) const {
   // We don't use a separate frame pointer - just the stack pointer (R10)
   // Could implement FP later if needed for variable-length arrays
   return false;

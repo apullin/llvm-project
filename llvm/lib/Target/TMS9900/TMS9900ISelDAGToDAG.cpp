@@ -25,20 +25,15 @@
 using namespace llvm;
 
 #define DEBUG_TYPE "tms9900-isel"
+#define PASS_NAME "TMS9900 DAG->DAG Pattern Instruction Selection"
 
 namespace {
 class TMS9900DAGToDAGISel : public SelectionDAGISel {
 public:
-  static char ID;
-
   TMS9900DAGToDAGISel() = delete;
 
   explicit TMS9900DAGToDAGISel(TMS9900TargetMachine &TM, CodeGenOptLevel OptLevel)
-      : SelectionDAGISel(ID, TM, OptLevel) {}
-
-  StringRef getPassName() const override {
-    return "TMS9900 DAG->DAG Pattern Instruction Selection";
-  }
+      : SelectionDAGISel(TM, OptLevel) {}
 
   void Select(SDNode *N) override;
 
@@ -50,9 +45,18 @@ public:
 #include "TMS9900GenDAGISel.inc"
 };
 
-char TMS9900DAGToDAGISel::ID;
-
+class TMS9900DAGToDAGISelLegacy : public SelectionDAGISelLegacy {
+public:
+  static char ID;
+  TMS9900DAGToDAGISelLegacy(TMS9900TargetMachine &TM, CodeGenOptLevel OptLevel)
+      : SelectionDAGISelLegacy(
+            ID, std::make_unique<TMS9900DAGToDAGISel>(TM, OptLevel)) {}
+};
 } // end anonymous namespace
+
+char TMS9900DAGToDAGISelLegacy::ID;
+
+INITIALIZE_PASS(TMS9900DAGToDAGISelLegacy, DEBUG_TYPE, PASS_NAME, false, false)
 
 /// Map ISD::CondCode to TMS9900 jump instruction opcode.
 /// LowerBR_CC orders the compare so flags reflect (LHS - RHS).
@@ -302,5 +306,5 @@ bool TMS9900DAGToDAGISel::SelectAddr(SDValue N, SDValue &Base, SDValue &Offset) 
 
 FunctionPass *llvm::createTMS9900ISelDag(TMS9900TargetMachine &TM,
                                           CodeGenOptLevel OptLevel) {
-  return new TMS9900DAGToDAGISel(TM, OptLevel);
+  return new TMS9900DAGToDAGISelLegacy(TM, OptLevel);
 }

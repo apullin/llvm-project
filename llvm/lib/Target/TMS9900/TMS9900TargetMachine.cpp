@@ -34,6 +34,7 @@ extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializeTMS9900Target() {
   // Register the target
   RegisterTargetMachine<TMS9900TargetMachine> X(getTheTMS9900Target());
   PassRegistry &PR = *PassRegistry::getPassRegistry();
+  initializeTMS9900DAGToDAGISelLegacyPass(PR);
   initializeTMS9900PeepholePassPass(PR);
   initializeTMS9900LongBranchPassPass(PR);
 }
@@ -67,10 +68,10 @@ TMS9900TargetMachine::TMS9900TargetMachine(const Target &T, const Triple &TT,
                                              std::optional<Reloc::Model> RM,
                                              std::optional<CodeModel::Model> CM,
                                              CodeGenOptLevel OL, bool JIT)
-    : LLVMTargetMachine(T, computeDataLayout(TT), TT,
-                        CPU.empty() ? "tms9900" : CPU, FS, Options,
-                        getEffectiveRelocModel(RM),
-                        CM.value_or(CodeModel::Small), OL),
+    : CodeGenTargetMachineImpl(T, computeDataLayout(TT), TT,
+                               CPU.empty() ? "tms9900" : CPU, FS, Options,
+                               getEffectiveRelocModel(RM),
+                               CM.value_or(CodeModel::Small), OL),
       TLOF(std::make_unique<TMS9900TargetObjectFile>()),
       Subtarget(TT, CPU.empty() ? std::string("tms9900") : std::string(CPU),
                 std::string(FS), *this) {
@@ -107,7 +108,7 @@ MachineFunctionInfo *TMS9900TargetMachine::createMachineFunctionInfo(
 void TMS9900PassConfig::addIRPasses() {
   // Expand atomic operations to regular load/store/RMW.
   // TMS9900 is single-core with no caches, so atomics are trivially correct.
-  addPass(createAtomicExpandPass());
+  addPass(createAtomicExpandLegacyPass());
 
   TargetPassConfig::addIRPasses();
 }

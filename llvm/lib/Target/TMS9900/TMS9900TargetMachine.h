@@ -14,12 +14,12 @@
 #define LLVM_LIB_TARGET_TMS9900_TMS9900TARGETMACHINE_H
 
 #include "TMS9900Subtarget.h"
-#include "llvm/Target/TargetMachine.h"
+#include "llvm/CodeGen/CodeGenTargetMachineImpl.h"
 #include <optional>
 
 namespace llvm {
 
-class TMS9900TargetMachine : public LLVMTargetMachine {
+class TMS9900TargetMachine : public CodeGenTargetMachineImpl {
   std::unique_ptr<TargetLoweringObjectFile> TLOF;
   TMS9900Subtarget Subtarget;
 

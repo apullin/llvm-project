@@ -1785,7 +1785,8 @@ SDValue TMS9900TargetLowering::LowerFormalArguments(
 
 bool TMS9900TargetLowering::CanLowerReturn(
     CallingConv::ID CallConv, MachineFunction &MF, bool isVarArg,
-    const SmallVectorImpl<ISD::OutputArg> &Outs, LLVMContext &Context) const {
+    const SmallVectorImpl<ISD::OutputArg> &Outs, LLVMContext &Context,
+    const Type *RetTy) const {
   // TMS9900 can return up to 8 bytes (4 x i16 registers: R0-R3).
   // Anything larger (e.g. i128) must use sret (struct return).
   unsigned TotalBytes = 0;
@@ -1982,7 +1983,7 @@ SDValue TMS9900TargetLowering::LowerCall(
     Chain = DAG.getMemcpy(Chain, DL, Dst, Src, SizeNode, Alignment,
                           /*isVolatile=*/false,
                           /*AlwaysInline=*/true,
-                          /*isTailCall=*/false,
+                          /*CI=*/nullptr, std::nullopt,
                           MachinePointerInfo::getFixedStack(MF, FI),
                           MachinePointerInfo());
 

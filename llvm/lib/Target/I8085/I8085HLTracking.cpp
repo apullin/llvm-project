@@ -28,7 +28,7 @@ using namespace llvm;
 
 #define DEBUG_TYPE "i8085-hl-tracking"
 
-// Maximum delta for INX/DCX replacement. At delta=3, INX×3 = 18 cycles
+// Maximum delta for INX/DCX replacement. At delta=3, INX*3 = 18 cycles
 // vs LXI+DAD = 20 cycles, so it's still a win.
 static const int MaxDelta = 3;
 
@@ -73,7 +73,7 @@ public:
               int delta = targetOffset - trackedOffset;
 
               if (delta == 0) {
-                // HL already has the right value — delete both instructions
+                // HL already has the right value -- delete both instructions
                 auto AfterDAD = std::next(Next);
                 Next->eraseFromParent();
                 MI->eraseFromParent();
@@ -110,6 +110,26 @@ public:
             MI = std::next(Next);
             continue;
           }
+        }
+
+        // PUSH: SP -= 2, HL unchanged. Adjust tracked offset.
+        if (MI->getOpcode() == I8085::PUSH) {
+          if (tracked)
+            trackedOffset += 2;
+          ++MI;
+          continue;
+        }
+
+        // POP: SP += 2. POP H clobbers HL; others just adjust offset.
+        if (MI->getOpcode() == I8085::POP) {
+          unsigned Reg = MI->getOperand(0).getReg();
+          if (Reg == I8085::HL) {
+            tracked = false;
+          } else if (tracked) {
+            trackedOffset -= 2;
+          }
+          ++MI;
+          continue;
         }
 
         // Check if this instruction invalidates HL tracking
@@ -153,9 +173,8 @@ private:
       break;
     }
 
-    // PUSH/POP change SP, invalidating SP-relative tracking
-    if (Opc == I8085::PUSH || Opc == I8085::POP)
-      return true;
+    // PUSH/POP are handled explicitly in the main loop (offset adjustment).
+    // They do NOT go through clobbersHL().
 
     // DAD with any register (B, D, SP, HL) modifies HL
     // (DAD SP as part of LXI+DAD is handled above, standalone DAD is a clobber)

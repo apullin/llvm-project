@@ -1910,9 +1910,50 @@ template <> bool I8085ExpandPseudo::expand<I8085::JMP_8_IF>(Block &MBB, BlockIt 
     .addImm(0);
 
   buildMI(MBB, MBBI, I8085::JNZ).add(MI.getOperand(1));
-  
+
   MI.eraseFromParent();
   return true;
+}
+
+// Fused compare-immediate-and-branch expansions.
+// Each emits: MOV A, LHS; CPI imm; Jcc target
+// Replaces the SET_*_8 diamond + JMP_8_IF pattern (saves ~15 bytes each).
+
+static bool expandBrCCImm(MachineBasicBlock &MBB,
+                          MachineBasicBlock::iterator MBBI,
+                          unsigned JmpOpc,
+                          const TargetInstrInfo *TII) {
+  MachineInstr &MI = *MBBI;
+  unsigned LHS = MI.getOperand(0).getReg();
+  int64_t Imm = MI.getOperand(1).getImm();
+  DebugLoc DL = MI.getDebugLoc();
+
+  BuildMI(MBB, MBBI, DL, TII->get(I8085::MOV))
+    .addReg(I8085::A, RegState::Define)
+    .addReg(LHS);
+  BuildMI(MBB, MBBI, DL, TII->get(I8085::CPI))
+    .addImm(Imm);
+  BuildMI(MBB, MBBI, DL, TII->get(JmpOpc))
+    .add(MI.getOperand(2));
+
+  MI.eraseFromParent();
+  return true;
+}
+
+template <> bool I8085ExpandPseudo::expand<I8085::BR_CC_EQ_8_IMM>(Block &MBB, BlockIt MBBI) {
+  return expandBrCCImm(MBB, MBBI, I8085::JZ, TII);
+}
+
+template <> bool I8085ExpandPseudo::expand<I8085::BR_CC_NE_8_IMM>(Block &MBB, BlockIt MBBI) {
+  return expandBrCCImm(MBB, MBBI, I8085::JNZ, TII);
+}
+
+template <> bool I8085ExpandPseudo::expand<I8085::BR_CC_ULT_8_IMM>(Block &MBB, BlockIt MBBI) {
+  return expandBrCCImm(MBB, MBBI, I8085::JC, TII);
+}
+
+template <> bool I8085ExpandPseudo::expand<I8085::BR_CC_UGE_8_IMM>(Block &MBB, BlockIt MBBI) {
+  return expandBrCCImm(MBB, MBBI, I8085::JNC, TII);
 }
 
 template <> bool I8085ExpandPseudo::expand<I8085::TRUNC16TO8>(Block &MBB, BlockIt MBBI) {
@@ -2690,6 +2731,271 @@ template <> bool I8085ExpandPseudo::expand<I8085::STORE_16_AT_OFFSET_WITH_SP>(Bl
   return true;
 }
 
+/// Expand MUL_16_IMM: multiply a 16-bit register by a constant using
+/// shift-add chains operating directly on HL with DAD instructions.
+///
+/// The expansion operates entirely in HL (accumulator) and BC (save register):
+///   DAD H  = HL <<= 1  (1 byte, 10 cycles)
+///   MOV B,H; MOV C,L   = save HL to BC  (2 bytes, 8 cycles)
+///   DAD B  = HL += BC   (1 byte, 10 cycles)
+///   SUB: MOV A,L; SUB C; MOV L,A; MOV A,H; SBB B; MOV H,A  (6 bytes, 24 cycles)
+template <> bool I8085ExpandPseudo::expand<I8085::MUL_16_IMM>(Block &MBB, BlockIt MBBI) {
+  MachineInstr &MI = *MBBI;
+
+  unsigned destReg = MI.getOperand(0).getReg();
+  unsigned srcReg = MI.getOperand(1).getReg();
+  uint16_t CVal = MI.getOperand(2).getImm();
+
+  // Helper lambdas for emitting instructions
+  auto emitCopyToHL = [&]() {
+    if (srcReg != I8085::HL)
+      buildMI(MBB, MBBI, TargetOpcode::COPY, I8085::HL).addReg(srcReg);
+  };
+
+  auto emitDADH = [&]() {
+    buildMI(MBB, MBBI, I8085::DAD).addReg(I8085::HL);
+  };
+
+  auto emitSaveToBC = [&]() {
+    buildMI(MBB, MBBI, I8085::MOV)
+        .addReg(I8085::B, RegState::Define).addReg(I8085::H);
+    buildMI(MBB, MBBI, I8085::MOV)
+        .addReg(I8085::C, RegState::Define).addReg(I8085::L);
+  };
+
+  auto emitDADB = [&]() {
+    buildMI(MBB, MBBI, I8085::DAD).addReg(I8085::BC);
+  };
+
+  auto emitSubBC = [&]() {
+    // HL -= BC: MOV A,L; SUB C; MOV L,A; MOV A,H; SBB B; MOV H,A
+    buildMI(MBB, MBBI, I8085::MOV)
+        .addReg(I8085::A, RegState::Define).addReg(I8085::L);
+    buildMI(MBB, MBBI, I8085::SUB).addReg(I8085::C);
+    buildMI(MBB, MBBI, I8085::MOV)
+        .addReg(I8085::L, RegState::Define).addReg(I8085::A);
+    buildMI(MBB, MBBI, I8085::MOV)
+        .addReg(I8085::A, RegState::Define).addReg(I8085::H);
+    buildMI(MBB, MBBI, I8085::SBB).addReg(I8085::B);
+    buildMI(MBB, MBBI, I8085::MOV)
+        .addReg(I8085::H, RegState::Define).addReg(I8085::A);
+  };
+
+  auto emitShiftN = [&](unsigned N) {
+    for (unsigned i = 0; i < N; ++i)
+      emitDADH();
+  };
+
+  auto emitCopyFromHL = [&]() {
+    if (destReg != I8085::HL)
+      buildMI(MBB, MBBI, TargetOpcode::COPY, destReg).addReg(I8085::HL);
+  };
+
+  // Determine the best decomposition strategy (mirrors ISel cost model)
+  unsigned TZ = __builtin_ctz(CVal);
+  uint16_t Core = CVal >> TZ;
+
+  struct BestDecomp {
+    unsigned Strategy = 0;
+    unsigned Bytes = UINT_MAX;
+    unsigned Cycles = UINT_MAX;
+    unsigned Param1 = 0, Param2 = 0;
+  } Best;
+
+  auto tryBetter = [&](unsigned Strategy, unsigned Bytes, unsigned Cycles,
+                        unsigned P1 = 0, unsigned P2 = 0) {
+    if (Bytes < Best.Bytes || (Bytes == Best.Bytes && Cycles < Best.Cycles)) {
+      Best = {Strategy, Bytes, Cycles, P1, P2};
+    }
+  };
+
+  // Strategy 1: (2^a + 1) * 2^tz
+  if (Core >= 3 && ((Core - 1) & (Core - 2)) == 0) {
+    unsigned A = __builtin_ctz(Core - 1);
+    tryBetter(1, A + 3 + TZ, A * 10 + 18 + TZ * 10, A);
+  }
+  // Strategy 2: (2^a - 1) * 2^tz
+  if (Core >= 3 && ((Core + 1) & Core) == 0) {
+    unsigned A = __builtin_ctz(Core + 1);
+    tryBetter(2, A + 8 + TZ, A * 10 + 32 + TZ * 10, A);
+  }
+  // Strategy 3: popcount 2
+  if (__builtin_popcount(CVal) == 2) {
+    unsigned B = __builtin_ctz(CVal);
+    unsigned A = 15 - __builtin_clz(CVal);
+    tryBetter(3, B + 2 + (A - B) + 1, B * 10 + 8 + (A - B) * 10 + 10, A, B);
+  }
+  // Strategy 4: run of 1s
+  {
+    uint16_t Lo = CVal & (-CVal);
+    uint16_t Sum = CVal + Lo;
+    if (Sum && (Sum & (Sum - 1)) == 0) {
+      unsigned A = __builtin_ctz(Sum);
+      unsigned B = __builtin_ctz(Lo);
+      tryBetter(4, B + 2 + (A - B) + 6, B * 10 + 8 + (A - B) * 10 + 24, A, B);
+    }
+  }
+  // Strategy 5/6: factored
+  if (Core > 1) {
+    for (unsigned A = 1; A <= 7; ++A) {
+      uint16_t F1 = (1u << A) + 1;
+      if (F1 > Core) break;
+      if (Core % F1 != 0) continue;
+      uint16_t F2 = Core / F1;
+      if (F2 <= 1) continue;
+      if (F2 >= 3 && ((F2 - 1) & (F2 - 2)) == 0) {
+        unsigned B = __builtin_ctz(F2 - 1);
+        tryBetter(5, A + 3 + B + 3 + TZ, A * 10 + 18 + B * 10 + 18 + TZ * 10, A, B);
+      }
+      if ((F2 & (F2 - 1)) == 0) {
+        unsigned B = __builtin_ctz(F2);
+        tryBetter(6, A + 3 + B + TZ, A * 10 + 18 + B * 10 + TZ * 10, A, B);
+      }
+    }
+  }
+  // Strategy 71/72: C+1 decomp
+  {
+    uint16_t Cp = CVal + 1;
+    if (Cp > 0) {
+      if ((Cp & (Cp - 1)) == 0) {
+        unsigned N = __builtin_ctz(Cp);
+        tryBetter(71, N + 8, N * 10 + 32, N);
+      } else {
+        unsigned TZp = __builtin_ctz(Cp);
+        uint16_t Corep = Cp >> TZp;
+        if (Corep >= 3 && ((Corep - 1) & (Corep - 2)) == 0) {
+          unsigned A = __builtin_ctz(Corep - 1);
+          tryBetter(72, A + 3 + TZp + 8, A * 10 + 18 + TZp * 10 + 32, A, TZp);
+        }
+      }
+    }
+  }
+  // Strategy 81/82: C-1 decomp
+  {
+    uint16_t Cm = CVal - 1;
+    if (Cm > 1) {
+      if ((Cm & (Cm - 1)) == 0) {
+        unsigned N = __builtin_ctz(Cm);
+        tryBetter(81, N + 3, N * 10 + 18, N);
+      } else {
+        unsigned TZp = __builtin_ctz(Cm);
+        uint16_t Corep = Cm >> TZp;
+        if (Corep >= 3 && ((Corep - 1) & (Corep - 2)) == 0) {
+          unsigned A = __builtin_ctz(Corep - 1);
+          tryBetter(82, A + 3 + TZp + 3, A * 10 + 18 + TZp * 10 + 18, A, TZp);
+        }
+      }
+    }
+  }
+
+  // Emit the expansion based on the winning strategy.
+  emitCopyToHL();
+
+  switch (Best.Strategy) {
+  case 1: {
+    // (2^a + 1) * 2^tz
+    unsigned A = Best.Param1;
+    emitSaveToBC();
+    emitShiftN(A);
+    emitDADB();
+    emitShiftN(TZ);
+    break;
+  }
+  case 2: {
+    // (2^a - 1) * 2^tz
+    unsigned A = Best.Param1;
+    emitSaveToBC();
+    emitShiftN(A);
+    emitSubBC();
+    emitShiftN(TZ);
+    break;
+  }
+  case 3: {
+    // 2^a + 2^b
+    unsigned A = Best.Param1, B = Best.Param2;
+    emitShiftN(B);
+    emitSaveToBC();
+    emitShiftN(A - B);
+    emitDADB();
+    break;
+  }
+  case 4: {
+    // 2^a - 2^b (run of 1s)
+    unsigned A = Best.Param1, B = Best.Param2;
+    emitShiftN(B);
+    emitSaveToBC();
+    emitShiftN(A - B);
+    emitSubBC();
+    break;
+  }
+  case 5: {
+    // (2^a+1) * (2^b+1) * 2^tz
+    unsigned A = Best.Param1, B = Best.Param2;
+    emitSaveToBC();
+    emitShiftN(A);
+    emitDADB();
+    emitSaveToBC();
+    emitShiftN(B);
+    emitDADB();
+    emitShiftN(TZ);
+    break;
+  }
+  case 6: {
+    // (2^a+1) * 2^b * 2^tz
+    unsigned A = Best.Param1, B = Best.Param2;
+    emitSaveToBC();
+    emitShiftN(A);
+    emitDADB();
+    emitShiftN(B);
+    emitShiftN(TZ);
+    break;
+  }
+  case 71: {
+    // C = 2^n - 1
+    unsigned N = Best.Param1;
+    emitSaveToBC();
+    emitShiftN(N);
+    emitSubBC();
+    break;
+  }
+  case 72: {
+    // C+1 = (2^a+1)*2^tz: shift-add, shift, sub x
+    unsigned A = Best.Param1, TZp = Best.Param2;
+    emitSaveToBC();
+    emitShiftN(A);
+    emitDADB();
+    emitShiftN(TZp);
+    emitSubBC();
+    break;
+  }
+  case 81: {
+    // C = 2^n + 1
+    unsigned N = Best.Param1;
+    emitSaveToBC();
+    emitShiftN(N);
+    emitDADB();
+    break;
+  }
+  case 82: {
+    // C-1 = (2^a+1)*2^tz: shift-add, shift, add x
+    unsigned A = Best.Param1, TZp = Best.Param2;
+    emitSaveToBC();
+    emitShiftN(A);
+    emitDADB();
+    emitShiftN(TZp);
+    emitDADB();
+    break;
+  }
+  default:
+    llvm_unreachable("MUL_16_IMM: no decomposition strategy matched");
+  }
+
+  emitCopyFromHL();
+
+  MI.eraseFromParent();
+  return true;
+}
+
 bool I8085ExpandPseudo::expandMI(Block &MBB, BlockIt MBBI) {
   MachineInstr &MI = *MBBI;
   int Opcode = MBBI->getOpcode();
@@ -2717,6 +3023,10 @@ bool I8085ExpandPseudo::expandMI(Block &MBB, BlockIt MBBI) {
     EXPAND(I8085::JMP_16_IF_ZERO);
     EXPAND(I8085::JMP_16_IF_NOT_ZERO);
     EXPAND(I8085::JMP_8_IF);
+    EXPAND(I8085::BR_CC_EQ_8_IMM);
+    EXPAND(I8085::BR_CC_NE_8_IMM);
+    EXPAND(I8085::BR_CC_ULT_8_IMM);
+    EXPAND(I8085::BR_CC_UGE_8_IMM);
     EXPAND(I8085::TRUNC16TO8);
     EXPAND(I8085::AEXT8TO16);
     EXPAND(I8085::SEXT8TO16);
@@ -2765,6 +3075,7 @@ bool I8085ExpandPseudo::expandMI(Block &MBB, BlockIt MBBI) {
     EXPAND(I8085::SHRINK_STACK_BY);
     EXPAND(I8085::GROW_STACK_BY);
     EXPAND(I8085::STORE_8);
+    EXPAND(I8085::MUL_16_IMM);
   }
 #undef EXPAND
   return false;

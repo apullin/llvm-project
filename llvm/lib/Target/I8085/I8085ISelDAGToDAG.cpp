@@ -11,6 +11,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "I8085.h"
+#include "I8085ISelLowering.h"
 #include "I8085TargetMachine.h"
 #include "MCTargetDesc/I8085MCTargetDesc.h"
 
@@ -323,10 +324,52 @@ template <> bool I8085DAGToDAGISel::select<ISD::BR_CC>(SDNode *N) {
   SDValue LHS = N->getOperand(2);
   SDValue RHS = N->getOperand(3);
   SDValue JumpTo = N->getOperand(4);
-  
+
+  // Fused compare-immediate-and-branch for i8 with constant RHS.
+  // Bypasses the SET_*_8 diamond + JMP_8_IF path entirely.
+  if (LHS.getSimpleValueType() == MVT::i8) {
+    ConstantSDNode *RHSC = dyn_cast<ConstantSDNode>(RHS);
+    if (!RHSC) {
+      if (auto *LHSC = dyn_cast<ConstantSDNode>(LHS)) {
+        CC = ISD::getSetCCSwappedOperands(CC);
+        std::swap(LHS, RHS);
+        RHSC = LHSC;
+      }
+    }
+
+    if (RHSC) {
+      unsigned FusedOpc = 0;
+      uint64_t Imm = RHSC->getZExtValue() & 0xFF;
+
+      switch (CC) {
+      case ISD::SETEQ:  FusedOpc = I8085::BR_CC_EQ_8_IMM; break;
+      case ISD::SETNE:  FusedOpc = I8085::BR_CC_NE_8_IMM; break;
+      case ISD::SETULT: FusedOpc = I8085::BR_CC_ULT_8_IMM; break;
+      case ISD::SETUGE: FusedOpc = I8085::BR_CC_UGE_8_IMM; break;
+      case ISD::SETUGT:
+        if (Imm < 255) { FusedOpc = I8085::BR_CC_UGE_8_IMM; Imm++; }
+        break;
+      case ISD::SETULE:
+        if (Imm < 255) { FusedOpc = I8085::BR_CC_ULT_8_IMM; Imm++; }
+        break;
+      default: break;
+      }
+
+      if (FusedOpc) {
+        SDValue ImmOp = CurDAG->getTargetConstant(Imm, dl, MVT::i8);
+        SDValue Ops[] = {LHS, ImmOp, JumpTo, Chain};
+        SDNode *Res = CurDAG->getMachineNode(FusedOpc, dl, MVT::Other, Ops);
+        ReplaceUses(SDValue(N, 0), SDValue(Res, 0));
+        CurDAG->RemoveDeadNode(N);
+        return true;
+      }
+    }
+  }
+
+  // Fall back to SET_* + JMP_8_IF for non-constant, i16, i32, or signed.
   unsigned Opc=get8Opc(CC);
   unsigned JumpOpc=I8085::JMP_8_IF;
-  
+
   if(LHS.getSimpleValueType() == MVT::i16){
     Opc=get16Opc(CC);
   }
@@ -337,7 +380,7 @@ template <> bool I8085DAGToDAGISel::select<ISD::BR_CC>(SDNode *N) {
   SDNode *SETccNode=CurDAG->getMachineNode(Opc, dl,MVT::i8,{LHS,RHS});
 
   SDValue Ops[] = {SDValue(SETccNode, 0),JumpTo,Chain};
-  
+
   SDNode *ResNode = CurDAG->getMachineNode(JumpOpc, dl,MVT::Other,Ops);
   ReplaceUses(SDValue(N, 0), SDValue(ResNode, 0));
   CurDAG->RemoveDeadNode(N);
@@ -1257,6 +1300,17 @@ bool I8085DAGToDAGISel::trySelect(SDNode *N) {
     ReplaceUses(SDValue(N, 0), SDValue(ResNode, 0));
     ReplaceUses(SDValue(N, 1), SDValue(ResNode, 1));
     ReplaceUses(SDValue(N, 2), SDValue(ResNode, 2));
+    CurDAG->RemoveDeadNode(N);
+    return true;
+  }
+  case I8085ISD::MUL_IMM: {
+    // Match the I8085ISD::MUL_IMM node (emitted from LowerOperation)
+    // to the MUL_16_IMM machine pseudo instruction.
+    SDValue Src = N->getOperand(0);
+    SDValue Imm = N->getOperand(1);
+    SDNode *ResNode = CurDAG->getMachineNode(I8085::MUL_16_IMM, DL,
+                                              MVT::i16, Src, Imm);
+    ReplaceUses(SDValue(N, 0), SDValue(ResNode, 0));
     CurDAG->RemoveDeadNode(N);
     return true;
   }

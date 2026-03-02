@@ -78,7 +78,13 @@ enum NodeType {
   /// Atomically capture the i32 call result from BC:DE into a GR32.
   /// Avoids intermediate virtual registers that cause register pressure
   /// issues with the fast register allocator at O0.
-  PACK_CALL_RESULT_32
+  PACK_CALL_RESULT_32,
+
+  /// Multiply a 16-bit value by an immediate constant using inline
+  /// shift-add chains (DAD H / DAD B / SUB). Operand 0 is the value,
+  /// operand 1 is the constant. Used when the inline decomposition
+  /// is cheaper than calling __mul16.
+  MUL_IMM
 };
 
 } // end of namespace I8085ISD
@@ -136,6 +142,13 @@ public:
                                   SelectionDAG &DAG) const override;
 
   bool isOffsetFoldingLegal(const GlobalAddressSDNode *GA) const override;
+
+  /// Division by constant is NOT cheaper as multiply-by-reciprocal on the
+  /// i8085.  The reciprocal multiply requires i32 precision (CALL __mul32)
+  /// which is far more expensive than the i16 division libcall (__udiv16).
+  bool isIntDivCheap(EVT VT, AttributeList Attr) const override {
+    return true;
+  }
 
   EVT getSetCCResultType(const DataLayout &DL, LLVMContext &Context,
                          EVT VT) const override;

@@ -508,6 +508,7 @@ const char *I8085TargetLowering::getTargetNodeName(unsigned Opcode) const {
     NODE(SELECT_CC);
     NODE(TRUNC32_HI);
     NODE(PACK_CALL_RESULT_32);
+    NODE(MUL_IMM);
 #undef NODE
   }
 }
@@ -1540,6 +1541,132 @@ SDValue I8085TargetLowering::LowerOperation(SDValue Op, SelectionDAG &DAG) const
       SDValue BU = getZExtI8Operand(Op.getOperand(1));
       if (AU && BU) {
         return emitMul8LibCall(DAG, DL, "__mului8", MVT::i16, AU, BU, *this);
+      }
+      // Check for constant multiply strength reduction.
+      // If one operand is a constant with a cheap shift-add decomposition,
+      // emit an I8085ISD::MUL_IMM node instead of the library call.
+      {
+        SDValue MulLHS = Op.getOperand(0);
+        SDValue MulRHS = Op.getOperand(1);
+        const ConstantSDNode *MulC = dyn_cast<ConstantSDNode>(MulRHS);
+        SDValue MulOther = MulLHS;
+        if (!MulC) {
+          MulC = dyn_cast<ConstantSDNode>(MulLHS);
+          MulOther = MulRHS;
+        }
+        if (MulC) {
+          uint64_t CVal64 = MulC->getZExtValue() & 0xFFFF;
+          if (CVal64 >= 2 && CVal64 <= 0xFFFF && (CVal64 & (CVal64 - 1)) != 0) {
+            uint16_t CVal = static_cast<uint16_t>(CVal64);
+            // Check optimization level
+            const Function &Fn = DAG.getMachineFunction().getFunction();
+            bool IsMinSize = Fn.hasMinSize();
+            bool IsOptNone = Fn.hasOptNone();
+            if (!IsMinSize && !IsOptNone) {
+              bool IsOptForSize = Fn.hasOptSize();
+              // Cost estimation (same as ISel and pseudo expansion)
+              auto estimateCost = [](uint16_t C) -> std::pair<unsigned, unsigned> {
+                unsigned TZ = __builtin_ctz(C);
+                uint16_t Core = C >> TZ;
+                unsigned BestB = UINT_MAX, BestC = UINT_MAX;
+                auto tryB = [&](unsigned B, unsigned Cy) {
+                  if (B < BestB || (B == BestB && Cy < BestC)) { BestB = B; BestC = Cy; }
+                };
+                if (Core >= 3 && ((Core-1)&(Core-2)) == 0) {
+                  unsigned A = __builtin_ctz(Core-1);
+                  tryB(A+3+TZ, A*10+18+TZ*10);
+                }
+                if (Core >= 3 && ((Core+1)&Core) == 0) {
+                  unsigned A = __builtin_ctz(Core+1);
+                  tryB(A+8+TZ, A*10+32+TZ*10);
+                }
+                if (__builtin_popcount(C) == 2) {
+                  unsigned B = __builtin_ctz(C);
+                  unsigned A = 15 - __builtin_clz(C);
+                  tryB(B+2+(A-B)+1, B*10+8+(A-B)*10+10);
+                }
+                {
+                  uint16_t Lo = C & (-C);
+                  uint16_t Sum = C + Lo;
+                  if (Sum && (Sum & (Sum-1)) == 0) {
+                    unsigned A = __builtin_ctz(Sum);
+                    unsigned B = __builtin_ctz(Lo);
+                    tryB(B+2+(A-B)+6, B*10+8+(A-B)*10+24);
+                  }
+                }
+                if (Core > 1) {
+                  for (unsigned A = 1; A <= 7; ++A) {
+                    uint16_t F1 = (1u<<A)+1;
+                    if (F1 > Core) break;
+                    if (Core%F1 != 0) continue;
+                    uint16_t F2 = Core/F1;
+                    if (F2 <= 1) continue;
+                    if (F2 >= 3 && ((F2-1)&(F2-2)) == 0) {
+                      unsigned B = __builtin_ctz(F2-1);
+                      tryB(A+3+B+3+TZ, A*10+18+B*10+18+TZ*10);
+                    }
+                    if ((F2 & (F2-1)) == 0) {
+                      unsigned B = __builtin_ctz(F2);
+                      tryB(A+3+B+TZ, A*10+18+B*10+TZ*10);
+                    }
+                  }
+                }
+                {
+                  uint16_t Cp = C+1;
+                  if (Cp > 0) {
+                    if ((Cp&(Cp-1)) == 0) {
+                      unsigned N = __builtin_ctz(Cp);
+                      tryB(N+8, N*10+32);
+                    } else {
+                      unsigned TZp = __builtin_ctz(Cp);
+                      uint16_t Corep = Cp>>TZp;
+                      if (Corep >= 3 && ((Corep-1)&(Corep-2)) == 0) {
+                        unsigned A = __builtin_ctz(Corep-1);
+                        tryB(A+3+TZp+8, A*10+18+TZp*10+32);
+                      }
+                    }
+                  }
+                }
+                {
+                  uint16_t Cm = C-1;
+                  if (Cm > 1) {
+                    if ((Cm&(Cm-1)) == 0) {
+                      unsigned N = __builtin_ctz(Cm);
+                      tryB(N+3, N*10+18);
+                    } else {
+                      unsigned TZp = __builtin_ctz(Cm);
+                      uint16_t Corep = Cm>>TZp;
+                      if (Corep >= 3 && ((Corep-1)&(Corep-2)) == 0) {
+                        unsigned A = __builtin_ctz(Corep-1);
+                        tryB(A+3+TZp+3, A*10+18+TZp*10+18);
+                      }
+                    }
+                  }
+                }
+                return {BestB, BestC};
+              };
+              auto [CostBytes, CostCycles] = estimateCost(CVal);
+              if (CostBytes != UINT_MAX) {
+                const unsigned LibCallCycles = 170;
+                // At -Os, inline if decomposition fits in 16 bytes.
+                // The __mul16 library routine is ~58 bytes of ROM.
+                // Even with 2 call sites sharing it, 2×16 = 32 bytes
+                // inline < 58 + 2×8 = 74 bytes with library. Only
+                // break even around 10+ call sites. Always inlining
+                // also enables --gc-sections to strip __mul16 entirely.
+                bool ShouldInline;
+                if (IsOptForSize)
+                  ShouldInline = (CostBytes <= 16);
+                else
+                  ShouldInline = (CostCycles < LibCallCycles) && (CostBytes <= 16);
+                if (ShouldInline) {
+                  return DAG.getNode(I8085ISD::MUL_IMM, DL, MVT::i16, MulOther,
+                                     DAG.getTargetConstant(CVal, DL, MVT::i16));
+                }
+              }
+            }
+          }
+        }
       }
       // Otherwise fall back to the default __mul16 library call
       MakeLibCallOptions CallOptions;
@@ -3147,9 +3274,11 @@ SDValue I8085TargetLowering::LowerFormalArguments(
   CCState CCInfo(CallConv, isVarArg, DAG.getMachineFunction(), ArgLocs,
                  *DAG.getContext());
 
-  // Variadic functions do not need all the analysis below.
-
-  CCInfo.AnalyzeFormalArguments(Ins, ArgCC_I8085_Vararg);
+  // Use fast CC for internal functions promoted by GlobalOpt.
+  if (CallConv == CallingConv::Fast && !isVarArg)
+    CCInfo.AnalyzeFormalArguments(Ins, ArgCC_I8085_Fast);
+  else
+    CCInfo.AnalyzeFormalArguments(Ins, ArgCC_I8085_Vararg);
 
 
   for (unsigned i = 0, e = ArgLocs.size(); i != e; ++i) {
@@ -3158,7 +3287,15 @@ SDValue I8085TargetLowering::LowerFormalArguments(
 
     // Arguments stored on registers.
     if (VA.isRegLoc()) {
-      llvm_unreachable("Args should be passed via Stack!");
+      const TargetRegisterClass *RC;
+      if (VA.getLocVT() == MVT::i8)
+        RC = &I8085::GR8RegClass;
+      else
+        RC = &I8085::GR16RegClass;
+
+      unsigned Reg = MF.addLiveIn(VA.getLocReg(), RC);
+      SDValue ArgValue = DAG.getCopyFromReg(Chain, dl, Reg, VA.getLocVT());
+      InVals.push_back(ArgValue);
     } else {
       // Only arguments passed on the stack should make it here.
       assert(VA.isMemLoc());
@@ -3261,7 +3398,11 @@ SDValue I8085TargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
                  *DAG.getContext());
 
 
-  CCInfo.AnalyzeCallOperands(Outs, ArgCC_I8085_Vararg);
+  // Use fast CC for internal functions promoted by GlobalOpt.
+  if (CallConv == CallingConv::Fast && !isVarArg)
+    CCInfo.AnalyzeCallOperands(Outs, ArgCC_I8085_Fast);
+  else
+    CCInfo.AnalyzeCallOperands(Outs, ArgCC_I8085_Vararg);
 
   isTailCall = isEligibleForTailCallOptimization(CLI, CCInfo, MF);
 
@@ -3284,42 +3425,34 @@ SDValue I8085TargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
 
   SmallVector<std::pair<unsigned, SDValue>, 8> RegsToPass;
 
-  // First, walk the register assignments, inserting copies.
-  unsigned AI, AE;
+  // Walk all arg locations and separate register vs stack args.
+  // With fastcc, register and stack args may be interleaved (e.g., i32 on
+  // stack, then ptr in register), so we cannot assume register args come first.
   bool HasStackArgs = false;
-  for (AI = 0, AE = ArgLocs.size(); AI != AE; ++AI) {
+  for (unsigned AI = 0, AE = ArgLocs.size(); AI != AE; ++AI) {
     CCValAssign &VA = ArgLocs[AI];
-    EVT RegVT = VA.getLocVT();
     SDValue Arg = OutVals[AI];
-    
-    if (VA.isMemLoc()) {
-      HasStackArgs = true;
-      break;
-    }
 
-    // Arguments that can be passed on registers must be kept in the RegsToPass
-    // vector.
-    RegsToPass.push_back(std::make_pair(VA.getLocReg(), Arg));
+    if (VA.isRegLoc()) {
+      RegsToPass.push_back(std::make_pair(VA.getLocReg(), Arg));
+    } else {
+      HasStackArgs = true;
+    }
   }
 
   if (!isTailCall)
     Chain = DAG.getCALLSEQ_START(Chain, NumBytes, 0, DL);
 
-  // Second, stack arguments have to walked.
-  // Previously this code created chained stores but those chained stores appear
-  // to be unchained in the legalization phase. Therefore, do not attempt to
-  // chain them here. In fact, chaining them here somehow causes the first and
-  // second store to be reversed which is the exact opposite of the intended
-  // effect.
+  // Walk stack arguments and emit stores.
   if (HasStackArgs) {
     SmallVector<SDValue, 8> MemOpChains;
-    for (; AI != AE; AI++) {
-
+    for (unsigned AI = 0, AE = ArgLocs.size(); AI != AE; ++AI) {
       CCValAssign &VA = ArgLocs[AI];
+      if (!VA.isMemLoc())
+        continue;
+
       SDValue Arg = OutVals[AI];
       ISD::ArgFlagsTy Flags = Outs[AI].Flags;
-
-      assert(VA.isMemLoc());
 
       SDValue PtrOff = DAG.getNode(
           ISD::ADD, DL, getPointerTy(DAG.getDataLayout()),
@@ -3340,7 +3473,6 @@ SDValue I8085TargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
             Chain, DL, Arg, PtrOff,
             MachinePointerInfo::getStack(MF, VA.getLocMemOffset())));
       }
-
     }
 
     if (!MemOpChains.empty())

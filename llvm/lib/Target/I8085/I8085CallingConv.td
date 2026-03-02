@@ -55,6 +55,15 @@ def ArgCC_I8085_Vararg : CallingConv<[
   // i16 are always passed through the stack with an alignment of 1.
 ]>;
 
+// Fast calling convention for internal (static) functions.
+// First i8 args go in C, E; first i16 args go in BC, DE; rest on stack.
+// LLVM's GlobalOpt promotes internal functions to fastcc at -O2+.
+def ArgCC_I8085_Fast : CallingConv<[
+  CCIfType<[i8],  CCAssignToReg<[C, E]>>,
+  CCIfType<[i16], CCAssignToReg<[BC, DE]>>,
+  CCDelegateTo<ArgCC_I8085_Vararg>
+]>;
+
 //===----------------------------------------------------------------------===//
 // Callee-saved register lists.
 //===----------------------------------------------------------------------===//

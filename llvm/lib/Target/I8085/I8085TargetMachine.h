@@ -41,6 +41,8 @@ public:
     return this->TLOF.get();
   }
 
+  bool useIPRA() const override { return true; }
+
   TargetPassConfig *createPassConfig(PassManagerBase &PM) override;
   void registerPassBuilderCallbacks(PassBuilder &PB) override;
   TargetTransformInfo getTargetTransformInfo(const Function &F) const override;

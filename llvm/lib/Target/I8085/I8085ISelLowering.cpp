@@ -477,9 +477,15 @@ I8085TargetLowering::I8085TargetLowering(const I8085TargetMachine &TM,
   setOperationAction(ISD::GlobalAddress, MVT::i16, Custom);
   setOperationAction(ISD::BlockAddress, MVT::i16, Custom);
   setOperationAction(ISD::ConstantPool, MVT::i16, Custom);
+  setOperationAction(ISD::JumpTable, MVT::i16, Custom);
+  setOperationAction(ISD::BR_JT, MVT::Other, Expand);
 
   setMinFunctionAlignment(Align(2));
-  setMinimumJumpTableEntries(UINT_MAX);
+  // The 8085 can materialize an indirect branch via PCHL, and MC lowering
+  // already supports jump-table symbols. Keep the threshold conservative so
+  // small switches still become compare chains, but allow large dispatchers
+  // such as bytecode interpreters to use jump tables.
+  setMinimumJumpTableEntries(8);
   setMaxAtomicSizeInBitsSupported(0);
 }
 
@@ -678,6 +684,15 @@ SDValue I8085TargetLowering::LowerConstantPool(SDValue Op,
       DAG.getTargetConstantPool(CP->getConstVal(), getPointerTy(DL),
                                 CP->getAlign(), CP->getOffset());
 
+  return DAG.getNode(I8085ISD::WRAPPER, SDLoc(Op), getPointerTy(DL), Result);
+}
+
+SDValue I8085TargetLowering::LowerJumpTable(SDValue Op,
+                                            SelectionDAG &DAG) const {
+  auto DL = DAG.getDataLayout();
+  const auto *JT = cast<JumpTableSDNode>(Op);
+
+  SDValue Result = DAG.getTargetJumpTable(JT->getIndex(), getPointerTy(DL));
   return DAG.getNode(I8085ISD::WRAPPER, SDLoc(Op), getPointerTy(DL), Result);
 }
 
@@ -2356,6 +2371,8 @@ SDValue I8085TargetLowering::LowerOperation(SDValue Op, SelectionDAG &DAG) const
     return LowerBlockAddress(Op, DAG);
   case ISD::ConstantPool:
     return LowerConstantPool(Op, DAG);
+  case ISD::JumpTable:
+    return LowerJumpTable(Op, DAG);
   }
 
   return SDValue();

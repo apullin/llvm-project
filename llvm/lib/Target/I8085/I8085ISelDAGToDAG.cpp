@@ -876,8 +876,10 @@ template <> bool I8085DAGToDAGISel::select<ISD::LOAD>(SDNode *N) {
           BaseOpc == ISD::TargetExternalSymbol ||
           BaseOpc == ISD::TargetBlockAddress ||
           BaseOpc == ISD::TargetConstantPool ||
+          BaseOpc == ISD::TargetJumpTable ||
           BaseOpc == ISD::GlobalAddress ||
-          BaseOpc == ISD::ExternalSymbol) {
+          BaseOpc == ISD::ExternalSymbol ||
+          BaseOpc == ISD::JumpTable) {
         SDLoc DL(N);
         SDValue Chain = LD->getChain();
         if (BaseOpc == ISD::GlobalAddress) {
@@ -886,6 +888,11 @@ template <> bool I8085DAGToDAGISel::select<ISD::LOAD>(SDNode *N) {
               GA->getGlobal(), DL,
               getTargetLowering()->getPointerTy(CurDAG->getDataLayout()),
               GA->getOffset() + Off);
+        } else if (BaseOpc == ISD::JumpTable) {
+          const auto *JT = cast<JumpTableSDNode>(Base);
+          Base = CurDAG->getTargetJumpTable(
+              JT->getIndex(),
+              getTargetLowering()->getPointerTy(CurDAG->getDataLayout()));
         } else if (BaseOpc == ISD::ExternalSymbol) {
           const auto *ES = cast<ExternalSymbolSDNode>(Base);
           Base = CurDAG->getTargetExternalSymbol(
@@ -1003,8 +1010,10 @@ template <> bool I8085DAGToDAGISel::select<ISD::LOAD>(SDNode *N) {
         BaseOpc == ISD::TargetExternalSymbol ||
         BaseOpc == ISD::TargetBlockAddress ||
         BaseOpc == ISD::TargetConstantPool ||
+        BaseOpc == ISD::TargetJumpTable ||
         BaseOpc == ISD::GlobalAddress ||
-        BaseOpc == ISD::ExternalSymbol) {
+        BaseOpc == ISD::ExternalSymbol ||
+        BaseOpc == ISD::JumpTable) {
       SDLoc DL(N);
       SDValue Chain = LD->getChain();
 
@@ -1014,6 +1023,11 @@ template <> bool I8085DAGToDAGISel::select<ISD::LOAD>(SDNode *N) {
             GA->getGlobal(), DL,
             getTargetLowering()->getPointerTy(CurDAG->getDataLayout()),
             GA->getOffset());
+      } else if (BaseOpc == ISD::JumpTable) {
+        const auto *JT = cast<JumpTableSDNode>(Addr);
+        Addr = CurDAG->getTargetJumpTable(
+            JT->getIndex(),
+            getTargetLowering()->getPointerTy(CurDAG->getDataLayout()));
       } else if (BaseOpc == ISD::ExternalSymbol) {
         const auto *ES = cast<ExternalSymbolSDNode>(Addr);
         Addr = CurDAG->getTargetExternalSymbol(
@@ -1042,6 +1056,7 @@ template <> bool I8085DAGToDAGISel::select<ISD::LOAD>(SDNode *N) {
   {
     unsigned BaseOpc = BasePtr.getOpcode();
     if (BaseOpc == ISD::GlobalAddress || BaseOpc == ISD::TargetGlobalAddress ||
+        BaseOpc == ISD::JumpTable || BaseOpc == ISD::TargetJumpTable ||
         BaseOpc == ISD::ExternalSymbol || BaseOpc == ISD::TargetExternalSymbol ||
         BaseOpc == I8085ISD::WRAPPER)
       return false;
@@ -1103,8 +1118,10 @@ template <> bool I8085DAGToDAGISel::select<ISD::STORE>(SDNode *N) {
         BaseOpc == ISD::TargetExternalSymbol ||
         BaseOpc == ISD::TargetBlockAddress ||
         BaseOpc == ISD::TargetConstantPool ||
+        BaseOpc == ISD::TargetJumpTable ||
         BaseOpc == ISD::GlobalAddress ||
-        BaseOpc == ISD::ExternalSymbol) {
+        BaseOpc == ISD::ExternalSymbol ||
+        BaseOpc == ISD::JumpTable) {
       SDLoc DL(N);
       SDValue Chain = ST->getChain();
       SDValue StoreVal = ST->getValue();
@@ -1120,6 +1137,11 @@ template <> bool I8085DAGToDAGISel::select<ISD::STORE>(SDNode *N) {
         Addr = CurDAG->getTargetGlobalAddress(GA->getGlobal(), DL,
                                               getTargetLowering()->getPointerTy(CurDAG->getDataLayout()),
                                               GA->getOffset());
+      } else if (BaseOpc == ISD::JumpTable) {
+        const auto *JT = cast<JumpTableSDNode>(Addr);
+        Addr = CurDAG->getTargetJumpTable(
+            JT->getIndex(),
+            getTargetLowering()->getPointerTy(CurDAG->getDataLayout()));
       } else if (BaseOpc == ISD::ExternalSymbol) {
         const auto *ES = cast<ExternalSymbolSDNode>(Addr);
         Addr = CurDAG->getTargetExternalSymbol(ES->getSymbol(), getTargetLowering()->getPointerTy(CurDAG->getDataLayout()));
@@ -1215,6 +1237,7 @@ template <> bool I8085DAGToDAGISel::select<ISD::STORE>(SDNode *N) {
   {
     unsigned BaseOpc = BasePtr.getOpcode();
     if (BaseOpc == ISD::GlobalAddress || BaseOpc == ISD::TargetGlobalAddress ||
+        BaseOpc == ISD::JumpTable || BaseOpc == ISD::TargetJumpTable ||
         BaseOpc == ISD::ExternalSymbol || BaseOpc == ISD::TargetExternalSymbol ||
         BaseOpc == I8085ISD::WRAPPER)
       return false;

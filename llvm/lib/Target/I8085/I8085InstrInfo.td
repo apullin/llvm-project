@@ -720,6 +720,19 @@ def : Pat<(i16(I8085Wrapper tglobaladdr : $dst)),
 def : Pat<(i16(I8085Wrapper tblockaddress : $dst)),
           (LOAD_16 tblockaddress : $dst)>;
 
+def : Pat<(i16(load(I8085Wrapper tjumptable
+                    : $dst))),
+          (LOAD_16_WITH_IMM_ADDR tjumptable
+           : $dst)>;
+
+def : Pat<(i8(load(I8085Wrapper tjumptable
+                   : $dst))),
+          (LOAD_8_WITH_IMM_ADDR tjumptable
+           : $dst)>;
+
+def : Pat<(i16(I8085Wrapper tjumptable : $dst)),
+          (LOAD_16 tjumptable : $dst)>;
+
 def : Pat<(i16(load(I8085Wrapper tconstpool
                     : $dst))),
           (LOAD_16_WITH_IMM_ADDR tconstpool

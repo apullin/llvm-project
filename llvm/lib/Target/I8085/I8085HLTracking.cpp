@@ -144,7 +144,7 @@ private:
 
               for (int i = 0; i < count; i++) {
                 BuildMI(MBB, InsertPt, DL, TII->get(Opc))
-                    .addReg(I8085::HL);
+                    .addReg(I8085::HL, RegState::Define);
               }
 
               auto AfterDAD = std::next(Next);
@@ -185,21 +185,30 @@ private:
         continue;
       }
 
+      // INX/DCX H update HL in a tracked way rather than invalidating it.
+      if (MI->getOpcode() == I8085::INX &&
+          MI->getNumOperands() >= 1 &&
+          MI->getOperand(0).isReg() &&
+          MI->getOperand(0).getReg() == I8085::HL) {
+        if (tracked)
+          trackedOffset++;
+        ++MI;
+        continue;
+      }
+
+      if (MI->getOpcode() == I8085::DCX &&
+          MI->getNumOperands() >= 1 &&
+          MI->getOperand(0).isReg() &&
+          MI->getOperand(0).getReg() == I8085::HL) {
+        if (tracked)
+          trackedOffset--;
+        ++MI;
+        continue;
+      }
+
       // Check if this instruction invalidates HL tracking
       if (clobbersHL(*MI)) {
         tracked = false;
-      } else if (MI->getOpcode() == I8085::INX &&
-                 MI->getNumOperands() >= 1 &&
-                 MI->getOperand(0).isReg() &&
-                 MI->getOperand(0).getReg() == I8085::HL) {
-        if (tracked)
-          trackedOffset++;
-      } else if (MI->getOpcode() == I8085::DCX &&
-                 MI->getNumOperands() >= 1 &&
-                 MI->getOperand(0).isReg() &&
-                 MI->getOperand(0).getReg() == I8085::HL) {
-        if (tracked)
-          trackedOffset--;
       }
 
       ++MI;

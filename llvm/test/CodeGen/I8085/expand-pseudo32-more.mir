@@ -177,7 +177,7 @@ body:             |
     ; CHECK: $hl = LXI 0
     ; CHECK-NEXT: DAD $sp
     ; CHECK-NEXT: MOV_M $a
-    $iax = LOAD_32_ADDR_CONTENT $bc, implicit $sp, implicit-def $a, implicit-def $hl
+    $iax = LOAD_32_ADDR_CONTENT $bc, implicit $sp, implicit-def $a, implicit-def $hl, implicit-def $bc
     RET implicit $sp, implicit-def $sp
 ...
 
@@ -190,7 +190,7 @@ body:             |
     ; CHECK: $h = MOV $h
     ; CHECK-NEXT: $l = MOV $l
     ; CHECK-NEXT: $a = MOV_FROM_M
-    $iax = LOAD_32_ADDR_CONTENT $hl, implicit $sp, implicit-def $a, implicit-def $hl
+    $iax = LOAD_32_ADDR_CONTENT $hl, implicit $sp, implicit-def $a, implicit-def $hl, implicit-def $bc
     RET implicit $sp, implicit-def $sp
 ...
 
@@ -203,7 +203,7 @@ body:             |
     ; CHECK: $hl = LXI 0
     ; CHECK-NEXT: DAD $sp
     ; CHECK-NEXT: $a = MOV_FROM_M
-    $iax = LOAD_32_ADDR_CONTENT $sp, implicit $sp, implicit-def $a, implicit-def $hl
+    $iax = LOAD_32_ADDR_CONTENT $sp, implicit $sp, implicit-def $a, implicit-def $hl, implicit-def $bc
     RET implicit $sp, implicit-def $sp
 ...
 

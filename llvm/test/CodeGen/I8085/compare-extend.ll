@@ -12,14 +12,12 @@ define i1 @cmp_sext_i8(i8 %a, i8 %b) {
 ; CHECK-NEXT:    ADI 128
 ; CHECK-NEXT:    SBB A
 ; CHECK-NEXT:    MOV B, A
-; CHECK-NEXT:    LXI H, 2
-; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    DCX H
 ; CHECK-NEXT:    MOV A, M
 ; CHECK-NEXT:    MOV E, A
 ; CHECK-NEXT:    ADI 128
 ; CHECK-NEXT:    SBB A
 ; CHECK-NEXT:    MOV D, A
-; CHECK-NEXT:    MOV A, D
 ; CHECK-NEXT:    XRA B
 ; CHECK-NEXT:    ANI 128
 ; CHECK-NEXT:    JNZ LBB0_3
@@ -57,8 +55,7 @@ define i1 @cmp_zext_i8(i8 %a, i8 %b) {
 ; CHECK-NEXT:    MOV A, M
 ; CHECK-NEXT:    MOV C, A
 ; CHECK-NEXT:    MVI B, 0
-; CHECK-NEXT:    LXI H, 2
-; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    DCX H
 ; CHECK-NEXT:    MOV A, M
 ; CHECK-NEXT:    MOV E, A
 ; CHECK-NEXT:    MVI D, 0
@@ -93,11 +90,11 @@ define i1 @cmp_mixed_i16(i16 %a, i16 %b) {
 ; CHECK-NEXT:    ADI 128
 ; CHECK-NEXT:    SBB A
 ; CHECK-NEXT:    MOV B, A
-; CHECK-NEXT:    LXI H, 5
-; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    MOV D, M
-; CHECK-NEXT:    LXI H, 4
-; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    DCX H
 ; CHECK-NEXT:    MOV E, M
 ; CHECK-NEXT:    MOV A, B
 ; CHECK-NEXT:    XRA D

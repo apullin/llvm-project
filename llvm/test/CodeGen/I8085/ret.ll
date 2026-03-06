@@ -32,8 +32,28 @@ define i32 @retthirtytwo() {
 ; CHECK-LABEL: retthirtytwo:
 ; CHECK:         .cfi_startproc
 ; CHECK-NEXT:  LBB3_0:
+; CHECK-NEXT:    ; implicit-def: $iax
+; CHECK-NEXT:    LXI H, 65532
+; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    SPHL
+; CHECK-NEXT:    .cfi_adjust_cfa_offset 4
+; CHECK-NEXT:    LXI H, 0
+; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    MVI M, 4
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MVI M, 3
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MVI M, 2
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MVI M, 1
+; CHECK-NEXT:    DCX H
+; CHECK-NEXT:    MOV E, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV D, M
 ; CHECK-NEXT:    LXI B, 772
-; CHECK-NEXT:    LXI D, 258
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    SPHL
+; CHECK-NEXT:    .cfi_adjust_cfa_offset 4294967292
 ; CHECK-NEXT:    RET
   ret i32 16909060
 }
@@ -43,11 +63,49 @@ define i64 @retsixtyfour() {
 ; CHECK:         .cfi_startproc
 ; CHECK-NEXT:  LBB4_0:
 ; CHECK-NEXT:    ; implicit-def: $iax
-; CHECK-NEXT:    ; implicit-def: $ibx
-; CHECK-NEXT:    LXI H, 65528
+; CHECK-NEXT:    LXI H, 65532
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    SPHL
-; CHECK-NEXT:    .cfi_adjust_cfa_offset 8
+; CHECK-NEXT:    .cfi_adjust_cfa_offset 4
+; CHECK-NEXT:    LXI H, 7
+; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    MOV B, M
+; CHECK-NEXT:    DCX H
+; CHECK-NEXT:    MOV C, M
+; CHECK-NEXT:    LXI H, 0
+; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    MVI M, 4
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MVI M, 3
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MVI M, 2
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MVI M, 1
+; CHECK-NEXT:    DCX H
+; CHECK-NEXT:    DCX H
+; CHECK-NEXT:    DCX H
+; CHECK-NEXT:    MOV A, M
+; CHECK-NEXT:    LXI H, 4
+; CHECK-NEXT:    DAD B
+; CHECK-NEXT:    MOV M, A
+; CHECK-NEXT:    LXI H, 1
+; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    MOV A, M
+; CHECK-NEXT:    LXI H, 5
+; CHECK-NEXT:    DAD B
+; CHECK-NEXT:    MOV M, A
+; CHECK-NEXT:    LXI H, 2
+; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    MOV A, M
+; CHECK-NEXT:    LXI H, 6
+; CHECK-NEXT:    DAD B
+; CHECK-NEXT:    MOV M, A
+; CHECK-NEXT:    LXI H, 3
+; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    MOV A, M
+; CHECK-NEXT:    LXI H, 7
+; CHECK-NEXT:    DAD B
+; CHECK-NEXT:    MOV M, A
 ; CHECK-NEXT:    LXI H, 0
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MVI M, 8
@@ -57,21 +115,41 @@ define i64 @retsixtyfour() {
 ; CHECK-NEXT:    MVI M, 6
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    MVI M, 5
+; CHECK-NEXT:    DCX H
+; CHECK-NEXT:    DCX H
+; CHECK-NEXT:    DCX H
+; CHECK-NEXT:    MOV A, M
+; CHECK-NEXT:    MOV H, B
+; CHECK-NEXT:    MOV L, C
+; CHECK-NEXT:    MOV M, A
+; CHECK-NEXT:    LXI H, 1
+; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    MOV A, M
+; CHECK-NEXT:    MOV H, B
+; CHECK-NEXT:    MOV L, C
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, A
+; CHECK-NEXT:    LXI H, 2
+; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    MOV A, M
+; CHECK-NEXT:    MOV H, B
+; CHECK-NEXT:    MOV L, C
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, A
+; CHECK-NEXT:    LXI H, 3
+; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    MOV A, M
+; CHECK-NEXT:    MOV H, B
+; CHECK-NEXT:    MOV L, C
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, A
 ; CHECK-NEXT:    LXI H, 4
 ; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MVI M, 4
-; CHECK-NEXT:    INX H
-; CHECK-NEXT:    MVI M, 3
-; CHECK-NEXT:    INX H
-; CHECK-NEXT:    MVI M, 2
-; CHECK-NEXT:    INX H
-; CHECK-NEXT:    MVI M, 1
-; CHECK-NEXT:    LXI H, 8
-; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    SPHL
-; CHECK-NEXT:    .cfi_adjust_cfa_offset 4294967288
-; CHECK-NEXT:    ; implicit-def: $iax
-; CHECK-NEXT:    ; implicit-def: $ibx
+; CHECK-NEXT:    .cfi_adjust_cfa_offset 4294967292
 ; CHECK-NEXT:    RET
   ret i64 72623859790382856
 }

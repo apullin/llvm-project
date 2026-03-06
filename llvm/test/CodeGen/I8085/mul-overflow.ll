@@ -9,99 +9,80 @@ define i16 @umul_ov_i16(i16 %a, i16 %b) {
 ; CHECK:         .cfi_startproc
 ; CHECK-NEXT:  LBB0_0:
 ; CHECK-NEXT:    ; implicit-def: $iax
-; CHECK-NEXT:    LXI H, 65520
+; CHECK-NEXT:    LXI H, 65528
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    SPHL
-; CHECK-NEXT:    .cfi_adjust_cfa_offset 16
-; CHECK-NEXT:    LXI H, 21
+; CHECK-NEXT:    .cfi_adjust_cfa_offset 8
+; CHECK-NEXT:    LXI H, 10
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV B, M
-; CHECK-NEXT:    LXI H, 20
-; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    MOV C, M
-; CHECK-NEXT:    LXI H, 8
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, C
 ; CHECK-NEXT:    INX H
-; CHECK-NEXT:    MOV M, B
+; CHECK-NEXT:    MOV D, M
 ; CHECK-NEXT:    INX H
-; CHECK-NEXT:    MVI M, 0
-; CHECK-NEXT:    INX H
-; CHECK-NEXT:    MVI M, 0
-; CHECK-NEXT:    LXI H, 8
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
+; CHECK-NEXT:    MOV E, M
 ; CHECK-NEXT:    LXI H, 4
 ; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    LXI H, 9
-; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    MOV M, B
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, C
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, D
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, E
+; CHECK-NEXT:    DCX H
+; CHECK-NEXT:    DCX H
+; CHECK-NEXT:    DCX H
 ; CHECK-NEXT:    MOV A, M
+; CHECK-NEXT:    LXI H, 0
+; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    MOV M, A
 ; CHECK-NEXT:    LXI H, 5
 ; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    LXI H, 10
-; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV A, M
+; CHECK-NEXT:    LXI H, 0
+; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, A
 ; CHECK-NEXT:    LXI H, 6
 ; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    LXI H, 11
-; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV A, M
+; CHECK-NEXT:    LXI H, 0
+; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, A
 ; CHECK-NEXT:    LXI H, 7
 ; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    MOV A, M
+; CHECK-NEXT:    LXI H, 0
+; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    LXI H, 19
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV B, M
-; CHECK-NEXT:    LXI H, 18
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV C, M
-; CHECK-NEXT:    LXI H, 8
+; CHECK-NEXT:    CALL __mului16
+; CHECK-NEXT:    LXI H, 4
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV M, C
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    MOV M, B
 ; CHECK-NEXT:    INX H
-; CHECK-NEXT:    MVI M, 0
+; CHECK-NEXT:    MOV M, E
 ; CHECK-NEXT:    INX H
-; CHECK-NEXT:    MVI M, 0
-; CHECK-NEXT:    LXI H, 8
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
-; CHECK-NEXT:    LXI H, 0
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    LXI H, 9
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
-; CHECK-NEXT:    LXI H, 0
-; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    MOV M, D
+; CHECK-NEXT:    DCX H
+; CHECK-NEXT:    DCX H
+; CHECK-NEXT:    DCX H
+; CHECK-NEXT:    MOV C, M
 ; CHECK-NEXT:    INX H
-; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    LXI H, 10
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
-; CHECK-NEXT:    LXI H, 0
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    INX H
-; CHECK-NEXT:    INX H
-; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    LXI H, 11
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
-; CHECK-NEXT:    LXI H, 0
-; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    MOV B, M
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    INX H
-; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    CALL __mul32
-; CHECK-NEXT:    LXI H, 16
-; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    SPHL
-; CHECK-NEXT:    .cfi_adjust_cfa_offset 4294967280
+; CHECK-NEXT:    .cfi_adjust_cfa_offset 4294967288
 ; CHECK-NEXT:    RET
 entry:
   %res = call { i16, i1 } @llvm.umul.with.overflow.i16(i16 %a, i16 %b)
@@ -114,95 +95,89 @@ define i1 @umul_ov_flag(i16 %a, i16 %b) {
 ; CHECK:         .cfi_startproc
 ; CHECK-NEXT:  LBB1_0:
 ; CHECK-NEXT:    ; implicit-def: $iax
-; CHECK-NEXT:    LXI H, 65520
+; CHECK-NEXT:    LXI H, 65528
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    SPHL
-; CHECK-NEXT:    .cfi_adjust_cfa_offset 16
-; CHECK-NEXT:    LXI H, 21
+; CHECK-NEXT:    .cfi_adjust_cfa_offset 8
+; CHECK-NEXT:    LXI H, 10
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV B, M
-; CHECK-NEXT:    LXI H, 20
-; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    MOV C, M
-; CHECK-NEXT:    LXI H, 8
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, C
 ; CHECK-NEXT:    INX H
-; CHECK-NEXT:    MOV M, B
+; CHECK-NEXT:    MOV D, M
 ; CHECK-NEXT:    INX H
-; CHECK-NEXT:    MVI M, 0
-; CHECK-NEXT:    INX H
-; CHECK-NEXT:    MVI M, 0
-; CHECK-NEXT:    LXI H, 8
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
+; CHECK-NEXT:    MOV E, M
 ; CHECK-NEXT:    LXI H, 4
 ; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    LXI H, 9
-; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    MOV M, B
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, C
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, D
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, E
+; CHECK-NEXT:    DCX H
+; CHECK-NEXT:    DCX H
+; CHECK-NEXT:    DCX H
 ; CHECK-NEXT:    MOV A, M
+; CHECK-NEXT:    LXI H, 0
+; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    MOV M, A
 ; CHECK-NEXT:    LXI H, 5
 ; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    LXI H, 10
-; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV A, M
+; CHECK-NEXT:    LXI H, 0
+; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, A
 ; CHECK-NEXT:    LXI H, 6
 ; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    LXI H, 11
-; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV A, M
+; CHECK-NEXT:    LXI H, 0
+; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, A
 ; CHECK-NEXT:    LXI H, 7
 ; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    MOV A, M
+; CHECK-NEXT:    LXI H, 0
+; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    LXI H, 19
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV B, M
-; CHECK-NEXT:    LXI H, 18
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV C, M
-; CHECK-NEXT:    LXI H, 8
+; CHECK-NEXT:    CALL __mului16
+; CHECK-NEXT:    LXI H, 4
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV M, C
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    MOV M, B
 ; CHECK-NEXT:    INX H
-; CHECK-NEXT:    MVI M, 0
+; CHECK-NEXT:    MOV M, E
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, D
+; CHECK-NEXT:    DCX H
+; CHECK-NEXT:    MOV B, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV C, M
+; CHECK-NEXT:    DCX H
+; CHECK-NEXT:    DCX H
+; CHECK-NEXT:    DCX H
+; CHECK-NEXT:    MOV M, B
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, C
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    MVI M, 0
-; CHECK-NEXT:    LXI H, 8
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
-; CHECK-NEXT:    LXI H, 0
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    LXI H, 9
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
-; CHECK-NEXT:    LXI H, 0
-; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    INX H
-; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    LXI H, 10
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
-; CHECK-NEXT:    LXI H, 0
-; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    MVI M, 0
+; CHECK-NEXT:    DCX H
+; CHECK-NEXT:    DCX H
+; CHECK-NEXT:    DCX H
+; CHECK-NEXT:    MOV E, M
 ; CHECK-NEXT:    INX H
-; CHECK-NEXT:    INX H
-; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    LXI H, 11
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
-; CHECK-NEXT:    LXI H, 0
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    INX H
-; CHECK-NEXT:    INX H
-; CHECK-NEXT:    INX H
-; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    CALL __mul32
+; CHECK-NEXT:    MOV D, M
 ; CHECK-NEXT:    LXI H, 0
 ; CHECK-NEXT:    MVI B, 1
 ; CHECK-NEXT:    MOV A, D
@@ -219,10 +194,10 @@ define i1 @umul_ov_flag(i16 %a, i16 %b) {
 ; CHECK-NEXT:  LBB1_3:
 ; CHECK-NEXT:  LBB1_5:
 ; CHECK-NEXT:    MOV A, B
-; CHECK-NEXT:    LXI H, 16
+; CHECK-NEXT:    LXI H, 8
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    SPHL
-; CHECK-NEXT:    .cfi_adjust_cfa_offset 4294967280
+; CHECK-NEXT:    .cfi_adjust_cfa_offset 4294967288
 ; CHECK-NEXT:    RET
 entry:
   %res = call { i16, i1 } @llvm.umul.with.overflow.i16(i16 %a, i16 %b)
@@ -234,41 +209,26 @@ define i8 @smul_ov_i8(i8 %a, i8 %b) {
 ; CHECK-LABEL: smul_ov_i8:
 ; CHECK:         .cfi_startproc
 ; CHECK-NEXT:  LBB2_0:
-; CHECK-NEXT:    LXI H, 65532
+; CHECK-NEXT:    LXI H, 65534
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    SPHL
-; CHECK-NEXT:    .cfi_adjust_cfa_offset 4
-; CHECK-NEXT:    LXI H, 7
+; CHECK-NEXT:    .cfi_adjust_cfa_offset 2
+; CHECK-NEXT:    LXI H, 5
 ; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
-; CHECK-NEXT:    MOV C, A
-; CHECK-NEXT:    ADI 128
-; CHECK-NEXT:    SBB A
-; CHECK-NEXT:    MOV B, A
-; CHECK-NEXT:    LXI H, 3
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, B
-; CHECK-NEXT:    LXI H, 2
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, C
-; CHECK-NEXT:    LXI H, 6
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
-; CHECK-NEXT:    MOV C, A
-; CHECK-NEXT:    ADI 128
-; CHECK-NEXT:    SBB A
-; CHECK-NEXT:    MOV B, A
+; CHECK-NEXT:    MOV B, M
+; CHECK-NEXT:    DCX H
+; CHECK-NEXT:    MOV C, M
 ; CHECK-NEXT:    LXI H, 0
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV M, C
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    MOV M, B
-; CHECK-NEXT:    CALL __mul16
+; CHECK-NEXT:    CALL __mulsi8
 ; CHECK-NEXT:    MOV A, C
-; CHECK-NEXT:    LXI H, 4
+; CHECK-NEXT:    LXI H, 2
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    SPHL
-; CHECK-NEXT:    .cfi_adjust_cfa_offset 4294967292
+; CHECK-NEXT:    .cfi_adjust_cfa_offset 4294967294
 ; CHECK-NEXT:    RET
 entry:
   %res = call { i8, i1 } @llvm.smul.with.overflow.i8(i8 %a, i8 %b)
@@ -280,80 +240,45 @@ define i1 @smul_ov_flag(i8 %a, i8 %b) {
 ; CHECK-LABEL: smul_ov_flag:
 ; CHECK:         .cfi_startproc
 ; CHECK-NEXT:  LBB3_0:
-; CHECK-NEXT:    LXI H, 65532
+; CHECK-NEXT:    LXI H, 65534
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    SPHL
-; CHECK-NEXT:    .cfi_adjust_cfa_offset 4
-; CHECK-NEXT:    LXI H, 7
+; CHECK-NEXT:    .cfi_adjust_cfa_offset 2
+; CHECK-NEXT:    LXI H, 5
 ; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
-; CHECK-NEXT:    MOV C, A
-; CHECK-NEXT:    ADI 128
-; CHECK-NEXT:    SBB A
-; CHECK-NEXT:    MOV B, A
-; CHECK-NEXT:    LXI H, 3
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, B
-; CHECK-NEXT:    LXI H, 2
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, C
-; CHECK-NEXT:    LXI H, 6
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
-; CHECK-NEXT:    MOV C, A
-; CHECK-NEXT:    ADI 128
-; CHECK-NEXT:    SBB A
-; CHECK-NEXT:    MOV B, A
+; CHECK-NEXT:    MOV B, M
+; CHECK-NEXT:    DCX H
+; CHECK-NEXT:    MOV C, M
 ; CHECK-NEXT:    LXI H, 0
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV M, C
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    MOV M, B
-; CHECK-NEXT:    CALL __mul16
-; CHECK-NEXT:    MOV D, C
-; CHECK-NEXT:    MVI E, 7
-; CHECK-NEXT:    DCR E
-; CHECK-NEXT:    JM LBB3_2
+; CHECK-NEXT:    CALL __mulsi8
+; CHECK-NEXT:    MOV A, C
+; CHECK-NEXT:    MOV L, A
+; CHECK-NEXT:    ADI 128
+; CHECK-NEXT:    SBB A
+; CHECK-NEXT:    MOV H, A
+; CHECK-NEXT:    MVI D, 1
+; CHECK-NEXT:    MOV A, B
+; CHECK-NEXT:    CMP H
+; CHECK-NEXT:    JNZ LBB3_3
 ; CHECK-NEXT:  LBB3_1:
-; CHECK-NEXT:    MOV A, D
-; CHECK-NEXT:    RLC
-; CHECK-NEXT:    MOV A, D
-; CHECK-NEXT:    RAR
-; CHECK-NEXT:    MOV D, A
-; CHECK-NEXT:    DCR E
-; CHECK-NEXT:    JP LBB3_1
+; CHECK-NEXT:    MOV A, C
+; CHECK-NEXT:    CMP L
+; CHECK-NEXT:    JNZ LBB3_3
 ; CHECK-NEXT:  LBB3_2:
-; CHECK-NEXT:    MVI E, 8
-; CHECK-NEXT:    DCR E
-; CHECK-NEXT:    JM LBB3_4
-; CHECK-NEXT:  LBB3_3:
-; CHECK-NEXT:    STC
-; CHECK-NEXT:    CMC
-; CHECK-NEXT:    MOV A, B
-; CHECK-NEXT:    RAR
-; CHECK-NEXT:    MOV B, A
-; CHECK-NEXT:    MOV A, C
-; CHECK-NEXT:    RAR
-; CHECK-NEXT:    MOV C, A
-; CHECK-NEXT:    MOV A, B
-; CHECK-NEXT:    ANI 127
-; CHECK-NEXT:    MOV B, A
-; CHECK-NEXT:    DCR E
-; CHECK-NEXT:    JP LBB3_3
 ; CHECK-NEXT:  LBB3_4:
-; CHECK-NEXT:    MOV A, C
-; CHECK-NEXT:    SUB D
-; CHECK-NEXT:    JNZ LBB3_6
+; CHECK-NEXT:    MVI D, 0
+; CHECK-NEXT:    JMP LBB3_5
+; CHECK-NEXT:  LBB3_3:
 ; CHECK-NEXT:  LBB3_5:
-; CHECK-NEXT:    MVI A, 0
-; CHECK-NEXT:    JMP LBB3_7
-; CHECK-NEXT:  LBB3_6:
-; CHECK-NEXT:    MVI A, 1
-; CHECK-NEXT:  LBB3_7:
-; CHECK-NEXT:    LXI H, 4
+; CHECK-NEXT:    MOV A, D
+; CHECK-NEXT:    LXI H, 2
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    SPHL
-; CHECK-NEXT:    .cfi_adjust_cfa_offset 4294967292
+; CHECK-NEXT:    .cfi_adjust_cfa_offset 4294967294
 ; CHECK-NEXT:    RET
 entry:
   %res = call { i8, i1 } @llvm.smul.with.overflow.i8(i8 %a, i8 %b)

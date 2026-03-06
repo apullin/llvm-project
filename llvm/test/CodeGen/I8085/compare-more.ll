@@ -10,8 +10,7 @@ define i8 @cmp_slt_i8(i8 %a, i8 %b) {
 ; CHECK-NEXT:    LXI H, 3
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV B, M
-; CHECK-NEXT:    LXI H, 2
-; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    DCX H
 ; CHECK-NEXT:    MOV C, M
 ; CHECK-NEXT:    MOV A, C
 ; CHECK-NEXT:    XRA B
@@ -51,8 +50,7 @@ define i8 @cmp_sgt_i8(i8 %a, i8 %b) {
 ; CHECK-NEXT:    LXI H, 3
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV B, M
-; CHECK-NEXT:    LXI H, 2
-; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    DCX H
 ; CHECK-NEXT:    MOV C, M
 ; CHECK-NEXT:    MOV A, C
 ; CHECK-NEXT:    XRA B
@@ -92,14 +90,11 @@ define i8 @cmp_slt_i16(i16 %a, i16 %b) {
 ; CHECK-NEXT:    LXI H, 5
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV D, M
-; CHECK-NEXT:    LXI H, 4
-; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    DCX H
 ; CHECK-NEXT:    MOV E, M
-; CHECK-NEXT:    LXI H, 3
-; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    DCX H
 ; CHECK-NEXT:    MOV B, M
-; CHECK-NEXT:    LXI H, 2
-; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    DCX H
 ; CHECK-NEXT:    MOV C, M
 ; CHECK-NEXT:    MOV A, B
 ; CHECK-NEXT:    XRA D
@@ -138,14 +133,11 @@ define i8 @cmp_uge_i16(i16 %a, i16 %b) {
 ; CHECK-NEXT:    LXI H, 5
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV B, M
-; CHECK-NEXT:    LXI H, 4
-; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    DCX H
 ; CHECK-NEXT:    MOV C, M
-; CHECK-NEXT:    LXI H, 3
-; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    DCX H
 ; CHECK-NEXT:    MOV D, M
-; CHECK-NEXT:    LXI H, 2
-; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    DCX H
 ; CHECK-NEXT:    MOV E, M
 ; CHECK-NEXT:    MOV A, E
 ; CHECK-NEXT:    SUB C
@@ -175,8 +167,7 @@ define i8 @cmp_uge_i8(i8 %a, i8 %b) {
 ; CHECK-NEXT:    LXI H, 3
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV B, M
-; CHECK-NEXT:    LXI H, 2
-; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    DCX H
 ; CHECK-NEXT:    MOV A, M
 ; CHECK-NEXT:    SUB B
 ; CHECK-NEXT:    JNC LBB4_1

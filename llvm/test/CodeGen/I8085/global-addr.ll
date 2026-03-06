@@ -18,8 +18,7 @@ define void @store_globals(i8 %a, i16 %b) {
 ; CHECK-NEXT:    LXI H, 4
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV B, M
-; CHECK-NEXT:    LXI H, 3
-; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    DCX H
 ; CHECK-NEXT:    MOV C, M
 ; CHECK-NEXT:    LXI H, g16
 ; CHECK-NEXT:    MOV M, C

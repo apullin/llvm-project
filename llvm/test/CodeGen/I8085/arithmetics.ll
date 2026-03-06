@@ -8,14 +8,11 @@ define i16 @add_sub_1(i16,i16) {
 ; CHECK-NEXT:    LXI H, 5
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV D, M
-; CHECK-NEXT:    LXI H, 4
-; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    DCX H
 ; CHECK-NEXT:    MOV E, M
-; CHECK-NEXT:    LXI H, 3
-; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    DCX H
 ; CHECK-NEXT:    MOV B, M
-; CHECK-NEXT:    LXI H, 2
-; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    DCX H
 ; CHECK-NEXT:    MOV C, M
 ; CHECK-NEXT:    MOV A, C
 ; CHECK-NEXT:    ADD E
@@ -66,14 +63,11 @@ define i16 @add_sub_2(i16,i16) {
 ; CHECK-NEXT:    LXI H, 5
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV B, M
-; CHECK-NEXT:    LXI H, 4
-; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    DCX H
 ; CHECK-NEXT:    MOV C, M
-; CHECK-NEXT:    LXI H, 3
-; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    DCX H
 ; CHECK-NEXT:    MOV D, M
-; CHECK-NEXT:    LXI H, 2
-; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    DCX H
 ; CHECK-NEXT:    MOV E, M
 ; CHECK-NEXT:    MOV A, E
 ; CHECK-NEXT:    ADD C
@@ -117,13 +111,13 @@ define i8 @add_sub_3(i8,i8) {
 ; CHECK-NEXT:    LXI H, 3
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV A, M
-; CHECK-NEXT:    LXI H, 2
-; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    DCX H
 ; CHECK-NEXT:    MOV B, M
 ; CHECK-NEXT:    ADD B
 ; CHECK-NEXT:    MOV B, A
 ; CHECK-NEXT:    MVI A, 58
 ; CHECK-NEXT:    ADD B
+; CHECK-NEXT:    MOV B, A
 ; CHECK-NEXT:    RET
 
   %3 = add i8 %0, %1 ; 48
@@ -147,12 +141,12 @@ define i8 @add_sub_4(i8,i8) {
 ; CHECK-NEXT:    LXI H, 1
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    LXI H, 4
-; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    MOV B, M
 ; CHECK-NEXT:    ADD B
 ; CHECK-NEXT:    MOV B, A
-; CHECK-NEXT:    MOV A, B
 ; CHECK-NEXT:    XRI -1
 ; CHECK-NEXT:    MOV B, A
 ; CHECK-NEXT:    MVI A, 6
@@ -162,8 +156,8 @@ define i8 @add_sub_4(i8,i8) {
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV M, B
 ; CHECK-NEXT:    MOV A, B
-; CHECK-NEXT:    LXI H, 2
-; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    SPHL
 ; CHECK-NEXT:    .cfi_adjust_cfa_offset 4294967294
 ; CHECK-NEXT:    RET

@@ -13,18 +13,17 @@ define i16 @loadtest16() #0  {
 ; CHECK-NEXT:    LXI H, 1
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV M, B
-; CHECK-NEXT:    LXI H, 0
-; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    DCX H
 ; CHECK-NEXT:    MOV M, C
 ; CHECK-NEXT:    LXI D, 105
-; CHECK-NEXT:    LXI H, 3
-; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    MOV M, D
-; CHECK-NEXT:    LXI H, 2
-; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    DCX H
 ; CHECK-NEXT:    MOV M, E
-; CHECK-NEXT:    LXI H, 4
-; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    SPHL
 ; CHECK-NEXT:    .cfi_adjust_cfa_offset 4294967292
 ; CHECK-NEXT:    RET
@@ -54,11 +53,9 @@ define i8 @loadtest8()  {
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV M, A
 ; CHECK-NEXT:    MVI B, 55
-; CHECK-NEXT:    LXI H, 1
-; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    MOV M, B
-; CHECK-NEXT:    LXI H, 2
-; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    SPHL
 ; CHECK-NEXT:    .cfi_adjust_cfa_offset 4294967294
 ; CHECK-NEXT:    RET

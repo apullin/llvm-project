@@ -4,7 +4,7 @@
 define i8 @functionone(i8,i8) {
 ; CHECK-LABEL: functionone:
 ; CHECK:         .cfi_startproc
-; CHECK-NEXT:  LBB0_0:
+; CHECK-NEXT:  ; %bb.0:
 ; CHECK-NEXT:    LXI H, 3
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV C, M
@@ -29,7 +29,7 @@ define i8 @functionone(i8,i8) {
 define i16 @functiontwo(i16,i16) {
 ; CHECK-LABEL: functiontwo:
 ; CHECK:         .cfi_startproc
-; CHECK-NEXT:  LBB1_0:
+; CHECK-NEXT:  ; %bb.0:
 ; CHECK-NEXT:    LXI H, 5
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV D, M
@@ -74,7 +74,7 @@ define i16 @functiontwo(i16,i16) {
 define i8 @functionthree(i8,i8) {
 ; CHECK-LABEL: functionthree:
 ; CHECK:         .cfi_startproc
-; CHECK-NEXT:  LBB2_0:
+; CHECK-NEXT:  ; %bb.0:
 ; CHECK-NEXT:    LXI H, 3
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV A, M
@@ -100,7 +100,7 @@ define i8 @functionthree(i8,i8) {
 define i16 @functionfour(i16,i16) {
 ; CHECK-LABEL: functionfour:
 ; CHECK:         .cfi_startproc
-; CHECK-NEXT:  LBB3_0:
+; CHECK-NEXT:  ; %bb.0:
 ; CHECK-NEXT:    LXI H, 5
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV D, M

@@ -6,14 +6,14 @@
 define i8 @switch_many(i8 %x) {
 ; CHECK-LABEL: switch_many:
 ; CHECK:         .cfi_startproc
-; CHECK-NEXT:  LBB0_0:
+; CHECK-NEXT:  ; %bb.0: ; %entry
 ; CHECK-NEXT:    LXI H, 2
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV B, M
 ; CHECK-NEXT:    MOV A, B
 ; CHECK-NEXT:    CPI 8
 ; CHECK-NEXT:    JNC LBB0_10
-; CHECK-NEXT:  LBB0_1:
+; CHECK-NEXT:  ; %bb.1: ; %entry
 ; CHECK-NEXT:    MOV A, B
 ; CHECK-NEXT:    MOV C, A
 ; CHECK-NEXT:    MVI B, 0
@@ -23,7 +23,7 @@ define i8 @switch_many(i8 %x) {
 ; CHECK-NEXT:    MOV A, B
 ; CHECK-NEXT:    ADC B
 ; CHECK-NEXT:    MOV B, A
-; CHECK-NEXT:    LXI D, CPI0_0
+; CHECK-NEXT:    LXI D, JTI0_0
 ; CHECK-NEXT:    MOV A, C
 ; CHECK-NEXT:    ADD E
 ; CHECK-NEXT:    MOV C, A
@@ -38,31 +38,31 @@ define i8 @switch_many(i8 %x) {
 ; CHECK-NEXT:    MOV H, B
 ; CHECK-NEXT:    MOV L, C
 ; CHECK-NEXT:    PCHL
-; CHECK-NEXT:  LBB0_2:
+; CHECK-NEXT:  LBB0_2: ; %c0
 ; CHECK-NEXT:    MVI A, 10
 ; CHECK-NEXT:    RET
-; CHECK-NEXT:  LBB0_6:
+; CHECK-NEXT:  LBB0_6: ; %c4
 ; CHECK-NEXT:    MVI A, 14
 ; CHECK-NEXT:    RET
-; CHECK-NEXT:  LBB0_4:
+; CHECK-NEXT:  LBB0_4: ; %c2
 ; CHECK-NEXT:    MVI A, 12
 ; CHECK-NEXT:    RET
-; CHECK-NEXT:  LBB0_5:
+; CHECK-NEXT:  LBB0_5: ; %c3
 ; CHECK-NEXT:    MVI A, 13
 ; CHECK-NEXT:    RET
-; CHECK-NEXT:  LBB0_9:
+; CHECK-NEXT:  LBB0_9: ; %c7
 ; CHECK-NEXT:    MVI A, 17
 ; CHECK-NEXT:    RET
-; CHECK-NEXT:  LBB0_3:
+; CHECK-NEXT:  LBB0_3: ; %c1
 ; CHECK-NEXT:    MVI A, 11
 ; CHECK-NEXT:    RET
-; CHECK-NEXT:  LBB0_7:
+; CHECK-NEXT:  LBB0_7: ; %c5
 ; CHECK-NEXT:    MVI A, 15
 ; CHECK-NEXT:    RET
-; CHECK-NEXT:  LBB0_8:
+; CHECK-NEXT:  LBB0_8: ; %c6
 ; CHECK-NEXT:    MVI A, 16
 ; CHECK-NEXT:    RET
-; CHECK-NEXT:  LBB0_10:
+; CHECK-NEXT:  LBB0_10: ; %default
 ; CHECK-NEXT:    MVI A, 0
 ; CHECK-NEXT:    RET
 entry:

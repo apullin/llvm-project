@@ -4,7 +4,7 @@
 define i1 @cmp_sext_i8(i8 %a, i8 %b) {
 ; CHECK-LABEL: cmp_sext_i8:
 ; CHECK:         .cfi_startproc
-; CHECK-NEXT:  LBB0_0:
+; CHECK-NEXT:  ; %bb.0: ; %entry
 ; CHECK-NEXT:    LXI H, 3
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV A, M
@@ -21,7 +21,7 @@ define i1 @cmp_sext_i8(i8 %a, i8 %b) {
 ; CHECK-NEXT:    XRA B
 ; CHECK-NEXT:    ANI 128
 ; CHECK-NEXT:    JNZ LBB0_3
-; CHECK-NEXT:  LBB0_1:
+; CHECK-NEXT:  ; %bb.1: ; %entry
 ; CHECK-NEXT:    MOV A, E
 ; CHECK-NEXT:    SUB C
 ; CHECK-NEXT:    MOV C, A
@@ -29,14 +29,14 @@ define i1 @cmp_sext_i8(i8 %a, i8 %b) {
 ; CHECK-NEXT:    SBB B
 ; CHECK-NEXT:    MOV B, A
 ; CHECK-NEXT:    JNC LBB0_4
-; CHECK-NEXT:  LBB0_2:
+; CHECK-NEXT:  LBB0_2: ; %entry
 ; CHECK-NEXT:    MVI A, 1
 ; CHECK-NEXT:    RET
-; CHECK-NEXT:  LBB0_3:
+; CHECK-NEXT:  LBB0_3: ; %entry
 ; CHECK-NEXT:    MOV A, D
 ; CHECK-NEXT:    ANI 128
 ; CHECK-NEXT:    JNZ LBB0_2
-; CHECK-NEXT:  LBB0_4:
+; CHECK-NEXT:  LBB0_4: ; %entry
 ; CHECK-NEXT:    MVI A, 0
 ; CHECK-NEXT:    RET
 entry:
@@ -49,7 +49,7 @@ entry:
 define i1 @cmp_zext_i8(i8 %a, i8 %b) {
 ; CHECK-LABEL: cmp_zext_i8:
 ; CHECK:         .cfi_startproc
-; CHECK-NEXT:  LBB1_0:
+; CHECK-NEXT:  ; %bb.0: ; %entry
 ; CHECK-NEXT:    LXI H, 3
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV A, M
@@ -66,10 +66,10 @@ define i1 @cmp_zext_i8(i8 %a, i8 %b) {
 ; CHECK-NEXT:    SBB B
 ; CHECK-NEXT:    MOV B, A
 ; CHECK-NEXT:    JNC LBB1_2
-; CHECK-NEXT:  LBB1_1:
+; CHECK-NEXT:  ; %bb.1: ; %entry
 ; CHECK-NEXT:    MVI A, 1
 ; CHECK-NEXT:    RET
-; CHECK-NEXT:  LBB1_2:
+; CHECK-NEXT:  LBB1_2: ; %entry
 ; CHECK-NEXT:    MVI A, 0
 ; CHECK-NEXT:    RET
 entry:
@@ -82,7 +82,7 @@ entry:
 define i1 @cmp_mixed_i16(i16 %a, i16 %b) {
 ; CHECK-LABEL: cmp_mixed_i16:
 ; CHECK:         .cfi_startproc
-; CHECK-NEXT:  LBB2_0:
+; CHECK-NEXT:  ; %bb.0: ; %entry
 ; CHECK-NEXT:    LXI H, 2
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV A, M
@@ -100,7 +100,7 @@ define i1 @cmp_mixed_i16(i16 %a, i16 %b) {
 ; CHECK-NEXT:    XRA D
 ; CHECK-NEXT:    ANI 128
 ; CHECK-NEXT:    JNZ LBB2_8
-; CHECK-NEXT:  LBB2_2:
+; CHECK-NEXT:  ; %bb.2: ; %entry
 ; CHECK-NEXT:    MOV H, B
 ; CHECK-NEXT:    MOV L, C
 ; CHECK-NEXT:    MOV A, L
@@ -110,28 +110,28 @@ define i1 @cmp_mixed_i16(i16 %a, i16 %b) {
 ; CHECK-NEXT:    SBB D
 ; CHECK-NEXT:    MOV H, A
 ; CHECK-NEXT:    JC LBB2_3
-; CHECK-NEXT:  LBB2_4:
+; CHECK-NEXT:  ; %bb.4: ; %entry
 ; CHECK-NEXT:    MOV A, B
 ; CHECK-NEXT:    CMP D
 ; CHECK-NEXT:    JNZ LBB2_7
-; CHECK-NEXT:  LBB2_5:
+; CHECK-NEXT:  ; %bb.5: ; %entry
 ; CHECK-NEXT:    MOV A, C
 ; CHECK-NEXT:    CMP E
 ; CHECK-NEXT:    JNZ LBB2_7
-; CHECK-NEXT:  LBB2_6:
+; CHECK-NEXT:  ; %bb.6: ; %entry
 ; CHECK-NEXT:    JMP LBB2_3
-; CHECK-NEXT:  LBB2_8:
+; CHECK-NEXT:  LBB2_8: ; %entry
 ; CHECK-NEXT:    MOV A, B
 ; CHECK-NEXT:    ANI 128
 ; CHECK-NEXT:    JNZ LBB2_3
-; CHECK-NEXT:  LBB2_9:
+; CHECK-NEXT:  ; %bb.9: ; %entry
 ; CHECK-NEXT:    MVI A, 1
 ; CHECK-NEXT:    RET
-; CHECK-NEXT:  LBB2_3:
+; CHECK-NEXT:  LBB2_3: ; %entry
 ; CHECK-NEXT:    MVI A, 0
 ; CHECK-NEXT:    RET
-; CHECK-NEXT:  LBB2_7:
-; CHECK-NEXT:  LBB2_1:
+; CHECK-NEXT:  LBB2_7: ; %entry
+; CHECK-NEXT:  ; %bb.1: ; %entry
 ; CHECK-NEXT:    MVI A, 1
 ; CHECK-NEXT:    RET
 entry:

@@ -6,7 +6,7 @@
 define i8 @select_i8(i8 %a, i8 %b, i1 %c) {
 ; CHECK-LABEL: select_i8:
 ; CHECK:         .cfi_startproc
-; CHECK-NEXT:  LBB0_0:
+; CHECK-NEXT:  ; %bb.0: ; %entry
 ; CHECK-NEXT:    LXI H, 4
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV B, M
@@ -15,9 +15,9 @@ define i8 @select_i8(i8 %a, i8 %b, i1 %c) {
 ; CHECK-NEXT:    MOV B, A
 ; CHECK-NEXT:    ORA A
 ; CHECK-NEXT:    JZ LBB0_3
-; CHECK-NEXT:  LBB0_2:
+; CHECK-NEXT:  ; %bb.2:
 ; CHECK-NEXT:    DCX H
-; CHECK-NEXT:  LBB0_3:
+; CHECK-NEXT:  LBB0_3: ; %entry
 ; CHECK-NEXT:    DCX H
 ; CHECK-NEXT:    MOV B, H
 ; CHECK-NEXT:    MOV C, L

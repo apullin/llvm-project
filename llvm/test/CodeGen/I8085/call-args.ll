@@ -6,7 +6,7 @@
 define i8 @callee(i8 %a, i16 %b) {
 ; CHECK-LABEL: callee:
 ; CHECK:         .cfi_startproc
-; CHECK-NEXT:  LBB0_0:
+; CHECK-NEXT:  ; %bb.0: ; %entry
 ; CHECK-NEXT:    LXI H, 3
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV A, M
@@ -24,7 +24,7 @@ entry:
 define i8 @caller(i8 %x, i16 %y) {
 ; CHECK-LABEL: caller:
 ; CHECK:         .cfi_startproc
-; CHECK-NEXT:  LBB1_0:
+; CHECK-NEXT:  ; %bb.0: ; %entry
 ; CHECK-NEXT:    LXI H, 65533
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    SPHL

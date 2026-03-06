@@ -9,7 +9,7 @@
 define void @store_globals(i8 %a, i16 %b) {
 ; CHECK-LABEL: store_globals:
 ; CHECK:         .cfi_startproc
-; CHECK-NEXT:  LBB0_0:
+; CHECK-NEXT:  ; %bb.0: ; %entry
 ; CHECK-NEXT:    LXI H, 2
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV A, M
@@ -34,7 +34,7 @@ entry:
 define i16 @load_globals() {
 ; CHECK-LABEL: load_globals:
 ; CHECK:         .cfi_startproc
-; CHECK-NEXT:  LBB1_0:
+; CHECK-NEXT:  ; %bb.0: ; %entry
 ; CHECK-NEXT:    LXI H, g8
 ; CHECK-NEXT:    MOV A, M
 ; CHECK-NEXT:    MOV C, A

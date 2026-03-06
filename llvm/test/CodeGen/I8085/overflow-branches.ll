@@ -10,7 +10,7 @@ declare { i8, i1 } @llvm.usub.with.overflow.i8(i8, i8)
 define i8 @br_uadd_ov(i16 %a, i16 %b) {
 ; CHECK-LABEL: br_uadd_ov:
 ; CHECK:         .cfi_startproc
-; CHECK-NEXT:  LBB0_0:
+; CHECK-NEXT:  ; %bb.0: ; %entry
 ; CHECK-NEXT:    LXI H, 5
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV B, M
@@ -37,18 +37,18 @@ define i8 @br_uadd_ov(i16 %a, i16 %b) {
 ; CHECK-NEXT:    SBB D
 ; CHECK-NEXT:    MOV B, A
 ; CHECK-NEXT:    JNC LBB0_1
-; CHECK-NEXT:  LBB0_2:
+; CHECK-NEXT:  ; %bb.2: ; %entry
 ; CHECK-NEXT:    MVI A, 0
 ; CHECK-NEXT:    ORA A
 ; CHECK-NEXT:    JNZ LBB0_4
-; CHECK-NEXT:  LBB0_3:
+; CHECK-NEXT:  LBB0_3: ; %t
 ; CHECK-NEXT:    MVI A, 1
 ; CHECK-NEXT:    RET
-; CHECK-NEXT:  LBB0_1:
+; CHECK-NEXT:  LBB0_1: ; %entry
 ; CHECK-NEXT:    MVI A, 1
 ; CHECK-NEXT:    ORA A
 ; CHECK-NEXT:    JZ LBB0_3
-; CHECK-NEXT:  LBB0_4:
+; CHECK-NEXT:  LBB0_4: ; %f
 ; CHECK-NEXT:    MVI A, 0
 ; CHECK-NEXT:    RET
 entry:
@@ -66,7 +66,7 @@ f:
 define i8 @br_sadd_ov(i16 %a, i16 %b) {
 ; CHECK-LABEL: br_sadd_ov:
 ; CHECK:         .cfi_startproc
-; CHECK-NEXT:  LBB1_0:
+; CHECK-NEXT:  ; %bb.0: ; %entry
 ; CHECK-NEXT:    LXI H, 5
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV D, M
@@ -107,7 +107,7 @@ define i8 @br_sadd_ov(i16 %a, i16 %b) {
 ; CHECK-NEXT:    XRA D
 ; CHECK-NEXT:    ANI 128
 ; CHECK-NEXT:    JNZ LBB1_4
-; CHECK-NEXT:  LBB1_1:
+; CHECK-NEXT:  ; %bb.1: ; %entry
 ; CHECK-NEXT:    MOV H, B
 ; CHECK-NEXT:    MOV L, C
 ; CHECK-NEXT:    MOV A, L
@@ -117,30 +117,30 @@ define i8 @br_sadd_ov(i16 %a, i16 %b) {
 ; CHECK-NEXT:    SBB D
 ; CHECK-NEXT:    MOV H, A
 ; CHECK-NEXT:    JC LBB1_2
-; CHECK-NEXT:  LBB1_6:
+; CHECK-NEXT:  ; %bb.6: ; %entry
 ; CHECK-NEXT:    MOV A, B
 ; CHECK-NEXT:    CMP D
 ; CHECK-NEXT:    JNZ LBB1_12
-; CHECK-NEXT:  LBB1_7:
+; CHECK-NEXT:  ; %bb.7: ; %entry
 ; CHECK-NEXT:    MOV A, C
 ; CHECK-NEXT:    CMP E
 ; CHECK-NEXT:    JZ LBB1_2
-; CHECK-NEXT:  LBB1_12:
+; CHECK-NEXT:  LBB1_12: ; %entry
 ; CHECK-NEXT:    MVI A, 1
 ; CHECK-NEXT:    ORA A
 ; CHECK-NEXT:    JZ LBB1_3
-; CHECK-NEXT:  LBB1_10:
+; CHECK-NEXT:  LBB1_10: ; %f
 ; CHECK-NEXT:    MVI A, 0
 ; CHECK-NEXT:    RET
-; CHECK-NEXT:  LBB1_4:
+; CHECK-NEXT:  LBB1_4: ; %entry
 ; CHECK-NEXT:    MOV A, B
 ; CHECK-NEXT:    ANI 128
 ; CHECK-NEXT:    JZ LBB1_12
-; CHECK-NEXT:  LBB1_2:
+; CHECK-NEXT:  LBB1_2: ; %entry
 ; CHECK-NEXT:    MVI A, 0
 ; CHECK-NEXT:    ORA A
 ; CHECK-NEXT:    JNZ LBB1_10
-; CHECK-NEXT:  LBB1_3:
+; CHECK-NEXT:  LBB1_3: ; %t
 ; CHECK-NEXT:    MVI A, 1
 ; CHECK-NEXT:    RET
 entry:
@@ -158,7 +158,7 @@ f:
 define i8 @br_usub_ov(i8 %a, i8 %b) {
 ; CHECK-LABEL: br_usub_ov:
 ; CHECK:         .cfi_startproc
-; CHECK-NEXT:  LBB2_0:
+; CHECK-NEXT:  ; %bb.0: ; %entry
 ; CHECK-NEXT:    LXI H, 3
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV B, M
@@ -166,18 +166,18 @@ define i8 @br_usub_ov(i8 %a, i8 %b) {
 ; CHECK-NEXT:    MOV A, M
 ; CHECK-NEXT:    SUB B
 ; CHECK-NEXT:    JNC LBB2_1
-; CHECK-NEXT:  LBB2_3:
+; CHECK-NEXT:  ; %bb.3: ; %entry
 ; CHECK-NEXT:    MVI A, 0
 ; CHECK-NEXT:    ORA A
 ; CHECK-NEXT:    JNZ LBB2_5
-; CHECK-NEXT:  LBB2_4:
+; CHECK-NEXT:  LBB2_4: ; %t
 ; CHECK-NEXT:    MVI A, 1
 ; CHECK-NEXT:    RET
 ; CHECK-NEXT:  LBB2_1:
 ; CHECK-NEXT:    MVI A, 1
 ; CHECK-NEXT:    ORA A
 ; CHECK-NEXT:    JZ LBB2_4
-; CHECK-NEXT:  LBB2_5:
+; CHECK-NEXT:  LBB2_5: ; %f
 ; CHECK-NEXT:    MVI A, 0
 ; CHECK-NEXT:    RET
 entry:

@@ -45,6 +45,7 @@ add_llvm_target(I8085CodeGen
   MC
   I8085Desc
   I8085Info
+  Passes
   SelectionDAG
   Support
   Target

@@ -7,7 +7,7 @@ declare { i8, i1 } @llvm.smul.with.overflow.i8(i8, i8)
 define i16 @umul_ov_i16(i16 %a, i16 %b) {
 ; CHECK-LABEL: umul_ov_i16:
 ; CHECK:         .cfi_startproc
-; CHECK-NEXT:  LBB0_0:
+; CHECK-NEXT:  ; %bb.0: ; %entry
 ; CHECK-NEXT:    ; implicit-def: $iax
 ; CHECK-NEXT:    LXI H, 65528
 ; CHECK-NEXT:    DAD SP
@@ -93,7 +93,7 @@ entry:
 define i1 @umul_ov_flag(i16 %a, i16 %b) {
 ; CHECK-LABEL: umul_ov_flag:
 ; CHECK:         .cfi_startproc
-; CHECK-NEXT:  LBB1_0:
+; CHECK-NEXT:  ; %bb.0: ; %entry
 ; CHECK-NEXT:    ; implicit-def: $iax
 ; CHECK-NEXT:    LXI H, 65528
 ; CHECK-NEXT:    DAD SP
@@ -183,16 +183,16 @@ define i1 @umul_ov_flag(i16 %a, i16 %b) {
 ; CHECK-NEXT:    MOV A, D
 ; CHECK-NEXT:    CMP H
 ; CHECK-NEXT:    JNZ LBB1_3
-; CHECK-NEXT:  LBB1_1:
+; CHECK-NEXT:  ; %bb.1: ; %entry
 ; CHECK-NEXT:    MOV A, E
 ; CHECK-NEXT:    CMP L
 ; CHECK-NEXT:    JNZ LBB1_3
-; CHECK-NEXT:  LBB1_2:
-; CHECK-NEXT:  LBB1_4:
+; CHECK-NEXT:  ; %bb.2: ; %entry
+; CHECK-NEXT:  ; %bb.4: ; %entry
 ; CHECK-NEXT:    MVI B, 0
 ; CHECK-NEXT:    JMP LBB1_5
-; CHECK-NEXT:  LBB1_3:
-; CHECK-NEXT:  LBB1_5:
+; CHECK-NEXT:  LBB1_3: ; %entry
+; CHECK-NEXT:  LBB1_5: ; %entry
 ; CHECK-NEXT:    MOV A, B
 ; CHECK-NEXT:    LXI H, 8
 ; CHECK-NEXT:    DAD SP
@@ -208,7 +208,7 @@ entry:
 define i8 @smul_ov_i8(i8 %a, i8 %b) {
 ; CHECK-LABEL: smul_ov_i8:
 ; CHECK:         .cfi_startproc
-; CHECK-NEXT:  LBB2_0:
+; CHECK-NEXT:  ; %bb.0: ; %entry
 ; CHECK-NEXT:    LXI H, 65534
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    SPHL
@@ -239,7 +239,7 @@ entry:
 define i1 @smul_ov_flag(i8 %a, i8 %b) {
 ; CHECK-LABEL: smul_ov_flag:
 ; CHECK:         .cfi_startproc
-; CHECK-NEXT:  LBB3_0:
+; CHECK-NEXT:  ; %bb.0: ; %entry
 ; CHECK-NEXT:    LXI H, 65534
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    SPHL
@@ -264,16 +264,16 @@ define i1 @smul_ov_flag(i8 %a, i8 %b) {
 ; CHECK-NEXT:    MOV A, B
 ; CHECK-NEXT:    CMP H
 ; CHECK-NEXT:    JNZ LBB3_3
-; CHECK-NEXT:  LBB3_1:
+; CHECK-NEXT:  ; %bb.1: ; %entry
 ; CHECK-NEXT:    MOV A, C
 ; CHECK-NEXT:    CMP L
 ; CHECK-NEXT:    JNZ LBB3_3
-; CHECK-NEXT:  LBB3_2:
-; CHECK-NEXT:  LBB3_4:
+; CHECK-NEXT:  ; %bb.2: ; %entry
+; CHECK-NEXT:  ; %bb.4: ; %entry
 ; CHECK-NEXT:    MVI D, 0
 ; CHECK-NEXT:    JMP LBB3_5
-; CHECK-NEXT:  LBB3_3:
-; CHECK-NEXT:  LBB3_5:
+; CHECK-NEXT:  LBB3_3: ; %entry
+; CHECK-NEXT:  LBB3_5: ; %entry
 ; CHECK-NEXT:    MOV A, D
 ; CHECK-NEXT:    LXI H, 2
 ; CHECK-NEXT:    DAD SP

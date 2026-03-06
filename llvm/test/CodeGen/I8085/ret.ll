@@ -4,7 +4,7 @@
 define void @retvoid(i8* %x) {
 ; CHECK-LABEL: retvoid:
 ; CHECK:         .cfi_startproc
-; CHECK-NEXT:  LBB0_0:
+; CHECK-NEXT:  ; %bb.0:
 ; CHECK-NEXT:    RET
   ret void
 }
@@ -13,7 +13,7 @@ define void @retvoid(i8* %x) {
 define i8 @reteight() #0 {
 ; CHECK-LABEL: reteight:
 ; CHECK:         .cfi_startproc
-; CHECK-NEXT:  LBB1_0:
+; CHECK-NEXT:  ; %bb.0:
 ; CHECK-NEXT:    MVI A, 56
 ; CHECK-NEXT:    RET
   ret i8 56
@@ -22,7 +22,7 @@ define i8 @reteight() #0 {
 define i16 @retsixteen() {
 ; CHECK-LABEL: retsixteen:
 ; CHECK:         .cfi_startproc
-; CHECK-NEXT:  LBB2_0:
+; CHECK-NEXT:  ; %bb.0:
 ; CHECK-NEXT:    LXI B, 4660
 ; CHECK-NEXT:    RET
   ret i16 4660
@@ -31,7 +31,7 @@ define i16 @retsixteen() {
 define i32 @retthirtytwo() {
 ; CHECK-LABEL: retthirtytwo:
 ; CHECK:         .cfi_startproc
-; CHECK-NEXT:  LBB3_0:
+; CHECK-NEXT:  ; %bb.0:
 ; CHECK-NEXT:    ; implicit-def: $iax
 ; CHECK-NEXT:    LXI H, 65532
 ; CHECK-NEXT:    DAD SP
@@ -61,7 +61,7 @@ define i32 @retthirtytwo() {
 define i64 @retsixtyfour() {
 ; CHECK-LABEL: retsixtyfour:
 ; CHECK:         .cfi_startproc
-; CHECK-NEXT:  LBB4_0:
+; CHECK-NEXT:  ; %bb.0:
 ; CHECK-NEXT:    ; implicit-def: $iax
 ; CHECK-NEXT:    LXI H, 65532
 ; CHECK-NEXT:    DAD SP

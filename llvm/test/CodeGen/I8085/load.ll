@@ -4,7 +4,7 @@
 define i16 @loadtest16() #0  {
 ; CHECK-LABEL: loadtest16:
 ; CHECK:         .cfi_startproc
-; CHECK-NEXT:  LBB0_0:
+; CHECK-NEXT:  ; %bb.0:
 ; CHECK-NEXT:    LXI H, 65532
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    SPHL
@@ -43,7 +43,7 @@ define i16 @loadtest16() #0  {
 define i8 @loadtest8()  {
 ; CHECK-LABEL: loadtest8:
 ; CHECK:         .cfi_startproc
-; CHECK-NEXT:  LBB1_0:
+; CHECK-NEXT:  ; %bb.0:
 ; CHECK-NEXT:    LXI H, 65534
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    SPHL

@@ -4,7 +4,7 @@
 define i16 @add_sub_1(i16,i16) {
 ; CHECK-LABEL: add_sub_1:
 ; CHECK:         .cfi_startproc
-; CHECK-NEXT:  LBB0_0:
+; CHECK-NEXT:  ; %bb.0:
 ; CHECK-NEXT:    LXI H, 5
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV D, M
@@ -59,7 +59,7 @@ define i16 @add_sub_1(i16,i16) {
 define i16 @add_sub_2(i16,i16) {
 ; CHECK-LABEL: add_sub_2:
 ; CHECK:         .cfi_startproc
-; CHECK-NEXT:  LBB1_0:
+; CHECK-NEXT:  ; %bb.0:
 ; CHECK-NEXT:    LXI H, 5
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV B, M
@@ -107,7 +107,7 @@ define i16 @add_sub_2(i16,i16) {
 define i8 @add_sub_3(i8,i8) {
 ; CHECK-LABEL: add_sub_3:
 ; CHECK:         .cfi_startproc
-; CHECK-NEXT:  LBB2_0:
+; CHECK-NEXT:  ; %bb.0:
 ; CHECK-NEXT:    LXI H, 3
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV A, M
@@ -132,7 +132,7 @@ define i8 @add_sub_3(i8,i8) {
 define i8 @add_sub_4(i8,i8) {
 ; CHECK-LABEL: add_sub_4:
 ; CHECK:         .cfi_startproc
-; CHECK-NEXT:  LBB3_0:
+; CHECK-NEXT:  ; %bb.0:
 ; CHECK-NEXT:    LXI H, 65534
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    SPHL

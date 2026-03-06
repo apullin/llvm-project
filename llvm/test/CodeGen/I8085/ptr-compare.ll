@@ -6,7 +6,7 @@
 define i8 @ptr_eq(ptr %a, ptr %b) {
 ; CHECK-LABEL: ptr_eq:
 ; CHECK:         .cfi_startproc
-; CHECK-NEXT:  LBB0_0:
+; CHECK-NEXT:  ; %bb.0: ; %entry
 ; CHECK-NEXT:    LXI H, 5
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV D, M
@@ -24,16 +24,16 @@ define i8 @ptr_eq(ptr %a, ptr %b) {
 ; CHECK-NEXT:    MOV A, H
 ; CHECK-NEXT:    CMP D
 ; CHECK-NEXT:    JNZ LBB0_3
-; CHECK-NEXT:  LBB0_1:
+; CHECK-NEXT:  ; %bb.1: ; %entry
 ; CHECK-NEXT:    MOV A, L
 ; CHECK-NEXT:    CMP E
 ; CHECK-NEXT:    JNZ LBB0_3
-; CHECK-NEXT:  LBB0_2:
-; CHECK-NEXT:  LBB0_4:
+; CHECK-NEXT:  ; %bb.2: ; %entry
+; CHECK-NEXT:  ; %bb.4: ; %entry
 ; CHECK-NEXT:    MOV A, B
 ; CHECK-NEXT:    RET
-; CHECK-NEXT:  LBB0_3:
-; CHECK-NEXT:  LBB0_5:
+; CHECK-NEXT:  LBB0_3: ; %entry
+; CHECK-NEXT:  ; %bb.5: ; %entry
 ; CHECK-NEXT:    MVI B, 0
 ; CHECK-NEXT:    MOV A, B
 ; CHECK-NEXT:    RET
@@ -46,7 +46,7 @@ entry:
 define i8 @ptr_ult(ptr %a, ptr %b) {
 ; CHECK-LABEL: ptr_ult:
 ; CHECK:         .cfi_startproc
-; CHECK-NEXT:  LBB1_0:
+; CHECK-NEXT:  ; %bb.0: ; %entry
 ; CHECK-NEXT:    LXI H, 5
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV B, M
@@ -63,10 +63,10 @@ define i8 @ptr_ult(ptr %a, ptr %b) {
 ; CHECK-NEXT:    SBB B
 ; CHECK-NEXT:    MOV B, A
 ; CHECK-NEXT:    JNC LBB1_2
-; CHECK-NEXT:  LBB1_1:
+; CHECK-NEXT:  ; %bb.1: ; %entry
 ; CHECK-NEXT:    MVI A, 1
 ; CHECK-NEXT:    RET
-; CHECK-NEXT:  LBB1_2:
+; CHECK-NEXT:  LBB1_2: ; %entry
 ; CHECK-NEXT:    MVI A, 0
 ; CHECK-NEXT:    RET
 entry:

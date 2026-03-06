@@ -4,7 +4,7 @@
 define i16 @zext_i8(i8 %a) {
 ; CHECK-LABEL: zext_i8:
 ; CHECK:         .cfi_startproc
-; CHECK-NEXT:  LBB0_0:
+; CHECK-NEXT:  ; %bb.0:
 ; CHECK-NEXT:    LXI H, 2
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV A, M
@@ -18,7 +18,7 @@ define i16 @zext_i8(i8 %a) {
 define i16 @sext_i8(i8 %a) {
 ; CHECK-LABEL: sext_i8:
 ; CHECK:         .cfi_startproc
-; CHECK-NEXT:  LBB1_0:
+; CHECK-NEXT:  ; %bb.0:
 ; CHECK-NEXT:    LXI H, 2
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV A, M
@@ -34,7 +34,7 @@ define i16 @sext_i8(i8 %a) {
 define i8 @trunc_i16(i16 %a) {
 ; CHECK-LABEL: trunc_i16:
 ; CHECK:         .cfi_startproc
-; CHECK-NEXT:  LBB2_0:
+; CHECK-NEXT:  ; %bb.0:
 ; CHECK-NEXT:    LXI H, 2
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV A, M

@@ -6,7 +6,7 @@
 define i8 @br_eq_i32(i32 %a, i32 %b) {
 ; CHECK-LABEL: br_eq_i32:
 ; CHECK:         .cfi_startproc
-; CHECK-NEXT:  LBB0_0:
+; CHECK-NEXT:  ; %bb.0: ; %entry
 ; CHECK-NEXT:    ; implicit-def: $iax
 ; CHECK-NEXT:    ; implicit-def: $ibx
 ; CHECK-NEXT:    LXI H, 65528
@@ -57,7 +57,7 @@ define i8 @br_eq_i32(i32 %a, i32 %b) {
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    CMP M
 ; CHECK-NEXT:    JNZ LBB0_6
-; CHECK-NEXT:  LBB0_1:
+; CHECK-NEXT:  ; %bb.1: ; %entry
 ; CHECK-NEXT:    DCX H
 ; CHECK-NEXT:    DCX H
 ; CHECK-NEXT:    DCX H
@@ -66,7 +66,7 @@ define i8 @br_eq_i32(i32 %a, i32 %b) {
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    CMP M
 ; CHECK-NEXT:    JNZ LBB0_6
-; CHECK-NEXT:  LBB0_2:
+; CHECK-NEXT:  ; %bb.2: ; %entry
 ; CHECK-NEXT:    DCX H
 ; CHECK-NEXT:    DCX H
 ; CHECK-NEXT:    DCX H
@@ -75,7 +75,7 @@ define i8 @br_eq_i32(i32 %a, i32 %b) {
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    CMP M
 ; CHECK-NEXT:    JNZ LBB0_6
-; CHECK-NEXT:  LBB0_3:
+; CHECK-NEXT:  ; %bb.3: ; %entry
 ; CHECK-NEXT:    DCX H
 ; CHECK-NEXT:    DCX H
 ; CHECK-NEXT:    DCX H
@@ -84,18 +84,18 @@ define i8 @br_eq_i32(i32 %a, i32 %b) {
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    CMP M
 ; CHECK-NEXT:    JNZ LBB0_6
-; CHECK-NEXT:  LBB0_5:
+; CHECK-NEXT:  ; %bb.5: ; %entry
 ; CHECK-NEXT:    MVI B, 0
-; CHECK-NEXT:  LBB0_6:
+; CHECK-NEXT:  LBB0_6: ; %entry
 ; CHECK-NEXT:    MOV A, B
 ; CHECK-NEXT:    ORA A
 ; CHECK-NEXT:    JNZ LBB0_9
-; CHECK-NEXT:  LBB0_7:
+; CHECK-NEXT:  ; %bb.7: ; %t
 ; CHECK-NEXT:    MVI A, 1
 ; CHECK-NEXT:    JMP LBB0_8
-; CHECK-NEXT:  LBB0_9:
+; CHECK-NEXT:  LBB0_9: ; %f
 ; CHECK-NEXT:    MVI A, 0
-; CHECK-NEXT:  LBB0_8:
+; CHECK-NEXT:  LBB0_8: ; %t
 ; CHECK-NEXT:    LXI H, 8
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    SPHL
@@ -115,7 +115,7 @@ f:
 define i8 @br_ult_i32(i32 %a, i32 %b) {
 ; CHECK-LABEL: br_ult_i32:
 ; CHECK:         .cfi_startproc
-; CHECK-NEXT:  LBB1_0:
+; CHECK-NEXT:  ; %bb.0: ; %entry
 ; CHECK-NEXT:    ; implicit-def: $iax
 ; CHECK-NEXT:    ; implicit-def: $ibx
 ; CHECK-NEXT:    LXI H, 65528
@@ -164,7 +164,7 @@ define i8 @br_ult_i32(i32 %a, i32 %b) {
 ; CHECK-NEXT:    CMP M
 ; CHECK-NEXT:    JC LBB1_5
 ; CHECK-NEXT:    JNZ LBB1_8
-; CHECK-NEXT:  LBB1_1:
+; CHECK-NEXT:  ; %bb.1: ; %entry
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    INX H
@@ -174,7 +174,7 @@ define i8 @br_ult_i32(i32 %a, i32 %b) {
 ; CHECK-NEXT:    CMP M
 ; CHECK-NEXT:    JC LBB1_5
 ; CHECK-NEXT:    JNZ LBB1_8
-; CHECK-NEXT:  LBB1_2:
+; CHECK-NEXT:  ; %bb.2: ; %entry
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    INX H
@@ -184,7 +184,7 @@ define i8 @br_ult_i32(i32 %a, i32 %b) {
 ; CHECK-NEXT:    CMP M
 ; CHECK-NEXT:    JC LBB1_5
 ; CHECK-NEXT:    JNZ LBB1_8
-; CHECK-NEXT:  LBB1_3:
+; CHECK-NEXT:  ; %bb.3: ; %entry
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    INX H
@@ -195,20 +195,20 @@ define i8 @br_ult_i32(i32 %a, i32 %b) {
 ; CHECK-NEXT:    JC LBB1_5
 ; CHECK-NEXT:    JNZ LBB1_8
 ; CHECK-NEXT:    JMP LBB1_8
-; CHECK-NEXT:  LBB1_5:
+; CHECK-NEXT:  LBB1_5: ; %entry
 ; CHECK-NEXT:    MVI A, 0
 ; CHECK-NEXT:    ORA A
 ; CHECK-NEXT:    JZ LBB1_9
-; CHECK-NEXT:  LBB1_6:
+; CHECK-NEXT:  LBB1_6: ; %f
 ; CHECK-NEXT:    MVI A, 0
 ; CHECK-NEXT:    JMP LBB1_10
-; CHECK-NEXT:  LBB1_8:
+; CHECK-NEXT:  LBB1_8: ; %entry
 ; CHECK-NEXT:    MVI A, 1
 ; CHECK-NEXT:    ORA A
 ; CHECK-NEXT:    JNZ LBB1_6
-; CHECK-NEXT:  LBB1_9:
+; CHECK-NEXT:  LBB1_9: ; %t
 ; CHECK-NEXT:    MVI A, 1
-; CHECK-NEXT:  LBB1_10:
+; CHECK-NEXT:  LBB1_10: ; %t
 ; CHECK-NEXT:    LXI H, 8
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    SPHL
@@ -228,7 +228,7 @@ f:
 define i8 @br_slt_i32(i32 %a, i32 %b) {
 ; CHECK-LABEL: br_slt_i32:
 ; CHECK:         .cfi_startproc
-; CHECK-NEXT:  LBB2_0:
+; CHECK-NEXT:  ; %bb.0: ; %entry
 ; CHECK-NEXT:    ; implicit-def: $iax
 ; CHECK-NEXT:    ; implicit-def: $ibx
 ; CHECK-NEXT:    LXI H, 65528
@@ -279,14 +279,14 @@ define i8 @br_slt_i32(i32 %a, i32 %b) {
 ; CHECK-NEXT:    XRA M
 ; CHECK-NEXT:    ANI 128
 ; CHECK-NEXT:    JNZ LBB2_8
-; CHECK-NEXT:  LBB2_1:
+; CHECK-NEXT:  ; %bb.1: ; %entry
 ; CHECK-NEXT:    MOV A, M
 ; CHECK-NEXT:    LXI H, 3
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    CMP M
 ; CHECK-NEXT:    JC LBB2_6
 ; CHECK-NEXT:    JNZ LBB2_11
-; CHECK-NEXT:  LBB2_2:
+; CHECK-NEXT:  ; %bb.2: ; %entry
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    INX H
@@ -296,7 +296,7 @@ define i8 @br_slt_i32(i32 %a, i32 %b) {
 ; CHECK-NEXT:    CMP M
 ; CHECK-NEXT:    JC LBB2_6
 ; CHECK-NEXT:    JNZ LBB2_11
-; CHECK-NEXT:  LBB2_3:
+; CHECK-NEXT:  ; %bb.3: ; %entry
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    INX H
@@ -306,7 +306,7 @@ define i8 @br_slt_i32(i32 %a, i32 %b) {
 ; CHECK-NEXT:    CMP M
 ; CHECK-NEXT:    JC LBB2_6
 ; CHECK-NEXT:    JNZ LBB2_11
-; CHECK-NEXT:  LBB2_4:
+; CHECK-NEXT:  ; %bb.4: ; %entry
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    INX H
@@ -316,26 +316,26 @@ define i8 @br_slt_i32(i32 %a, i32 %b) {
 ; CHECK-NEXT:    CMP M
 ; CHECK-NEXT:    JC LBB2_6
 ; CHECK-NEXT:    JNZ LBB2_11
-; CHECK-NEXT:  LBB2_11:
+; CHECK-NEXT:  LBB2_11: ; %entry
 ; CHECK-NEXT:    MVI A, 1
 ; CHECK-NEXT:    ORA A
 ; CHECK-NEXT:    JNZ LBB2_7
-; CHECK-NEXT:  LBB2_12:
+; CHECK-NEXT:  LBB2_12: ; %t
 ; CHECK-NEXT:    MVI A, 1
 ; CHECK-NEXT:    JMP LBB2_13
-; CHECK-NEXT:  LBB2_8:
+; CHECK-NEXT:  LBB2_8: ; %entry
 ; CHECK-NEXT:    LXI H, 3
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV A, M
 ; CHECK-NEXT:    ANI 128
 ; CHECK-NEXT:    JNZ LBB2_11
-; CHECK-NEXT:  LBB2_6:
+; CHECK-NEXT:  LBB2_6: ; %entry
 ; CHECK-NEXT:    MVI A, 0
 ; CHECK-NEXT:    ORA A
 ; CHECK-NEXT:    JZ LBB2_12
-; CHECK-NEXT:  LBB2_7:
+; CHECK-NEXT:  LBB2_7: ; %f
 ; CHECK-NEXT:    MVI A, 0
-; CHECK-NEXT:  LBB2_13:
+; CHECK-NEXT:  LBB2_13: ; %t
 ; CHECK-NEXT:    LXI H, 8
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    SPHL
@@ -355,7 +355,7 @@ f:
 define i8 @br_eq_i64(i64 %a, i64 %b) {
 ; CHECK-LABEL: br_eq_i64:
 ; CHECK:         .cfi_startproc
-; CHECK-NEXT:  LBB3_0:
+; CHECK-NEXT:  ; %bb.0: ; %entry
 ; CHECK-NEXT:    ; implicit-def: $iax
 ; CHECK-NEXT:    ; implicit-def: $ibx
 ; CHECK-NEXT:    LXI H, 65520
@@ -618,7 +618,7 @@ define i8 @br_eq_i64(i64 %a, i64 %b) {
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    CMP M
 ; CHECK-NEXT:    JNZ LBB3_6
-; CHECK-NEXT:  LBB3_1:
+; CHECK-NEXT:  ; %bb.1: ; %entry
 ; CHECK-NEXT:    DCX H
 ; CHECK-NEXT:    DCX H
 ; CHECK-NEXT:    DCX H
@@ -627,7 +627,7 @@ define i8 @br_eq_i64(i64 %a, i64 %b) {
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    CMP M
 ; CHECK-NEXT:    JNZ LBB3_6
-; CHECK-NEXT:  LBB3_2:
+; CHECK-NEXT:  ; %bb.2: ; %entry
 ; CHECK-NEXT:    DCX H
 ; CHECK-NEXT:    DCX H
 ; CHECK-NEXT:    DCX H
@@ -636,7 +636,7 @@ define i8 @br_eq_i64(i64 %a, i64 %b) {
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    CMP M
 ; CHECK-NEXT:    JNZ LBB3_6
-; CHECK-NEXT:  LBB3_3:
+; CHECK-NEXT:  ; %bb.3: ; %entry
 ; CHECK-NEXT:    DCX H
 ; CHECK-NEXT:    DCX H
 ; CHECK-NEXT:    DCX H
@@ -645,18 +645,18 @@ define i8 @br_eq_i64(i64 %a, i64 %b) {
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    CMP M
 ; CHECK-NEXT:    JNZ LBB3_6
-; CHECK-NEXT:  LBB3_5:
+; CHECK-NEXT:  ; %bb.5: ; %entry
 ; CHECK-NEXT:    MVI B, 0
-; CHECK-NEXT:  LBB3_6:
+; CHECK-NEXT:  LBB3_6: ; %entry
 ; CHECK-NEXT:    MOV A, B
 ; CHECK-NEXT:    ORA A
 ; CHECK-NEXT:    JNZ LBB3_9
-; CHECK-NEXT:  LBB3_7:
+; CHECK-NEXT:  ; %bb.7: ; %t
 ; CHECK-NEXT:    MVI A, 1
 ; CHECK-NEXT:    JMP LBB3_8
-; CHECK-NEXT:  LBB3_9:
+; CHECK-NEXT:  LBB3_9: ; %f
 ; CHECK-NEXT:    MVI A, 0
-; CHECK-NEXT:  LBB3_8:
+; CHECK-NEXT:  LBB3_8: ; %t
 ; CHECK-NEXT:    LXI H, 16
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    SPHL
@@ -676,7 +676,7 @@ f:
 define i8 @br_ult_i64(i64 %a, i64 %b) {
 ; CHECK-LABEL: br_ult_i64:
 ; CHECK:         .cfi_startproc
-; CHECK-NEXT:  LBB4_0:
+; CHECK-NEXT:  ; %bb.0: ; %entry
 ; CHECK-NEXT:    ; implicit-def: $iax
 ; CHECK-NEXT:    ; implicit-def: $ibx
 ; CHECK-NEXT:    LXI H, 65520
@@ -766,7 +766,7 @@ define i8 @br_ult_i64(i64 %a, i64 %b) {
 ; CHECK-NEXT:    CMP M
 ; CHECK-NEXT:    JC LBB4_5
 ; CHECK-NEXT:    JNZ LBB4_7
-; CHECK-NEXT:  LBB4_1:
+; CHECK-NEXT:  ; %bb.1: ; %entry
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    INX H
@@ -776,7 +776,7 @@ define i8 @br_ult_i64(i64 %a, i64 %b) {
 ; CHECK-NEXT:    CMP M
 ; CHECK-NEXT:    JC LBB4_5
 ; CHECK-NEXT:    JNZ LBB4_7
-; CHECK-NEXT:  LBB4_2:
+; CHECK-NEXT:  ; %bb.2: ; %entry
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    INX H
@@ -786,7 +786,7 @@ define i8 @br_ult_i64(i64 %a, i64 %b) {
 ; CHECK-NEXT:    CMP M
 ; CHECK-NEXT:    JC LBB4_5
 ; CHECK-NEXT:    JNZ LBB4_7
-; CHECK-NEXT:  LBB4_3:
+; CHECK-NEXT:  ; %bb.3: ; %entry
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    INX H
@@ -797,12 +797,12 @@ define i8 @br_ult_i64(i64 %a, i64 %b) {
 ; CHECK-NEXT:    JC LBB4_5
 ; CHECK-NEXT:    JNZ LBB4_7
 ; CHECK-NEXT:    JMP LBB4_7
-; CHECK-NEXT:  LBB4_5:
+; CHECK-NEXT:  LBB4_5: ; %entry
 ; CHECK-NEXT:    MVI B, 0
 ; CHECK-NEXT:    JMP LBB4_8
-; CHECK-NEXT:  LBB4_7:
+; CHECK-NEXT:  LBB4_7: ; %entry
 ; CHECK-NEXT:    MVI B, 1
-; CHECK-NEXT:  LBB4_8:
+; CHECK-NEXT:  LBB4_8: ; %entry
 ; CHECK-NEXT:    LXI H, 26
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV A, M
@@ -857,7 +857,7 @@ define i8 @br_ult_i64(i64 %a, i64 %b) {
 ; CHECK-NEXT:    CMP M
 ; CHECK-NEXT:    JC LBB4_13
 ; CHECK-NEXT:    JNZ LBB4_15
-; CHECK-NEXT:  LBB4_9:
+; CHECK-NEXT:  ; %bb.9: ; %entry
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    INX H
@@ -867,7 +867,7 @@ define i8 @br_ult_i64(i64 %a, i64 %b) {
 ; CHECK-NEXT:    CMP M
 ; CHECK-NEXT:    JC LBB4_13
 ; CHECK-NEXT:    JNZ LBB4_15
-; CHECK-NEXT:  LBB4_10:
+; CHECK-NEXT:  ; %bb.10: ; %entry
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    INX H
@@ -877,7 +877,7 @@ define i8 @br_ult_i64(i64 %a, i64 %b) {
 ; CHECK-NEXT:    CMP M
 ; CHECK-NEXT:    JC LBB4_13
 ; CHECK-NEXT:    JNZ LBB4_15
-; CHECK-NEXT:  LBB4_11:
+; CHECK-NEXT:  ; %bb.11: ; %entry
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    INX H
@@ -888,12 +888,12 @@ define i8 @br_ult_i64(i64 %a, i64 %b) {
 ; CHECK-NEXT:    JC LBB4_13
 ; CHECK-NEXT:    JNZ LBB4_15
 ; CHECK-NEXT:    JMP LBB4_15
-; CHECK-NEXT:  LBB4_13:
+; CHECK-NEXT:  LBB4_13: ; %entry
 ; CHECK-NEXT:    MVI C, 0
 ; CHECK-NEXT:    JMP LBB4_16
-; CHECK-NEXT:  LBB4_15:
+; CHECK-NEXT:  LBB4_15: ; %entry
 ; CHECK-NEXT:    MVI C, 1
-; CHECK-NEXT:  LBB4_16:
+; CHECK-NEXT:  LBB4_16: ; %entry
 ; CHECK-NEXT:    MVI D, 1
 ; CHECK-NEXT:    LXI H, 12
 ; CHECK-NEXT:    DAD SP
@@ -952,7 +952,7 @@ define i8 @br_ult_i64(i64 %a, i64 %b) {
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    CMP M
 ; CHECK-NEXT:    JNZ LBB4_21
-; CHECK-NEXT:  LBB4_17:
+; CHECK-NEXT:  ; %bb.17: ; %entry
 ; CHECK-NEXT:    DCX H
 ; CHECK-NEXT:    DCX H
 ; CHECK-NEXT:    DCX H
@@ -961,7 +961,7 @@ define i8 @br_ult_i64(i64 %a, i64 %b) {
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    CMP M
 ; CHECK-NEXT:    JNZ LBB4_21
-; CHECK-NEXT:  LBB4_18:
+; CHECK-NEXT:  ; %bb.18: ; %entry
 ; CHECK-NEXT:    DCX H
 ; CHECK-NEXT:    DCX H
 ; CHECK-NEXT:    DCX H
@@ -970,7 +970,7 @@ define i8 @br_ult_i64(i64 %a, i64 %b) {
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    CMP M
 ; CHECK-NEXT:    JNZ LBB4_21
-; CHECK-NEXT:  LBB4_19:
+; CHECK-NEXT:  ; %bb.19: ; %entry
 ; CHECK-NEXT:    DCX H
 ; CHECK-NEXT:    DCX H
 ; CHECK-NEXT:    DCX H
@@ -979,24 +979,24 @@ define i8 @br_ult_i64(i64 %a, i64 %b) {
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    CMP M
 ; CHECK-NEXT:    JZ LBB4_22
-; CHECK-NEXT:  LBB4_21:
+; CHECK-NEXT:  LBB4_21: ; %entry
 ; CHECK-NEXT:    MVI D, 0
-; CHECK-NEXT:  LBB4_22:
+; CHECK-NEXT:  LBB4_22: ; %entry
 ; CHECK-NEXT:    MOV A, D
 ; CHECK-NEXT:    ORA A
 ; CHECK-NEXT:    JNZ LBB4_24
-; CHECK-NEXT:  LBB4_23:
+; CHECK-NEXT:  ; %bb.23: ; %entry
 ; CHECK-NEXT:    MOV C, B
-; CHECK-NEXT:  LBB4_24:
+; CHECK-NEXT:  LBB4_24: ; %entry
 ; CHECK-NEXT:    MOV A, C
 ; CHECK-NEXT:    ORA A
 ; CHECK-NEXT:    JNZ LBB4_25
-; CHECK-NEXT:  LBB4_27:
+; CHECK-NEXT:  ; %bb.27: ; %t
 ; CHECK-NEXT:    MVI A, 1
 ; CHECK-NEXT:    JMP LBB4_28
-; CHECK-NEXT:  LBB4_25:
+; CHECK-NEXT:  LBB4_25: ; %f
 ; CHECK-NEXT:    MVI A, 0
-; CHECK-NEXT:  LBB4_28:
+; CHECK-NEXT:  LBB4_28: ; %t
 ; CHECK-NEXT:    LXI H, 16
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    SPHL
@@ -1016,7 +1016,7 @@ f:
 define i8 @br_slt_i64(i64 %a, i64 %b) {
 ; CHECK-LABEL: br_slt_i64:
 ; CHECK:         .cfi_startproc
-; CHECK-NEXT:  LBB5_0:
+; CHECK-NEXT:  ; %bb.0: ; %entry
 ; CHECK-NEXT:    ; implicit-def: $iax
 ; CHECK-NEXT:    ; implicit-def: $ibx
 ; CHECK-NEXT:    LXI H, 65520
@@ -1123,14 +1123,14 @@ define i8 @br_slt_i64(i64 %a, i64 %b) {
 ; CHECK-NEXT:    XRA M
 ; CHECK-NEXT:    ANI 128
 ; CHECK-NEXT:    JNZ LBB5_6
-; CHECK-NEXT:  LBB5_1:
+; CHECK-NEXT:  ; %bb.1: ; %entry
 ; CHECK-NEXT:    MOV A, M
 ; CHECK-NEXT:    LXI H, 3
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    CMP M
 ; CHECK-NEXT:    JC LBB5_7
 ; CHECK-NEXT:    JNZ LBB5_10
-; CHECK-NEXT:  LBB5_2:
+; CHECK-NEXT:  ; %bb.2: ; %entry
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    INX H
@@ -1140,7 +1140,7 @@ define i8 @br_slt_i64(i64 %a, i64 %b) {
 ; CHECK-NEXT:    CMP M
 ; CHECK-NEXT:    JC LBB5_7
 ; CHECK-NEXT:    JNZ LBB5_10
-; CHECK-NEXT:  LBB5_3:
+; CHECK-NEXT:  ; %bb.3: ; %entry
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    INX H
@@ -1150,7 +1150,7 @@ define i8 @br_slt_i64(i64 %a, i64 %b) {
 ; CHECK-NEXT:    CMP M
 ; CHECK-NEXT:    JC LBB5_7
 ; CHECK-NEXT:    JNZ LBB5_10
-; CHECK-NEXT:  LBB5_4:
+; CHECK-NEXT:  ; %bb.4: ; %entry
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    INX H
@@ -1161,15 +1161,15 @@ define i8 @br_slt_i64(i64 %a, i64 %b) {
 ; CHECK-NEXT:    JC LBB5_7
 ; CHECK-NEXT:    JNZ LBB5_10
 ; CHECK-NEXT:    JMP LBB5_10
-; CHECK-NEXT:  LBB5_6:
+; CHECK-NEXT:  LBB5_6: ; %entry
 ; CHECK-NEXT:    LXI H, 3
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV A, M
 ; CHECK-NEXT:    ANI 128
 ; CHECK-NEXT:    JNZ LBB5_10
-; CHECK-NEXT:  LBB5_7:
+; CHECK-NEXT:  LBB5_7: ; %entry
 ; CHECK-NEXT:    MVI B, 0
-; CHECK-NEXT:  LBB5_10:
+; CHECK-NEXT:  LBB5_10: ; %entry
 ; CHECK-NEXT:    LXI H, 26
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV A, M
@@ -1224,7 +1224,7 @@ define i8 @br_slt_i64(i64 %a, i64 %b) {
 ; CHECK-NEXT:    CMP M
 ; CHECK-NEXT:    JC LBB5_15
 ; CHECK-NEXT:    JNZ LBB5_17
-; CHECK-NEXT:  LBB5_11:
+; CHECK-NEXT:  ; %bb.11: ; %entry
 ; CHECK-NEXT:    LXI H, 2
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV A, M
@@ -1233,7 +1233,7 @@ define i8 @br_slt_i64(i64 %a, i64 %b) {
 ; CHECK-NEXT:    CMP M
 ; CHECK-NEXT:    JC LBB5_15
 ; CHECK-NEXT:    JNZ LBB5_17
-; CHECK-NEXT:  LBB5_12:
+; CHECK-NEXT:  ; %bb.12: ; %entry
 ; CHECK-NEXT:    LXI H, 1
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV A, M
@@ -1242,7 +1242,7 @@ define i8 @br_slt_i64(i64 %a, i64 %b) {
 ; CHECK-NEXT:    CMP M
 ; CHECK-NEXT:    JC LBB5_15
 ; CHECK-NEXT:    JNZ LBB5_17
-; CHECK-NEXT:  LBB5_13:
+; CHECK-NEXT:  ; %bb.13: ; %entry
 ; CHECK-NEXT:    LXI H, 0
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV A, M
@@ -1252,12 +1252,12 @@ define i8 @br_slt_i64(i64 %a, i64 %b) {
 ; CHECK-NEXT:    JC LBB5_15
 ; CHECK-NEXT:    JNZ LBB5_17
 ; CHECK-NEXT:    JMP LBB5_17
-; CHECK-NEXT:  LBB5_15:
+; CHECK-NEXT:  LBB5_15: ; %entry
 ; CHECK-NEXT:    MVI C, 0
 ; CHECK-NEXT:    JMP LBB5_18
-; CHECK-NEXT:  LBB5_17:
+; CHECK-NEXT:  LBB5_17: ; %entry
 ; CHECK-NEXT:    MVI C, 1
-; CHECK-NEXT:  LBB5_18:
+; CHECK-NEXT:  LBB5_18: ; %entry
 ; CHECK-NEXT:    MVI D, 1
 ; CHECK-NEXT:    LXI H, 12
 ; CHECK-NEXT:    DAD SP
@@ -1316,7 +1316,7 @@ define i8 @br_slt_i64(i64 %a, i64 %b) {
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    CMP M
 ; CHECK-NEXT:    JNZ LBB5_23
-; CHECK-NEXT:  LBB5_19:
+; CHECK-NEXT:  ; %bb.19: ; %entry
 ; CHECK-NEXT:    DCX H
 ; CHECK-NEXT:    DCX H
 ; CHECK-NEXT:    DCX H
@@ -1325,7 +1325,7 @@ define i8 @br_slt_i64(i64 %a, i64 %b) {
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    CMP M
 ; CHECK-NEXT:    JNZ LBB5_23
-; CHECK-NEXT:  LBB5_20:
+; CHECK-NEXT:  ; %bb.20: ; %entry
 ; CHECK-NEXT:    DCX H
 ; CHECK-NEXT:    DCX H
 ; CHECK-NEXT:    DCX H
@@ -1334,7 +1334,7 @@ define i8 @br_slt_i64(i64 %a, i64 %b) {
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    CMP M
 ; CHECK-NEXT:    JNZ LBB5_23
-; CHECK-NEXT:  LBB5_21:
+; CHECK-NEXT:  ; %bb.21: ; %entry
 ; CHECK-NEXT:    DCX H
 ; CHECK-NEXT:    DCX H
 ; CHECK-NEXT:    DCX H
@@ -1343,24 +1343,24 @@ define i8 @br_slt_i64(i64 %a, i64 %b) {
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    CMP M
 ; CHECK-NEXT:    JZ LBB5_24
-; CHECK-NEXT:  LBB5_23:
+; CHECK-NEXT:  LBB5_23: ; %entry
 ; CHECK-NEXT:    MVI D, 0
-; CHECK-NEXT:  LBB5_24:
+; CHECK-NEXT:  LBB5_24: ; %entry
 ; CHECK-NEXT:    MOV A, D
 ; CHECK-NEXT:    ORA A
 ; CHECK-NEXT:    JNZ LBB5_26
-; CHECK-NEXT:  LBB5_25:
+; CHECK-NEXT:  ; %bb.25: ; %entry
 ; CHECK-NEXT:    MOV C, B
-; CHECK-NEXT:  LBB5_26:
+; CHECK-NEXT:  LBB5_26: ; %entry
 ; CHECK-NEXT:    MOV A, C
 ; CHECK-NEXT:    ORA A
 ; CHECK-NEXT:    JNZ LBB5_27
-; CHECK-NEXT:  LBB5_29:
+; CHECK-NEXT:  ; %bb.29: ; %t
 ; CHECK-NEXT:    MVI A, 1
 ; CHECK-NEXT:    JMP LBB5_30
-; CHECK-NEXT:  LBB5_27:
+; CHECK-NEXT:  LBB5_27: ; %f
 ; CHECK-NEXT:    MVI A, 0
-; CHECK-NEXT:  LBB5_30:
+; CHECK-NEXT:  LBB5_30: ; %t
 ; CHECK-NEXT:    LXI H, 16
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    SPHL

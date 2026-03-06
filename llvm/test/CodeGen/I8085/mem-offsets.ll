@@ -6,7 +6,7 @@
 define i8 @stack_large_i8() {
 ; CHECK-LABEL: stack_large_i8:
 ; CHECK:         .cfi_startproc
-; CHECK-NEXT:  LBB0_0:
+; CHECK-NEXT:  ; %bb.0: ; %entry
 ; CHECK-NEXT:    LXI H, 65024
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    SPHL
@@ -35,7 +35,7 @@ entry:
 define i16 @stack_large_i16() {
 ; CHECK-LABEL: stack_large_i16:
 ; CHECK:         .cfi_startproc
-; CHECK-NEXT:  LBB1_0:
+; CHECK-NEXT:  ; %bb.0: ; %entry
 ; CHECK-NEXT:    LXI H, 65024
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    SPHL
@@ -70,7 +70,7 @@ entry:
 define i8 @stack_global_mix(i8 %x) {
 ; CHECK-LABEL: stack_global_mix:
 ; CHECK:         .cfi_startproc
-; CHECK-NEXT:  LBB2_0:
+; CHECK-NEXT:  ; %bb.0: ; %entry
 ; CHECK-NEXT:    LXI H, 65136
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    SPHL

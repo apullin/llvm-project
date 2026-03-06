@@ -6,31 +6,31 @@
 define i8 @switch_i8(i8 %x) {
 ; CHECK-LABEL: switch_i8:
 ; CHECK:         .cfi_startproc
-; CHECK-NEXT:  LBB0_0:
+; CHECK-NEXT:  ; %bb.0: ; %entry
 ; CHECK-NEXT:    LXI H, 2
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV B, M
 ; CHECK-NEXT:    MOV A, B
 ; CHECK-NEXT:    CPI 9
 ; CHECK-NEXT:    JZ LBB0_5
-; CHECK-NEXT:  LBB0_1:
+; CHECK-NEXT:  ; %bb.1: ; %entry
 ; CHECK-NEXT:    MOV A, B
 ; CHECK-NEXT:    CPI 5
 ; CHECK-NEXT:    JZ LBB0_4
-; CHECK-NEXT:  LBB0_2:
+; CHECK-NEXT:  ; %bb.2: ; %entry
 ; CHECK-NEXT:    MOV A, B
 ; CHECK-NEXT:    CPI 0
 ; CHECK-NEXT:    JNZ LBB0_6
-; CHECK-NEXT:  LBB0_3:
+; CHECK-NEXT:  ; %bb.3: ; %case0
 ; CHECK-NEXT:    MVI A, 0
 ; CHECK-NEXT:    RET
-; CHECK-NEXT:  LBB0_4:
+; CHECK-NEXT:  LBB0_4: ; %case5
 ; CHECK-NEXT:    MVI A, 5
 ; CHECK-NEXT:    RET
-; CHECK-NEXT:  LBB0_5:
+; CHECK-NEXT:  LBB0_5: ; %case9
 ; CHECK-NEXT:    MVI A, 9
 ; CHECK-NEXT:    RET
-; CHECK-NEXT:  LBB0_6:
+; CHECK-NEXT:  LBB0_6: ; %default
 ; CHECK-NEXT:    MVI A, 1
 ; CHECK-NEXT:    RET
 entry:

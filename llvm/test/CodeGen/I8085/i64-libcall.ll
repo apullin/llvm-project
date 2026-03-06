@@ -4,7 +4,7 @@
 define i64 @mul64(i64 %a, i64 %b) {
 ; CHECK-LABEL: mul64:
 ; CHECK:         .cfi_startproc
-; CHECK-NEXT:  LBB0_0:
+; CHECK-NEXT:  ; %bb.0: ; %entry
 ; CHECK-NEXT:    ; implicit-def: $iax
 ; CHECK-NEXT:    LXI H, 65506
 ; CHECK-NEXT:    DAD SP
@@ -290,7 +290,7 @@ entry:
 define i64 @sdiv64(i64 %a, i64 %b) {
 ; CHECK-LABEL: sdiv64:
 ; CHECK:         .cfi_startproc
-; CHECK-NEXT:  LBB1_0:
+; CHECK-NEXT:  ; %bb.0: ; %entry
 ; CHECK-NEXT:    ; implicit-def: $iax
 ; CHECK-NEXT:    LXI H, 65506
 ; CHECK-NEXT:    DAD SP
@@ -576,7 +576,7 @@ entry:
 define i64 @udiv64(i64 %a, i64 %b) {
 ; CHECK-LABEL: udiv64:
 ; CHECK:         .cfi_startproc
-; CHECK-NEXT:  LBB2_0:
+; CHECK-NEXT:  ; %bb.0: ; %entry
 ; CHECK-NEXT:    ; implicit-def: $iax
 ; CHECK-NEXT:    LXI H, 65506
 ; CHECK-NEXT:    DAD SP
@@ -862,7 +862,7 @@ entry:
 define i64 @srem64(i64 %a, i64 %b) {
 ; CHECK-LABEL: srem64:
 ; CHECK:         .cfi_startproc
-; CHECK-NEXT:  LBB3_0:
+; CHECK-NEXT:  ; %bb.0: ; %entry
 ; CHECK-NEXT:    ; implicit-def: $iax
 ; CHECK-NEXT:    LXI H, 65506
 ; CHECK-NEXT:    DAD SP
@@ -1148,7 +1148,7 @@ entry:
 define i64 @urem64(i64 %a, i64 %b) {
 ; CHECK-LABEL: urem64:
 ; CHECK:         .cfi_startproc
-; CHECK-NEXT:  LBB4_0:
+; CHECK-NEXT:  ; %bb.0: ; %entry
 ; CHECK-NEXT:    ; implicit-def: $iax
 ; CHECK-NEXT:    LXI H, 65506
 ; CHECK-NEXT:    DAD SP
@@ -1434,7 +1434,7 @@ entry:
 define i64 @shl64(i64 %a, i8 %b) {
 ; CHECK-LABEL: shl64:
 ; CHECK:         .cfi_startproc
-; CHECK-NEXT:  LBB5_0:
+; CHECK-NEXT:  ; %bb.0: ; %entry
 ; CHECK-NEXT:    ; implicit-def: $iax
 ; CHECK-NEXT:    LXI H, 65510
 ; CHECK-NEXT:    DAD SP
@@ -1678,7 +1678,7 @@ entry:
 define i64 @lshr64(i64 %a, i8 %b) {
 ; CHECK-LABEL: lshr64:
 ; CHECK:         .cfi_startproc
-; CHECK-NEXT:  LBB6_0:
+; CHECK-NEXT:  ; %bb.0: ; %entry
 ; CHECK-NEXT:    ; implicit-def: $iax
 ; CHECK-NEXT:    LXI H, 65510
 ; CHECK-NEXT:    DAD SP
@@ -1922,7 +1922,7 @@ entry:
 define i64 @ashr64(i64 %a, i8 %b) {
 ; CHECK-LABEL: ashr64:
 ; CHECK:         .cfi_startproc
-; CHECK-NEXT:  LBB7_0:
+; CHECK-NEXT:  ; %bb.0: ; %entry
 ; CHECK-NEXT:    ; implicit-def: $iax
 ; CHECK-NEXT:    LXI H, 65510
 ; CHECK-NEXT:    DAD SP
@@ -2168,7 +2168,7 @@ declare i64 @llvm.ctlz.i64(i64, i1)
 define i64 @clz64(i64 %a) {
 ; CHECK-LABEL: clz64:
 ; CHECK:         .cfi_startproc
-; CHECK-NEXT:  LBB8_0:
+; CHECK-NEXT:  ; %bb.0: ; %entry
 ; CHECK-NEXT:    ; implicit-def: $iax
 ; CHECK-NEXT:    LXI H, 65522
 ; CHECK-NEXT:    DAD SP

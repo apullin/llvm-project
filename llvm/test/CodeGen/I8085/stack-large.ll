@@ -6,7 +6,7 @@
 define void @stack_large() {
 ; CHECK-LABEL: stack_large:
 ; CHECK:         .cfi_startproc
-; CHECK-NEXT:  LBB0_0:
+; CHECK-NEXT:  ; %bb.0:
 ; CHECK-NEXT:    LXI H, 65456
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    SPHL

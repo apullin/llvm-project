@@ -6,7 +6,7 @@
 define i16 @switch_i16(i16 %x) {
 ; CHECK-LABEL: switch_i16:
 ; CHECK:         .cfi_startproc
-; CHECK-NEXT:  LBB0_0:
+; CHECK-NEXT:  ; %bb.0: ; %entry
 ; CHECK-NEXT:    LXI H, 258
 ; CHECK-NEXT:    PUSH H
 ; CHECK-NEXT:    LXI H, 4
@@ -19,39 +19,39 @@ define i16 @switch_i16(i16 %x) {
 ; CHECK-NEXT:    MOV A, B
 ; CHECK-NEXT:    CMP H
 ; CHECK-NEXT:    JNZ LBB0_6
-; CHECK-NEXT:  LBB0_1:
+; CHECK-NEXT:  ; %bb.1: ; %entry
 ; CHECK-NEXT:    MOV A, C
 ; CHECK-NEXT:    CMP L
 ; CHECK-NEXT:    JZ LBB0_3
-; CHECK-NEXT:  LBB0_6:
+; CHECK-NEXT:  LBB0_6: ; %entry
 ; CHECK-NEXT:    MVI D, 0
-; CHECK-NEXT:  LBB0_3:
+; CHECK-NEXT:  LBB0_3: ; %entry
 ; CHECK-NEXT:    MOV A, D
 ; CHECK-NEXT:    ORA A
 ; CHECK-NEXT:    JNZ LBB0_4
-; CHECK-NEXT:  LBB0_7:
+; CHECK-NEXT:  ; %bb.7: ; %entry
 ; CHECK-NEXT:    LXI H, 0
 ; CHECK-NEXT:    MVI D, 1
 ; CHECK-NEXT:    MOV A, B
 ; CHECK-NEXT:    CMP H
 ; CHECK-NEXT:    JNZ LBB0_12
-; CHECK-NEXT:  LBB0_8:
+; CHECK-NEXT:  ; %bb.8: ; %entry
 ; CHECK-NEXT:    MOV A, C
 ; CHECK-NEXT:    CMP L
 ; CHECK-NEXT:    JNZ LBB0_12
-; CHECK-NEXT:  LBB0_10:
+; CHECK-NEXT:  ; %bb.10: ; %entry
 ; CHECK-NEXT:    MVI D, 0
-; CHECK-NEXT:  LBB0_12:
+; CHECK-NEXT:  LBB0_12: ; %entry
 ; CHECK-NEXT:    MOV A, D
 ; CHECK-NEXT:    ORA A
 ; CHECK-NEXT:    JNZ LBB0_14
-; CHECK-NEXT:  LBB0_13:
+; CHECK-NEXT:  ; %bb.13: ; %case0
 ; CHECK-NEXT:    LXI B, 0
 ; CHECK-NEXT:    RET
-; CHECK-NEXT:  LBB0_4:
+; CHECK-NEXT:  LBB0_4: ; %case258
 ; CHECK-NEXT:    LXI B, 258
 ; CHECK-NEXT:    RET
-; CHECK-NEXT:  LBB0_14:
+; CHECK-NEXT:  LBB0_14: ; %default
 ; CHECK-NEXT:    LXI B, 1
 ; CHECK-NEXT:    RET
 entry:

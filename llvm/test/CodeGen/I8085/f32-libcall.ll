@@ -4,7 +4,7 @@
 define float @fadd_f32(float %a, float %b) {
 ; CHECK-LABEL: fadd_f32:
 ; CHECK:         .cfi_startproc
-; CHECK-NEXT:  LBB0_0:
+; CHECK-NEXT:  ; %bb.0:
 ; CHECK-NEXT:    ; implicit-def: $iax
 ; CHECK-NEXT:    LXI H, 65524
 ; CHECK-NEXT:    DAD SP
@@ -127,7 +127,7 @@ define float @fadd_f32(float %a, float %b) {
 define float @fsub_f32(float %a, float %b) {
 ; CHECK-LABEL: fsub_f32:
 ; CHECK:         .cfi_startproc
-; CHECK-NEXT:  LBB1_0:
+; CHECK-NEXT:  ; %bb.0:
 ; CHECK-NEXT:    ; implicit-def: $iax
 ; CHECK-NEXT:    LXI H, 65524
 ; CHECK-NEXT:    DAD SP
@@ -250,7 +250,7 @@ define float @fsub_f32(float %a, float %b) {
 define float @fmul_f32(float %a, float %b) {
 ; CHECK-LABEL: fmul_f32:
 ; CHECK:         .cfi_startproc
-; CHECK-NEXT:  LBB2_0:
+; CHECK-NEXT:  ; %bb.0:
 ; CHECK-NEXT:    ; implicit-def: $iax
 ; CHECK-NEXT:    LXI H, 65524
 ; CHECK-NEXT:    DAD SP
@@ -373,7 +373,7 @@ define float @fmul_f32(float %a, float %b) {
 define float @fdiv_f32(float %a, float %b) {
 ; CHECK-LABEL: fdiv_f32:
 ; CHECK:         .cfi_startproc
-; CHECK-NEXT:  LBB3_0:
+; CHECK-NEXT:  ; %bb.0:
 ; CHECK-NEXT:    ; implicit-def: $iax
 ; CHECK-NEXT:    LXI H, 65524
 ; CHECK-NEXT:    DAD SP
@@ -496,7 +496,7 @@ define float @fdiv_f32(float %a, float %b) {
 define i1 @fcmp_eq_f32(float %a, float %b) {
 ; CHECK-LABEL: fcmp_eq_f32:
 ; CHECK:         .cfi_startproc
-; CHECK-NEXT:  LBB4_0:
+; CHECK-NEXT:  ; %bb.0:
 ; CHECK-NEXT:    ; implicit-def: $iax
 ; CHECK-NEXT:    ; implicit-def: $ibx
 ; CHECK-NEXT:    LXI H, 65520
@@ -616,7 +616,7 @@ define i1 @fcmp_eq_f32(float %a, float %b) {
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    CMP M
 ; CHECK-NEXT:    JNZ LBB4_6
-; CHECK-NEXT:  LBB4_1:
+; CHECK-NEXT:  ; %bb.1:
 ; CHECK-NEXT:    LXI H, 13
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV A, M
@@ -624,7 +624,7 @@ define i1 @fcmp_eq_f32(float %a, float %b) {
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    CMP M
 ; CHECK-NEXT:    JNZ LBB4_6
-; CHECK-NEXT:  LBB4_2:
+; CHECK-NEXT:  ; %bb.2:
 ; CHECK-NEXT:    LXI H, 14
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV A, M
@@ -632,7 +632,7 @@ define i1 @fcmp_eq_f32(float %a, float %b) {
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    CMP M
 ; CHECK-NEXT:    JNZ LBB4_6
-; CHECK-NEXT:  LBB4_3:
+; CHECK-NEXT:  ; %bb.3:
 ; CHECK-NEXT:    LXI H, 15
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV A, M
@@ -640,7 +640,7 @@ define i1 @fcmp_eq_f32(float %a, float %b) {
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    CMP M
 ; CHECK-NEXT:    JNZ LBB4_6
-; CHECK-NEXT:  LBB4_4:
+; CHECK-NEXT:  ; %bb.4:
 ; CHECK-NEXT:    JMP LBB4_5
 ; CHECK-NEXT:  LBB4_6:
 ; CHECK-NEXT:    MVI B, 0
@@ -658,7 +658,7 @@ define i1 @fcmp_eq_f32(float %a, float %b) {
 define i1 @fcmp_lt_f32(float %a, float %b) {
 ; CHECK-LABEL: fcmp_lt_f32:
 ; CHECK:         .cfi_startproc
-; CHECK-NEXT:  LBB5_0:
+; CHECK-NEXT:  ; %bb.0:
 ; CHECK-NEXT:    ; implicit-def: $iax
 ; CHECK-NEXT:    ; implicit-def: $ibx
 ; CHECK-NEXT:    LXI H, 65520
@@ -775,14 +775,14 @@ define i1 @fcmp_lt_f32(float %a, float %b) {
 ; CHECK-NEXT:    XRA M
 ; CHECK-NEXT:    ANI 128
 ; CHECK-NEXT:    JNZ LBB5_6
-; CHECK-NEXT:  LBB5_1:
+; CHECK-NEXT:  ; %bb.1:
 ; CHECK-NEXT:    MOV A, M
 ; CHECK-NEXT:    LXI H, 15
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    CMP M
 ; CHECK-NEXT:    JC LBB5_8
 ; CHECK-NEXT:    JNZ LBB5_11
-; CHECK-NEXT:  LBB5_2:
+; CHECK-NEXT:  ; %bb.2:
 ; CHECK-NEXT:    LXI H, 10
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV A, M
@@ -791,7 +791,7 @@ define i1 @fcmp_lt_f32(float %a, float %b) {
 ; CHECK-NEXT:    CMP M
 ; CHECK-NEXT:    JC LBB5_8
 ; CHECK-NEXT:    JNZ LBB5_11
-; CHECK-NEXT:  LBB5_3:
+; CHECK-NEXT:  ; %bb.3:
 ; CHECK-NEXT:    LXI H, 9
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV A, M
@@ -800,7 +800,7 @@ define i1 @fcmp_lt_f32(float %a, float %b) {
 ; CHECK-NEXT:    CMP M
 ; CHECK-NEXT:    JC LBB5_8
 ; CHECK-NEXT:    JNZ LBB5_11
-; CHECK-NEXT:  LBB5_4:
+; CHECK-NEXT:  ; %bb.4:
 ; CHECK-NEXT:    LXI H, 8
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV A, M
@@ -831,7 +831,7 @@ define i1 @fcmp_lt_f32(float %a, float %b) {
 define i1 @fcmp_gt_f32(float %a, float %b) {
 ; CHECK-LABEL: fcmp_gt_f32:
 ; CHECK:         .cfi_startproc
-; CHECK-NEXT:  LBB6_0:
+; CHECK-NEXT:  ; %bb.0:
 ; CHECK-NEXT:    ; implicit-def: $iax
 ; CHECK-NEXT:    ; implicit-def: $ibx
 ; CHECK-NEXT:    LXI H, 65520
@@ -948,7 +948,7 @@ define i1 @fcmp_gt_f32(float %a, float %b) {
 ; CHECK-NEXT:    XRA M
 ; CHECK-NEXT:    ANI 128
 ; CHECK-NEXT:    JNZ LBB6_6
-; CHECK-NEXT:  LBB6_1:
+; CHECK-NEXT:  ; %bb.1:
 ; CHECK-NEXT:    LXI H, 15
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV A, M
@@ -957,7 +957,7 @@ define i1 @fcmp_gt_f32(float %a, float %b) {
 ; CHECK-NEXT:    CMP M
 ; CHECK-NEXT:    JC LBB6_7
 ; CHECK-NEXT:    JNZ LBB6_11
-; CHECK-NEXT:  LBB6_2:
+; CHECK-NEXT:  ; %bb.2:
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    INX H
@@ -967,7 +967,7 @@ define i1 @fcmp_gt_f32(float %a, float %b) {
 ; CHECK-NEXT:    CMP M
 ; CHECK-NEXT:    JC LBB6_7
 ; CHECK-NEXT:    JNZ LBB6_11
-; CHECK-NEXT:  LBB6_3:
+; CHECK-NEXT:  ; %bb.3:
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    INX H
@@ -977,7 +977,7 @@ define i1 @fcmp_gt_f32(float %a, float %b) {
 ; CHECK-NEXT:    CMP M
 ; CHECK-NEXT:    JC LBB6_7
 ; CHECK-NEXT:    JNZ LBB6_11
-; CHECK-NEXT:  LBB6_4:
+; CHECK-NEXT:  ; %bb.4:
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    INX H
@@ -1009,7 +1009,7 @@ define i1 @fcmp_gt_f32(float %a, float %b) {
 define float @sitofp_i32(i32 %a) {
 ; CHECK-LABEL: sitofp_i32:
 ; CHECK:         .cfi_startproc
-; CHECK-NEXT:  LBB7_0:
+; CHECK-NEXT:  ; %bb.0:
 ; CHECK-NEXT:    ; implicit-def: $iax
 ; CHECK-NEXT:    LXI H, 65528
 ; CHECK-NEXT:    DAD SP
@@ -1095,7 +1095,7 @@ define float @sitofp_i32(i32 %a) {
 define float @uitofp_i32(i32 %a) {
 ; CHECK-LABEL: uitofp_i32:
 ; CHECK:         .cfi_startproc
-; CHECK-NEXT:  LBB8_0:
+; CHECK-NEXT:  ; %bb.0:
 ; CHECK-NEXT:    ; implicit-def: $iax
 ; CHECK-NEXT:    LXI H, 65528
 ; CHECK-NEXT:    DAD SP
@@ -1181,7 +1181,7 @@ define float @uitofp_i32(i32 %a) {
 define i32 @fptosi_i32(float %a) {
 ; CHECK-LABEL: fptosi_i32:
 ; CHECK:         .cfi_startproc
-; CHECK-NEXT:  LBB9_0:
+; CHECK-NEXT:  ; %bb.0:
 ; CHECK-NEXT:    ; implicit-def: $iax
 ; CHECK-NEXT:    LXI H, 65528
 ; CHECK-NEXT:    DAD SP
@@ -1267,7 +1267,7 @@ define i32 @fptosi_i32(float %a) {
 define i32 @fptoui_i32(float %a) {
 ; CHECK-LABEL: fptoui_i32:
 ; CHECK:         .cfi_startproc
-; CHECK-NEXT:  LBB10_0:
+; CHECK-NEXT:  ; %bb.0:
 ; CHECK-NEXT:    ; implicit-def: $iax
 ; CHECK-NEXT:    LXI H, 65528
 ; CHECK-NEXT:    DAD SP

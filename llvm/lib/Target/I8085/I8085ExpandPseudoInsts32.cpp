@@ -121,6 +121,31 @@ private:
     return MBB.getParent()->getRegInfo();
   }
 
+  bool hasAvailablePhysRegValue(Block &MBB, BlockIt MBBI, Register Reg) const {
+    if (MBB.isLiveIn(Reg))
+      return true;
+
+    for (auto I = MBBI; I != MBB.begin();) {
+      --I;
+      for (const MachineOperand &MO : I->operands()) {
+        if (!MO.isReg() || !MO.isDef())
+          continue;
+        Register DefReg = MO.getReg();
+        if (DefReg == Reg || TRI->isSubRegisterEq(DefReg, Reg) ||
+            TRI->isSubRegisterEq(Reg, DefReg))
+          return true;
+      }
+    }
+
+    return false;
+  }
+
+  bool hasAvailableHLValue(Block &MBB, BlockIt MBBI) const {
+    return hasAvailablePhysRegValue(MBB, MBBI, I8085::HL) ||
+           hasAvailablePhysRegValue(MBB, MBBI, I8085::H) ||
+           hasAvailablePhysRegValue(MBB, MBBI, I8085::L);
+  }
+
 };
 
 char I8085ExpandPseudo32::ID = 0;
@@ -2358,6 +2383,9 @@ bool I8085ExpandPseudo32::expandMI(Block &MBB, BlockIt MBBI) {
       }
     }
   }
+
+  if (NeedHLSave && !hasAvailableHLValue(MBB, MBBI))
+    NeedHLSave = false;
 
   BlockIt AfterPseudo = std::next(MBBI);
   DebugLoc DL = MI.getDebugLoc();

@@ -14,8 +14,7 @@ body:             |
   bb.0:
     ; CHECK-LABEL: name: mvi32_iax
     ; CHECK: $iax = IMPLICIT_DEF
-    ; CHECK-NEXT: PUSH $hl, implicit-def $sp, implicit $sp
-    ; CHECK-NEXT: $hl = LXI 2
+    ; CHECK-NEXT: $hl = LXI 0
     ; CHECK-NEXT: DAD $sp, implicit-def $sreg, implicit-def $h, implicit-def $l, implicit $h, implicit $l
     ; CHECK-NEXT: MVI_M 4, implicit $h, implicit $l
     ; CHECK-NEXT: $hl = INX
@@ -24,7 +23,6 @@ body:             |
     ; CHECK-NEXT: MVI_M 2, implicit $h, implicit $l
     ; CHECK-NEXT: $hl = INX
     ; CHECK-NEXT: MVI_M 1, implicit $h, implicit $l
-    ; CHECK-NEXT: $hl = POP implicit-def $sp, implicit $sp
     ; CHECK-NEXT: RET implicit $sp, implicit-def $sp
     $iax = MVI_32 16909060, implicit-def $a, implicit-def $hl
     RET implicit $sp, implicit-def $sp
@@ -40,8 +38,7 @@ body:             |
     ; CHECK-NEXT: {{  $}}
     ; CHECK-NEXT: $iax = IMPLICIT_DEF
     ; CHECK-NEXT: $ibx = IMPLICIT_DEF
-    ; CHECK-NEXT: PUSH $hl, implicit-def $sp, implicit $sp
-    ; CHECK-NEXT: $hl = LXI 2
+    ; CHECK-NEXT: $hl = LXI 0
     ; CHECK-NEXT: DAD $sp, implicit-def $sreg, implicit-def $h, implicit-def $l, implicit $h, implicit $l
     ; CHECK-NEXT: $a = MOV_FROM_M implicit $h, implicit $l
     ; CHECK-NEXT: $hl = INX
@@ -90,7 +87,6 @@ body:             |
     ; CHECK-NEXT: $hl = DCX
     ; CHECK-NEXT: $hl = DCX
     ; CHECK-NEXT: MOV_M $a, implicit $h, implicit $l
-    ; CHECK-NEXT: $hl = POP implicit-def $sp, implicit $sp
     ; CHECK-NEXT: RET implicit $sp, implicit-def $sp
     $iax = ADD_32 $iax, $ibx, implicit-def $sreg, implicit-def $a, implicit-def $hl
     RET implicit $sp, implicit-def $sp
@@ -106,8 +102,7 @@ body:             |
     ; CHECK-NEXT: {{  $}}
     ; CHECK-NEXT: $iax = IMPLICIT_DEF
     ; CHECK-NEXT: $ibx = IMPLICIT_DEF
-    ; CHECK-NEXT: PUSH $hl, implicit-def $sp, implicit $sp
-    ; CHECK-NEXT: $hl = LXI 2
+    ; CHECK-NEXT: $hl = LXI 0
     ; CHECK-NEXT: DAD $sp, implicit-def $sreg, implicit-def $h, implicit-def $l, implicit $h, implicit $l
     ; CHECK-NEXT: $a = MOV_FROM_M implicit $h, implicit $l
     ; CHECK-NEXT: $hl = INX
@@ -156,7 +151,6 @@ body:             |
     ; CHECK-NEXT: $hl = DCX
     ; CHECK-NEXT: $hl = DCX
     ; CHECK-NEXT: MOV_M $a, implicit $h, implicit $l
-    ; CHECK-NEXT: $hl = POP implicit-def $sp, implicit $sp
     ; CHECK-NEXT: RET implicit $sp, implicit-def $sp
     $iax = SUB_32 $iax, $ibx, implicit-def $sreg, implicit-def $a, implicit-def $hl
     RET implicit $sp, implicit-def $sp

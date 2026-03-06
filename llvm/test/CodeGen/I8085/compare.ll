@@ -10,8 +10,7 @@ define i8 @cmp_eq_i8(i8 %a, i8 %b) {
 ; CHECK-NEXT:    LXI H, 3
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV B, M
-; CHECK-NEXT:    LXI H, 2
-; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    DCX H
 ; CHECK-NEXT:    MOV A, M
 ; CHECK-NEXT:    SUB B
 ; CHECK-NEXT:    JZ LBB0_1
@@ -36,8 +35,7 @@ define i8 @cmp_ult_i8(i8 %a, i8 %b) {
 ; CHECK-NEXT:    LXI H, 3
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV B, M
-; CHECK-NEXT:    LXI H, 2
-; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    DCX H
 ; CHECK-NEXT:    MOV A, M
 ; CHECK-NEXT:    SUB B
 ; CHECK-NEXT:    JC LBB1_1
@@ -59,47 +57,20 @@ define i8 @cmp_eq_i16(i16 %a, i16 %b) {
 ; CHECK-LABEL: cmp_eq_i16:
 ; CHECK:         .cfi_startproc
 ; CHECK-NEXT:  LBB2_0:
-; CHECK-NEXT:    LXI H, 65532
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    SPHL
-; CHECK-NEXT:    .cfi_adjust_cfa_offset 4
-; CHECK-NEXT:    LXI H, 9
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV B, M
-; CHECK-NEXT:    LXI H, 8
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV C, M
-; CHECK-NEXT:    LXI H, 3
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, B
-; CHECK-NEXT:    LXI H, 2
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, C
-; CHECK-NEXT:    LXI H, 7
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV B, M
-; CHECK-NEXT:    LXI H, 6
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV C, M
-; CHECK-NEXT:    LXI H, 1
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, B
-; CHECK-NEXT:    LXI H, 0
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, C
-; CHECK-NEXT:    MVI B, 1
-; CHECK-NEXT:    LXI H, 3
+; CHECK-NEXT:    LXI H, 5
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV D, M
-; CHECK-NEXT:    LXI H, 2
-; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    PUSH H
+; CHECK-NEXT:    DCX H
 ; CHECK-NEXT:    MOV E, M
-; CHECK-NEXT:    LXI H, 0
+; CHECK-NEXT:    POP H
+; CHECK-NEXT:    LXI H, 2
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV A, M
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    MOV H, M
 ; CHECK-NEXT:    MOV L, A
+; CHECK-NEXT:    MVI B, 1
 ; CHECK-NEXT:    MOV A, H
 ; CHECK-NEXT:    CMP D
 ; CHECK-NEXT:    JNZ LBB2_3
@@ -108,16 +79,13 @@ define i8 @cmp_eq_i16(i16 %a, i16 %b) {
 ; CHECK-NEXT:    CMP E
 ; CHECK-NEXT:    JNZ LBB2_3
 ; CHECK-NEXT:  LBB2_2:
-; CHECK-NEXT:    JMP LBB2_4
+; CHECK-NEXT:  LBB2_4:
+; CHECK-NEXT:    MOV A, B
+; CHECK-NEXT:    RET
 ; CHECK-NEXT:  LBB2_3:
 ; CHECK-NEXT:  LBB2_5:
 ; CHECK-NEXT:    MVI B, 0
-; CHECK-NEXT:  LBB2_4:
 ; CHECK-NEXT:    MOV A, B
-; CHECK-NEXT:    LXI H, 4
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    SPHL
-; CHECK-NEXT:    .cfi_adjust_cfa_offset 4294967292
 ; CHECK-NEXT:    RET
 
   %cmp = icmp eq i16 %a, %b
@@ -134,14 +102,11 @@ define i8 @cmp_ult_i16(i16 %a, i16 %b) {
 ; CHECK-NEXT:    LXI H, 5
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV B, M
-; CHECK-NEXT:    LXI H, 4
-; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    DCX H
 ; CHECK-NEXT:    MOV C, M
-; CHECK-NEXT:    LXI H, 3
-; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    DCX H
 ; CHECK-NEXT:    MOV D, M
-; CHECK-NEXT:    LXI H, 2
-; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    DCX H
 ; CHECK-NEXT:    MOV E, M
 ; CHECK-NEXT:    MOV A, E
 ; CHECK-NEXT:    SUB C

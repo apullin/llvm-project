@@ -375,12 +375,12 @@ I8085TargetLowering::I8085TargetLowering(const I8085TargetMachine &TM,
   // Bit counting
   setOperationAction(ISD::CTLZ, MVT::i32, Custom);
   setOperationAction(ISD::CTLZ_ZERO_UNDEF, MVT::i32, Custom);
-  setOperationAction(ISD::CTLZ, MVT::i64, Expand);
-  setOperationAction(ISD::CTLZ_ZERO_UNDEF, MVT::i64, Expand);
+  setOperationAction(ISD::CTLZ, MVT::i64, Custom);
+  setOperationAction(ISD::CTLZ_ZERO_UNDEF, MVT::i64, Custom);
   setOperationAction(ISD::CTTZ, MVT::i32, Custom);
   setOperationAction(ISD::CTTZ_ZERO_UNDEF, MVT::i32, Custom);
-  setOperationAction(ISD::CTTZ, MVT::i64, Expand);
-  setOperationAction(ISD::CTTZ_ZERO_UNDEF, MVT::i64, Expand);
+  setOperationAction(ISD::CTTZ, MVT::i64, Custom);
+  setOperationAction(ISD::CTTZ_ZERO_UNDEF, MVT::i64, Custom);
   // CTPOP i32 via Custom (manual libcall), i64 via Expand
   setOperationAction(ISD::CTPOP, MVT::i32, Custom);
   setOperationAction(ISD::CTPOP, MVT::i64, Expand);

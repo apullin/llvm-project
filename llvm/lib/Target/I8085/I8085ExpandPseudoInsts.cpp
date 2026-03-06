@@ -78,6 +78,31 @@ private:
     return MBB.getParent()->getRegInfo();
   }
 
+  bool hasAvailablePhysRegValue(Block &MBB, BlockIt MBBI, Register Reg) const {
+    if (MBB.isLiveIn(Reg))
+      return true;
+
+    for (auto I = MBBI; I != MBB.begin();) {
+      --I;
+      for (const MachineOperand &MO : I->operands()) {
+        if (!MO.isReg() || !MO.isDef())
+          continue;
+        Register DefReg = MO.getReg();
+        if (DefReg == Reg || TRI->isSubRegisterEq(DefReg, Reg) ||
+            TRI->isSubRegisterEq(Reg, DefReg))
+          return true;
+      }
+    }
+
+    return false;
+  }
+
+  bool hasAvailableHLValue(Block &MBB, BlockIt MBBI) const {
+    return hasAvailablePhysRegValue(MBB, MBBI, I8085::HL) ||
+           hasAvailablePhysRegValue(MBB, MBBI, I8085::H) ||
+           hasAvailablePhysRegValue(MBB, MBBI, I8085::L);
+  }
+
   bool isPhysRegLive(Block &MBB, BlockIt MBBI, Register Reg) const {
     LivePhysRegs LiveRegs(*TRI);
     LiveRegs.addLiveOuts(MBB);
@@ -95,6 +120,9 @@ private:
     if (MBB.isLiveIn(I8085::HL) || MBB.isLiveIn(I8085::H) ||
         MBB.isLiveIn(I8085::L))
       return true;
+
+    if (!hasAvailableHLValue(MBB, MBBI))
+      return false;
 
     // Do a forward scan from MBBI to detect if $h or $l is read before
     // being redefined.  This catches cases where the backwards walk might

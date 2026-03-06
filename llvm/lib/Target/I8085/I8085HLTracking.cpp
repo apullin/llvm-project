@@ -69,6 +69,10 @@ public:
     // Pass 2: re-process with predecessor exit states available
     for (MachineBasicBlock &MBB : MF) {
       HLState entry = mergeEntryState(MBB);
+      if (entry.tracked) {
+        if (!MBB.isLiveIn(I8085::HL))
+          MBB.addLiveIn(I8085::HL);
+      }
       ExitStates[MBB.getNumber()] = processBlock(MBB, entry, TII, Changed);
     }
 

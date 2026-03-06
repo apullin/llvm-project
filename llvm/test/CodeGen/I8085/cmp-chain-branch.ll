@@ -130,12 +130,12 @@ define i8 @cmp_chain_indep(i16 %a, i16 %b, i16 %c, i16 %d) {
 ; CHECK-LABEL: cmp_chain_indep:
 ; CHECK:         .cfi_startproc
 ; CHECK-NEXT:  LBB2_0:
-; CHECK-NEXT:    PUSH H
-; CHECK-NEXT:    LXI H, 6
+; CHECK-NEXT:    LXI H, 5
 ; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV E, M
-; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    MOV D, M
+; CHECK-NEXT:    PUSH H
+; CHECK-NEXT:    DCX H
+; CHECK-NEXT:    MOV E, M
 ; CHECK-NEXT:    POP H
 ; CHECK-NEXT:    LXI H, 2
 ; CHECK-NEXT:    DAD SP

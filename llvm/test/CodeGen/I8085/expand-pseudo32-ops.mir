@@ -108,8 +108,10 @@ body:             |
   bb.0:
     ; CHECK-LABEL: name:            load32_imm_addr_iax
     ; CHECK: $hl = LXI @g32
-    ; CHECK: DAD $sp
-    ; CHECK: MOV_FROM_M
+    ; CHECK-NEXT: $b = MOV_FROM_M
+    ; CHECK: $hl = LXI 0
+    ; CHECK-NEXT: DAD $sp
+    ; CHECK-NEXT: MOV_M $b
     $iax = LOAD_32_WITH_IMM_ADDR @g32, implicit $sp, implicit-def $a, implicit-def $hl
     RET implicit $sp, implicit-def $sp
 ...
@@ -121,9 +123,9 @@ body:             |
     liveins: $sp
     ; CHECK-LABEL: name:            load32_addr_content_sp
     ; CHECK: $hl = LXI 0
-    ; CHECK: DAD $sp
-    ; CHECK: MOV_FROM_M
-    $iax = LOAD_32_ADDR_CONTENT $sp, implicit $sp, implicit-def $a, implicit-def $hl, implicit-def $bc
+    ; CHECK-NEXT: DAD $sp
+    ; CHECK-NEXT: $a = MOV_FROM_M
+    $iax = LOAD_32_ADDR_CONTENT $sp, implicit $sp, implicit-def $a, implicit-def $hl, implicit-def $bc, implicit-def $b, implicit-def $c
     RET implicit $sp, implicit-def $sp
 ...
 
@@ -136,7 +138,7 @@ body:             |
     ; CHECK: MOV_FROM_M
     ; CHECK: INX
     ; CHECK: MOV_FROM_M
-    $iax = LOAD_32_ADDR_CONTENT $hl, implicit $sp, implicit-def $a, implicit-def $hl, implicit-def $bc
+    $iax = LOAD_32_ADDR_CONTENT $hl, implicit $sp, implicit-def $a, implicit-def $hl, implicit-def $bc, implicit-def $b, implicit-def $c
     RET implicit $sp, implicit-def $sp
 ...
 

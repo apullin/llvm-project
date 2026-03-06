@@ -82,13 +82,8 @@ void I8085MCInstLower::lowerInstruction(const MachineInstr &MI,
       return lowerSymbolOperand(
           MO, Printer.GetExternalSymbolSymbol(MO.getSymbolName()));
     case MachineOperand::MO_MachineBasicBlock: {
-      const llvm::MachineFunction *MF = MO.getMBB()->getParent();
-      MCContext &ctx = MF->getContext();
       return MCOperand::createExpr(
-          MCSymbolRefExpr::create(ctx.getOrCreateSymbol(
-                                      "LBB" + Twine(MF->getFunctionNumber()) +
-                                      "_" + Twine(MO.getMBB()->getNumber())),
-                                  Ctx));
+          MCSymbolRefExpr::create(MO.getMBB()->getSymbol(), Ctx));
     }
     case MachineOperand::MO_BlockAddress:
       return lowerSymbolOperand(

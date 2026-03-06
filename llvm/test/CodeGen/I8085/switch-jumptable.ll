@@ -1,4 +1,6 @@
 ; RUN: llc -O2 -mattr=i8085,sram < %s -march=i8085 -verify-machineinstrs | FileCheck %s
+; RUN: llc -O2 -mattr=i8085,sram < %s -march=i8085 -filetype=obj -o %t
+; RUN: llvm-nm -a %t | FileCheck %s --check-prefix=OBJ
 
 ; Large sparse switches should lower to a jump table plus indirect branch.
 
@@ -6,8 +8,11 @@ declare void @sink(i8)
 
 define i16 @switch_jumptable(i8 %x) {
 ; CHECK-LABEL: switch_jumptable:
-; CHECK: LXI D, CPI0_0
+; CHECK: LXI D, JTI0_0
 ; CHECK: PCHL
+; CHECK: JTI0_0:
+; OBJ: JTI0_0
+; OBJ-NOT: CPI
 entry:
   switch i8 %x, label %default [
     i8 0, label %c0

@@ -224,6 +224,11 @@ static void addAddrOperand(MachineInstrBuilder &MIB,
     MIB.addConstantPoolIndex(MO.getIndex(), MO.getOffset() + Offset,
                              MO.getTargetFlags());
     break;
+  case MachineOperand::MO_JumpTableIndex:
+    assert((MO.getOffset() + Offset) == 0 &&
+           "jump table operand does not support offsets");
+    MIB.addJumpTableIndex(MO.getIndex(), MO.getTargetFlags());
+    break;
   case MachineOperand::MO_BlockAddress:
     MIB.addBlockAddress(MO.getBlockAddress(), MO.getOffset() + Offset,
                         MO.getTargetFlags());

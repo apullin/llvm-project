@@ -1,0 +1,57 @@
+# RUN: llc -O0 -run-pass=i8085-expand-pseudo32 %s -o - | FileCheck %s
+
+--- |
+  target triple = "i8085-unknown-elf"
+  define void @pack16to32_hl_bc() { ret void }
+  define void @pack16to32_bc_hl() { ret void }
+...
+
+---
+name:            pack16to32_hl_bc
+body:             |
+  bb.0:
+    liveins: $hl, $bc
+    ; CHECK-LABEL: name: pack16to32_hl_bc
+    ; CHECK: liveins: $hl, $bc
+    ; CHECK-NEXT: {{  $}}
+    ; CHECK-NEXT: $iax = IMPLICIT_DEF
+    ; CHECK-NEXT: ${{[^ ]+}} = MOV $l
+    ; CHECK-NEXT: ${{[^ ]+}} = MOV $h
+    ; CHECK-NEXT: $hl = LXI 0
+    ; CHECK-NEXT: DAD $sp, implicit-def $sreg, implicit-def $h, implicit-def $l, implicit $h, implicit $l
+    ; CHECK-NEXT: MOV_M ${{[^,]+}}, implicit $h, implicit $l
+    ; CHECK-NEXT: $hl = INX
+    ; CHECK-NEXT: MOV_M ${{[^,]+}}, implicit $h, implicit $l
+    ; CHECK-NEXT: $hl = INX
+    ; CHECK-NEXT: MOV_M $c, implicit $h, implicit $l
+    ; CHECK-NEXT: $hl = INX
+    ; CHECK-NEXT: MOV_M $b, implicit $h, implicit $l
+    ; CHECK-NEXT: RET implicit $sp, implicit-def $sp
+    $iax = PACK_16_TO_32 $hl, $bc, implicit-def dead $a, implicit-def dead $hl, implicit $sp
+    RET implicit $sp, implicit-def $sp
+...
+
+---
+name:            pack16to32_bc_hl
+body:             |
+  bb.0:
+    liveins: $bc, $hl
+    ; CHECK-LABEL: name: pack16to32_bc_hl
+    ; CHECK: liveins: $bc, $hl
+    ; CHECK-NEXT: {{  $}}
+    ; CHECK-NEXT: $iax = IMPLICIT_DEF
+    ; CHECK-NEXT: ${{[^ ]+}} = MOV $l
+    ; CHECK-NEXT: ${{[^ ]+}} = MOV $h
+    ; CHECK-NEXT: $hl = LXI 0
+    ; CHECK-NEXT: DAD $sp, implicit-def $sreg, implicit-def $h, implicit-def $l, implicit $h, implicit $l
+    ; CHECK-NEXT: MOV_M $c, implicit $h, implicit $l
+    ; CHECK-NEXT: $hl = INX
+    ; CHECK-NEXT: MOV_M $b, implicit $h, implicit $l
+    ; CHECK-NEXT: $hl = INX
+    ; CHECK-NEXT: MOV_M ${{[^,]+}}, implicit $h, implicit $l
+    ; CHECK-NEXT: $hl = INX
+    ; CHECK-NEXT: MOV_M ${{[^,]+}}, implicit $h, implicit $l
+    ; CHECK-NEXT: RET implicit $sp, implicit-def $sp
+    $iax = PACK_16_TO_32 $bc, $hl, implicit-def dead $a, implicit-def dead $hl, implicit $sp
+    RET implicit $sp, implicit-def $sp
+...

@@ -1373,6 +1373,39 @@ template <> bool I8085ExpandPseudo32::expand<I8085::PACK_16_TO_32>(Block &MBB, B
   if (!getPairRegs(loReg, loLow, loHigh) || !getPairRegs(hiReg, hiLow, hiHigh))
     return false;
 
+  auto copyHLToPair = [&](unsigned Pair) {
+    unsigned PairLow = 0, PairHigh = 0;
+    assert(getPairRegs(Pair, PairLow, PairHigh) &&
+           "expected 16-bit pair register");
+    buildMI(MBB, MBBI, I8085::MOV)
+        .addReg(PairLow, RegState::Define)
+        .addReg(I8085::L);
+    buildMI(MBB, MBBI, I8085::MOV)
+        .addReg(PairHigh, RegState::Define)
+        .addReg(I8085::H);
+    return std::pair<unsigned, unsigned>(PairLow, PairHigh);
+  };
+
+  // emitScratchAddr() clobbers HL. If either source pair is HL, copy it to
+  // the remaining free 16-bit pair first so we store the original value, not
+  // the computed scratch address bytes.
+  if (loReg == I8085::HL && hiReg == I8085::HL) {
+    auto LoPair = copyHLToPair(I8085::BC);
+    auto HiPair = copyHLToPair(I8085::DE);
+    loLow = LoPair.first;
+    loHigh = LoPair.second;
+    hiLow = HiPair.first;
+    hiHigh = HiPair.second;
+  } else if (loReg == I8085::HL) {
+    auto Saved = copyHLToPair(hiReg == I8085::BC ? I8085::DE : I8085::BC);
+    loLow = Saved.first;
+    loHigh = Saved.second;
+  } else if (hiReg == I8085::HL) {
+    auto Saved = copyHLToPair(loReg == I8085::BC ? I8085::DE : I8085::BC);
+    hiLow = Saved.first;
+    hiHigh = Saved.second;
+  }
+
   emitScratchAddr(MBB, MBBI, destReg, 0);
   buildMI(MBB, MBBI, I8085::MOV_M).addReg(loLow);
   emitScratchAdvance(MBB, MBBI, 1);

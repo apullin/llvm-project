@@ -15,11 +15,11 @@ define void @store_globals(i8 %a, i16 %b) {
 ; CHECK-NEXT:    MOV A, M
 ; CHECK-NEXT:    LXI H, g8
 ; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    LXI H, 4
+; CHECK-NEXT:    LXI H, 3
 ; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV B, M
-; CHECK-NEXT:    DCX H
 ; CHECK-NEXT:    MOV C, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV B, M
 ; CHECK-NEXT:    LXI H, g16
 ; CHECK-NEXT:    MOV M, C
 ; CHECK-NEXT:    INX H

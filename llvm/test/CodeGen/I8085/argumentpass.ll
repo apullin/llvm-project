@@ -5,11 +5,11 @@ define i16 @argpass16(i16,i16,i16) #0  {
 ; CHECK-LABEL: argpass16:
 ; CHECK:         .cfi_startproc
 ; CHECK-NEXT:  ; %bb.0:
-; CHECK-NEXT:    LXI H, 7
+; CHECK-NEXT:    LXI H, 6
 ; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV B, M
-; CHECK-NEXT:    DCX H
 ; CHECK-NEXT:    MOV C, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV B, M
 ; CHECK-NEXT:    RET
 
   %4 = alloca i16, align 1

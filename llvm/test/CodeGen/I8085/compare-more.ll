@@ -87,15 +87,17 @@ define i8 @cmp_slt_i16(i16 %a, i16 %b) {
 ; CHECK-LABEL: cmp_slt_i16:
 ; CHECK:         .cfi_startproc
 ; CHECK-NEXT:  ; %bb.0:
-; CHECK-NEXT:    LXI H, 5
+; CHECK-NEXT:    LXI H, 4
 ; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    MOV E, M
+; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    MOV D, M
 ; CHECK-NEXT:    DCX H
-; CHECK-NEXT:    MOV E, M
 ; CHECK-NEXT:    DCX H
-; CHECK-NEXT:    MOV B, M
 ; CHECK-NEXT:    DCX H
 ; CHECK-NEXT:    MOV C, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV B, M
 ; CHECK-NEXT:    MOV A, B
 ; CHECK-NEXT:    XRA D
 ; CHECK-NEXT:    ANI 128
@@ -130,15 +132,17 @@ define i8 @cmp_uge_i16(i16 %a, i16 %b) {
 ; CHECK-LABEL: cmp_uge_i16:
 ; CHECK:         .cfi_startproc
 ; CHECK-NEXT:  ; %bb.0:
-; CHECK-NEXT:    LXI H, 5
+; CHECK-NEXT:    LXI H, 4
 ; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    MOV C, M
+; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    MOV B, M
 ; CHECK-NEXT:    DCX H
-; CHECK-NEXT:    MOV C, M
 ; CHECK-NEXT:    DCX H
-; CHECK-NEXT:    MOV D, M
 ; CHECK-NEXT:    DCX H
 ; CHECK-NEXT:    MOV E, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV D, M
 ; CHECK-NEXT:    MOV A, E
 ; CHECK-NEXT:    SUB C
 ; CHECK-NEXT:    MOV C, A

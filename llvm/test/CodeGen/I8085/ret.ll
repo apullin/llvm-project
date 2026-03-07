@@ -67,11 +67,11 @@ define i64 @retsixtyfour() {
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    SPHL
 ; CHECK-NEXT:    .cfi_adjust_cfa_offset 4
-; CHECK-NEXT:    LXI H, 7
+; CHECK-NEXT:    LXI H, 6
 ; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV B, M
-; CHECK-NEXT:    DCX H
 ; CHECK-NEXT:    MOV C, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV B, M
 ; CHECK-NEXT:    LXI H, 0
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MVI M, 4

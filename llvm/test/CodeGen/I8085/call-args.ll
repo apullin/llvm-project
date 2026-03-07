@@ -37,16 +37,16 @@ define i8 @caller(i8 %x, i16 %y) {
 ; CHECK-NEXT:    MOV B, H
 ; CHECK-NEXT:    MOV C, L
 ; CHECK-NEXT:    STAX B
-; CHECK-NEXT:    LXI H, 7
+; CHECK-NEXT:    LXI H, 6
 ; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV B, M
-; CHECK-NEXT:    DCX H
 ; CHECK-NEXT:    MOV C, M
-; CHECK-NEXT:    LXI H, 2
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV B, M
+; CHECK-NEXT:    LXI H, 1
 ; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, B
-; CHECK-NEXT:    DCX H
 ; CHECK-NEXT:    MOV M, C
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, B
 ; CHECK-NEXT:    CALL callee
 ; CHECK-NEXT:    LXI H, 3
 ; CHECK-NEXT:    DAD SP

@@ -7,15 +7,14 @@ define i8 @ptr_eq(ptr %a, ptr %b) {
 ; CHECK-LABEL: ptr_eq:
 ; CHECK:         .cfi_startproc
 ; CHECK-NEXT:  ; %bb.0: ; %entry
-; CHECK-NEXT:    LXI H, 5
+; CHECK-NEXT:    LXI H, 4
 ; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV D, M
-; CHECK-NEXT:    PUSH H
-; CHECK-NEXT:    DCX H
 ; CHECK-NEXT:    MOV E, M
-; CHECK-NEXT:    POP H
-; CHECK-NEXT:    LXI H, 2
-; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV D, M
+; CHECK-NEXT:    DCX H
+; CHECK-NEXT:    DCX H
+; CHECK-NEXT:    DCX H
 ; CHECK-NEXT:    MOV A, M
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    MOV H, M
@@ -47,15 +46,17 @@ define i8 @ptr_ult(ptr %a, ptr %b) {
 ; CHECK-LABEL: ptr_ult:
 ; CHECK:         .cfi_startproc
 ; CHECK-NEXT:  ; %bb.0: ; %entry
-; CHECK-NEXT:    LXI H, 5
+; CHECK-NEXT:    LXI H, 4
 ; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    MOV C, M
+; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    MOV B, M
 ; CHECK-NEXT:    DCX H
-; CHECK-NEXT:    MOV C, M
 ; CHECK-NEXT:    DCX H
-; CHECK-NEXT:    MOV D, M
 ; CHECK-NEXT:    DCX H
 ; CHECK-NEXT:    MOV E, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV D, M
 ; CHECK-NEXT:    MOV A, E
 ; CHECK-NEXT:    SUB C
 ; CHECK-NEXT:    MOV C, A

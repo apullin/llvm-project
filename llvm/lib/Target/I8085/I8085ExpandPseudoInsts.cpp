@@ -935,15 +935,38 @@ bool I8085ExpandPseudo::expand<I8085::STORE_16>(Block &MBB, BlockIt MBBI) {
     return true;
   }
 
-  buildMI(MBB, MBBI,  I8085::STORE_8)
+  if (destReg != I8085::SP) {
+    // When the source is BC/DE and HL is free, store both bytes through one
+    // computed address instead of two separate STORE_8 expansions.
+    const bool PreservePSWCarry = isPhysRegLive(MBB, MBBI, I8085::SREG);
+    if (PreservePSWCarry) {
+      buildMI(MBB, MBBI, I8085::PUSH).addReg(I8085::PSW);
+      if (baseReg == I8085::SP)
+        offsetToStore += 2;
+    }
+
+    buildMI(MBB, MBBI, I8085::LXI)
+        .addReg(I8085::HL, RegState::Define)
+        .addImm(offsetToStore);
+    buildMI(MBB, MBBI, I8085::DAD).addReg(baseReg);
+
+    if (PreservePSWCarry)
+      buildMI(MBB, MBBI, I8085::POP).addReg(I8085::PSW, RegState::Define);
+
+    buildMI(MBB, MBBI, I8085::MOV_M).addReg(lowReg);
+    buildMI(MBB, MBBI, I8085::INX).addReg(I8085::HL, RegState::Define);
+    buildMI(MBB, MBBI, I8085::MOV_M).addReg(highReg);
+  } else {
+    buildMI(MBB, MBBI, I8085::STORE_8)
         .addReg(baseReg)
-        .addImm(offsetToStore+1)
+        .addImm(offsetToStore + 1)
         .addReg(highReg);
 
-  buildMI(MBB, MBBI,  I8085::STORE_8)
+    buildMI(MBB, MBBI, I8085::STORE_8)
         .addReg(baseReg)
         .addImm(offsetToStore)
-        .addReg(lowReg);    
+        .addReg(lowReg);
+  }
 
   if (PreserveHL)
     buildMI(MBB, MBBI, I8085::POP).addReg(I8085::HL, RegState::Define);
@@ -1222,15 +1245,26 @@ bool I8085ExpandPseudo::expand<I8085::LOAD_16_WITH_ADDR>(Block &MBB, BlockIt MBB
     return true;
   }
 
-  buildMI(MBB, MBBI, I8085::LOAD_8_WITH_ADDR)
-      .addReg(highReg)
-      .addReg(baseReg)
-      .addImm(offsetToLoad+1);
+  // When HL is already free, load both bytes through one computed address
+  // instead of expanding into two separate 8-bit loads.
+  const bool PreservePSWCarry = isPhysRegLive(MBB, MBBI, I8085::SREG);
+  if (PreservePSWCarry) {
+    buildMI(MBB, MBBI, I8085::PUSH).addReg(I8085::PSW);
+    if (baseReg == I8085::SP)
+      offsetToLoad += 2;
+  }
 
-  buildMI(MBB, MBBI, I8085::LOAD_8_WITH_ADDR)
-      .addReg(lowReg)
-      .addReg(baseReg)
-      .addImm(offsetToLoad);    
+  buildMI(MBB, MBBI, I8085::LXI)
+      .addReg(I8085::HL, RegState::Define)
+      .addImm(offsetToLoad);
+  buildMI(MBB, MBBI, I8085::DAD).addReg(baseReg);
+
+  if (PreservePSWCarry)
+    buildMI(MBB, MBBI, I8085::POP).addReg(I8085::PSW, RegState::Define);
+
+  buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(lowReg, RegState::Define);
+  buildMI(MBB, MBBI, I8085::INX).addReg(I8085::HL, RegState::Define);
+  buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(highReg, RegState::Define);
   
   MI.eraseFromParent();
   return true;

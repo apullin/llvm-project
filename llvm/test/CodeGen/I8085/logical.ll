@@ -30,15 +30,14 @@ define i16 @functiontwo(i16,i16) {
 ; CHECK-LABEL: functiontwo:
 ; CHECK:         .cfi_startproc
 ; CHECK-NEXT:  ; %bb.0:
-; CHECK-NEXT:    LXI H, 5
+; CHECK-NEXT:    LXI H, 4
 ; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV D, M
-; CHECK-NEXT:    PUSH H
-; CHECK-NEXT:    DCX H
 ; CHECK-NEXT:    MOV E, M
-; CHECK-NEXT:    POP H
-; CHECK-NEXT:    LXI H, 2
-; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV D, M
+; CHECK-NEXT:    DCX H
+; CHECK-NEXT:    DCX H
+; CHECK-NEXT:    DCX H
 ; CHECK-NEXT:    MOV A, M
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    MOV H, M
@@ -101,15 +100,17 @@ define i16 @functionfour(i16,i16) {
 ; CHECK-LABEL: functionfour:
 ; CHECK:         .cfi_startproc
 ; CHECK-NEXT:  ; %bb.0:
-; CHECK-NEXT:    LXI H, 5
+; CHECK-NEXT:    LXI H, 4
 ; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    MOV E, M
+; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    MOV D, M
 ; CHECK-NEXT:    DCX H
-; CHECK-NEXT:    MOV E, M
 ; CHECK-NEXT:    DCX H
-; CHECK-NEXT:    MOV B, M
 ; CHECK-NEXT:    DCX H
 ; CHECK-NEXT:    MOV C, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV B, M
 ; CHECK-NEXT:    MOV A, C
 ; CHECK-NEXT:    XRA E
 ; CHECK-NEXT:    MOV C, A

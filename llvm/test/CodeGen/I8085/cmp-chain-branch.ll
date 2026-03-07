@@ -10,11 +10,11 @@ define i8 @cmp_chain_and_i16(i16 %a) {
 ; CHECK:         .cfi_startproc
 ; CHECK-NEXT:  ; %bb.0: ; %entry
 ; CHECK-NEXT:    LXI D, 6
-; CHECK-NEXT:    LXI H, 3
+; CHECK-NEXT:    LXI H, 2
 ; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV B, M
-; CHECK-NEXT:    DCX H
 ; CHECK-NEXT:    MOV C, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV B, M
 ; CHECK-NEXT:    MOV A, B
 ; CHECK-NEXT:    XRA D
 ; CHECK-NEXT:    ANI 128
@@ -130,15 +130,14 @@ define i8 @cmp_chain_indep(i16 %a, i16 %b, i16 %c, i16 %d) {
 ; CHECK-LABEL: cmp_chain_indep:
 ; CHECK:         .cfi_startproc
 ; CHECK-NEXT:  ; %bb.0: ; %entry
-; CHECK-NEXT:    LXI H, 5
+; CHECK-NEXT:    LXI H, 4
 ; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV D, M
-; CHECK-NEXT:    PUSH H
-; CHECK-NEXT:    DCX H
 ; CHECK-NEXT:    MOV E, M
-; CHECK-NEXT:    POP H
-; CHECK-NEXT:    LXI H, 2
-; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV D, M
+; CHECK-NEXT:    DCX H
+; CHECK-NEXT:    DCX H
+; CHECK-NEXT:    DCX H
 ; CHECK-NEXT:    MOV A, M
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    MOV H, M
@@ -154,11 +153,12 @@ define i8 @cmp_chain_indep(i16 %a, i16 %b, i16 %c, i16 %d) {
 ; CHECK-NEXT:  LBB2_4: ; %entry
 ; CHECK-NEXT:    MVI B, 0
 ; CHECK-NEXT:  LBB2_5: ; %entry
-; CHECK-NEXT:    LXI H, 9
+; CHECK-NEXT:    LXI H, 8
 ; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    MOV E, M
+; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    MOV D, M
 ; CHECK-NEXT:    DCX H
-; CHECK-NEXT:    MOV E, M
 ; CHECK-NEXT:    DCX H
 ; CHECK-NEXT:    DCX H
 ; CHECK-NEXT:    MOV A, M

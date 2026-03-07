@@ -92,10 +92,9 @@ define i1 @cmp_mixed_i16(i16 %a, i16 %b) {
 ; CHECK-NEXT:    MOV B, A
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV E, M
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    MOV D, M
-; CHECK-NEXT:    DCX H
-; CHECK-NEXT:    MOV E, M
 ; CHECK-NEXT:    MOV A, B
 ; CHECK-NEXT:    XRA D
 ; CHECK-NEXT:    ANI 128

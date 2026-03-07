@@ -10,19 +10,16 @@ define i16 @loadtest16() #0  {
 ; CHECK-NEXT:    SPHL
 ; CHECK-NEXT:    .cfi_adjust_cfa_offset 4
 ; CHECK-NEXT:    LXI B, 20000
-; CHECK-NEXT:    LXI H, 1
+; CHECK-NEXT:    LXI H, 0
 ; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, B
-; CHECK-NEXT:    DCX H
 ; CHECK-NEXT:    MOV M, C
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, B
 ; CHECK-NEXT:    LXI D, 105
 ; CHECK-NEXT:    INX H
-; CHECK-NEXT:    INX H
-; CHECK-NEXT:    INX H
-; CHECK-NEXT:    MOV M, D
-; CHECK-NEXT:    DCX H
 ; CHECK-NEXT:    MOV M, E
 ; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, D
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    SPHL
 ; CHECK-NEXT:    .cfi_adjust_cfa_offset 4294967292

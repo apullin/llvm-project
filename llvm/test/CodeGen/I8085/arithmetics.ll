@@ -5,15 +5,17 @@ define i16 @add_sub_1(i16,i16) {
 ; CHECK-LABEL: add_sub_1:
 ; CHECK:         .cfi_startproc
 ; CHECK-NEXT:  ; %bb.0:
-; CHECK-NEXT:    LXI H, 5
+; CHECK-NEXT:    LXI H, 4
 ; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    MOV E, M
+; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    MOV D, M
 ; CHECK-NEXT:    DCX H
-; CHECK-NEXT:    MOV E, M
 ; CHECK-NEXT:    DCX H
-; CHECK-NEXT:    MOV B, M
 ; CHECK-NEXT:    DCX H
 ; CHECK-NEXT:    MOV C, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV B, M
 ; CHECK-NEXT:    MOV A, C
 ; CHECK-NEXT:    ADD E
 ; CHECK-NEXT:    MOV C, A
@@ -60,15 +62,17 @@ define i16 @add_sub_2(i16,i16) {
 ; CHECK-LABEL: add_sub_2:
 ; CHECK:         .cfi_startproc
 ; CHECK-NEXT:  ; %bb.0:
-; CHECK-NEXT:    LXI H, 5
+; CHECK-NEXT:    LXI H, 4
 ; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    MOV C, M
+; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    MOV B, M
 ; CHECK-NEXT:    DCX H
-; CHECK-NEXT:    MOV C, M
 ; CHECK-NEXT:    DCX H
-; CHECK-NEXT:    MOV D, M
 ; CHECK-NEXT:    DCX H
 ; CHECK-NEXT:    MOV E, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV D, M
 ; CHECK-NEXT:    MOV A, E
 ; CHECK-NEXT:    ADD C
 ; CHECK-NEXT:    MOV E, A

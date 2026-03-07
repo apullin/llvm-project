@@ -10,11 +10,11 @@ define i16 @diamond_simple(i16 %a, i16 %b) {
 ; CHECK:         .cfi_startproc
 ; CHECK-NEXT:  ; %bb.0: ; %entry
 ; CHECK-NEXT:    LXI D, 1
-; CHECK-NEXT:    LXI H, 3
+; CHECK-NEXT:    LXI H, 2
 ; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV B, M
-; CHECK-NEXT:    DCX H
 ; CHECK-NEXT:    MOV C, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV B, M
 ; CHECK-NEXT:    MOV A, B
 ; CHECK-NEXT:    XRA D
 ; CHECK-NEXT:    ANI 128
@@ -37,11 +37,11 @@ define i16 @diamond_simple(i16 %a, i16 %b) {
 ; CHECK-NEXT:  LBB0_5: ; %entry
 ; CHECK-NEXT:    MVI A, 1
 ; CHECK-NEXT:  LBB0_6: ; %entry
-; CHECK-NEXT:    LXI H, 5
+; CHECK-NEXT:    LXI H, 4
 ; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV D, M
-; CHECK-NEXT:    DCX H
 ; CHECK-NEXT:    MOV E, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV D, M
 ; CHECK-NEXT:    ORA A
 ; CHECK-NEXT:    JNZ LBB0_8
 ; CHECK-NEXT:  ; %bb.7: ; %then
@@ -87,11 +87,11 @@ define i16 @diamond_nested(i16 %a, i16 %b) {
 ; CHECK-NEXT:    SPHL
 ; CHECK-NEXT:    .cfi_adjust_cfa_offset 4
 ; CHECK-NEXT:    LXI D, 1
-; CHECK-NEXT:    LXI H, 7
+; CHECK-NEXT:    LXI H, 6
 ; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV B, M
-; CHECK-NEXT:    DCX H
 ; CHECK-NEXT:    MOV C, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV B, M
 ; CHECK-NEXT:    MOV A, B
 ; CHECK-NEXT:    XRA D
 ; CHECK-NEXT:    ANI 128
@@ -114,11 +114,11 @@ define i16 @diamond_nested(i16 %a, i16 %b) {
 ; CHECK-NEXT:  LBB1_5: ; %entry
 ; CHECK-NEXT:    MVI A, 1
 ; CHECK-NEXT:  LBB1_6: ; %entry
-; CHECK-NEXT:    LXI H, 9
+; CHECK-NEXT:    LXI H, 8
 ; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV D, M
-; CHECK-NEXT:    DCX H
 ; CHECK-NEXT:    MOV E, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV D, M
 ; CHECK-NEXT:    ORA A
 ; CHECK-NEXT:    JNZ LBB1_13
 ; CHECK-NEXT:  ; %bb.7: ; %positive
@@ -147,11 +147,12 @@ define i16 @diamond_nested(i16 %a, i16 %b) {
 ; CHECK-NEXT:    ADC D
 ; CHECK-NEXT:    JMP LBB1_11
 ; CHECK-NEXT:  LBB1_13: ; %nonpositive
-; CHECK-NEXT:    LXI H, 3
+; CHECK-NEXT:    LXI H, 2
 ; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    MOV M, E
+; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    MOV M, D
 ; CHECK-NEXT:    DCX H
-; CHECK-NEXT:    MOV M, E
 ; CHECK-NEXT:    DCX H
 ; CHECK-NEXT:    DCX H
 ; CHECK-NEXT:    MOV M, C

@@ -168,11 +168,11 @@ define i64 @mul64(i64 %a, i64 %b) {
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    MOV M, B
 ; CHECK-NEXT:    CALL __muldi3
-; CHECK-NEXT:    LXI H, 33
+; CHECK-NEXT:    LXI H, 32
 ; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV B, M
-; CHECK-NEXT:    DCX H
 ; CHECK-NEXT:    MOV C, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV B, M
 ; CHECK-NEXT:    LXI H, 26
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV A, M
@@ -454,11 +454,11 @@ define i64 @sdiv64(i64 %a, i64 %b) {
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    MOV M, B
 ; CHECK-NEXT:    CALL __divdi3
-; CHECK-NEXT:    LXI H, 33
+; CHECK-NEXT:    LXI H, 32
 ; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV B, M
-; CHECK-NEXT:    DCX H
 ; CHECK-NEXT:    MOV C, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV B, M
 ; CHECK-NEXT:    LXI H, 26
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV A, M
@@ -740,11 +740,11 @@ define i64 @udiv64(i64 %a, i64 %b) {
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    MOV M, B
 ; CHECK-NEXT:    CALL __udivdi3
-; CHECK-NEXT:    LXI H, 33
+; CHECK-NEXT:    LXI H, 32
 ; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV B, M
-; CHECK-NEXT:    DCX H
 ; CHECK-NEXT:    MOV C, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV B, M
 ; CHECK-NEXT:    LXI H, 26
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV A, M
@@ -1026,11 +1026,11 @@ define i64 @srem64(i64 %a, i64 %b) {
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    MOV M, B
 ; CHECK-NEXT:    CALL __moddi3
-; CHECK-NEXT:    LXI H, 33
+; CHECK-NEXT:    LXI H, 32
 ; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV B, M
-; CHECK-NEXT:    DCX H
 ; CHECK-NEXT:    MOV C, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV B, M
 ; CHECK-NEXT:    LXI H, 26
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV A, M
@@ -1312,11 +1312,11 @@ define i64 @urem64(i64 %a, i64 %b) {
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    MOV M, B
 ; CHECK-NEXT:    CALL __umoddi3
-; CHECK-NEXT:    LXI H, 33
+; CHECK-NEXT:    LXI H, 32
 ; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV B, M
-; CHECK-NEXT:    DCX H
 ; CHECK-NEXT:    MOV C, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV B, M
 ; CHECK-NEXT:    LXI H, 26
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV A, M
@@ -1555,11 +1555,11 @@ define i64 @shl64(i64 %a, i8 %b) {
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    MOV M, B
 ; CHECK-NEXT:    CALL __ashldi3
-; CHECK-NEXT:    LXI H, 29
+; CHECK-NEXT:    LXI H, 28
 ; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV B, M
-; CHECK-NEXT:    DCX H
 ; CHECK-NEXT:    MOV C, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV B, M
 ; CHECK-NEXT:    LXI H, 22
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV A, M
@@ -1799,11 +1799,11 @@ define i64 @lshr64(i64 %a, i8 %b) {
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    MOV M, B
 ; CHECK-NEXT:    CALL __lshrdi3
-; CHECK-NEXT:    LXI H, 29
+; CHECK-NEXT:    LXI H, 28
 ; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV B, M
-; CHECK-NEXT:    DCX H
 ; CHECK-NEXT:    MOV C, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV B, M
 ; CHECK-NEXT:    LXI H, 22
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV A, M
@@ -2043,11 +2043,11 @@ define i64 @ashr64(i64 %a, i8 %b) {
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    MOV M, B
 ; CHECK-NEXT:    CALL __ashrdi3
-; CHECK-NEXT:    LXI H, 29
+; CHECK-NEXT:    LXI H, 28
 ; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV B, M
-; CHECK-NEXT:    DCX H
 ; CHECK-NEXT:    MOV C, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV B, M
 ; CHECK-NEXT:    LXI H, 22
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV A, M
@@ -2174,17 +2174,16 @@ define i64 @clz64(i64 %a) {
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    SPHL
 ; CHECK-NEXT:    .cfi_adjust_cfa_offset 14
-; CHECK-NEXT:    LXI H, 17
+; CHECK-NEXT:    LXI H, 16
 ; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV B, M
-; CHECK-NEXT:    DCX H
 ; CHECK-NEXT:    MOV C, M
-; CHECK-NEXT:    DCX H
-; CHECK-NEXT:    DCX H
-; CHECK-NEXT:    DCX H
-; CHECK-NEXT:    MOV M, B
-; CHECK-NEXT:    DCX H
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV B, M
+; CHECK-NEXT:    LXI H, 12
+; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV M, C
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, B
 ; CHECK-NEXT:    LXI H, 8
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MVI M, 0
@@ -2310,10 +2309,9 @@ define i64 @clz64(i64 %a) {
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    MOV M, D
 ; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV C, M
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    MOV B, M
-; CHECK-NEXT:    DCX H
-; CHECK-NEXT:    MOV C, M
 ; CHECK-NEXT:    LXI H, 8
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV A, M

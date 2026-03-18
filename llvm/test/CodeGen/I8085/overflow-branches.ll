@@ -11,17 +11,15 @@ define i8 @br_uadd_ov(i16 %a, i16 %b) {
 ; CHECK-LABEL: br_uadd_ov:
 ; CHECK:         .cfi_startproc
 ; CHECK-NEXT:  ; %bb.0: ; %entry
-; CHECK-NEXT:    LXI H, 4
+; CHECK-NEXT:    LXI H, 2
 ; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV C, M
-; CHECK-NEXT:    INX H
-; CHECK-NEXT:    MOV B, M
-; CHECK-NEXT:    DCX H
-; CHECK-NEXT:    DCX H
-; CHECK-NEXT:    DCX H
 ; CHECK-NEXT:    MOV E, M
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    MOV D, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV C, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV B, M
 ; CHECK-NEXT:    MOV H, D
 ; CHECK-NEXT:    MOV L, E
 ; CHECK-NEXT:    MOV A, L
@@ -69,17 +67,15 @@ define i8 @br_sadd_ov(i16 %a, i16 %b) {
 ; CHECK-LABEL: br_sadd_ov:
 ; CHECK:         .cfi_startproc
 ; CHECK-NEXT:  ; %bb.0: ; %entry
-; CHECK-NEXT:    LXI H, 4
+; CHECK-NEXT:    LXI H, 2
 ; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV E, M
-; CHECK-NEXT:    INX H
-; CHECK-NEXT:    MOV D, M
-; CHECK-NEXT:    DCX H
-; CHECK-NEXT:    DCX H
-; CHECK-NEXT:    DCX H
 ; CHECK-NEXT:    MOV C, M
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    MOV B, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV E, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV D, M
 ; CHECK-NEXT:    MOV H, B
 ; CHECK-NEXT:    MOV L, C
 ; CHECK-NEXT:    MOV A, L

@@ -58,6 +58,9 @@ private:
   bool expandMBB(Block &MBB);
   bool expandMI(Block &MBB, BlockIt MBBI);
   template <unsigned OP> bool expand(Block &MBB, BlockIt MBBI);
+  BlockIt nextNonDebugInstr(Block &MBB, BlockIt MBBI) const;
+  bool tryExpandAdjacentLoad16Pair(Block &MBB, BlockIt MBBI);
+  bool tryExpandAdjacentStore16Pair(Block &MBB, BlockIt MBBI);
 
   MachineInstrBuilder buildMI(Block &MBB, BlockIt MBBI, unsigned Opcode) {
     return BuildMI(MBB, MBBI, MBBI->getDebugLoc(), TII->get(Opcode));
@@ -185,6 +188,13 @@ private:
 
 char I8085ExpandPseudo::ID = 0;
 
+I8085ExpandPseudo::BlockIt
+I8085ExpandPseudo::nextNonDebugInstr(Block &MBB, BlockIt MBBI) const {
+  while (MBBI != MBB.end() && MBBI->isDebugInstr())
+    ++MBBI;
+  return MBBI;
+}
+
 static bool getPairRegs(unsigned Pair, unsigned &LowReg, unsigned &HighReg) {
   switch (Pair) {
   case I8085::BC:
@@ -236,6 +246,122 @@ static void addAddrOperand(MachineInstrBuilder &MIB,
   default:
     llvm_unreachable("unexpected address operand type");
   }
+}
+
+bool I8085ExpandPseudo::tryExpandAdjacentLoad16Pair(Block &MBB, BlockIt MBBI) {
+  MachineInstr &MI = *MBBI;
+  auto NextIt = nextNonDebugInstr(MBB, std::next(MBBI));
+  if (NextIt == MBB.end() || NextIt->getOpcode() != I8085::LOAD_16_WITH_ADDR)
+    return false;
+
+  MachineInstr &NextMI = *NextIt;
+  unsigned DestA = MI.getOperand(0).getReg();
+  unsigned BaseA = MI.getOperand(1).getReg();
+  int64_t OffA = MI.getOperand(2).getImm();
+  unsigned DestB = NextMI.getOperand(0).getReg();
+  unsigned BaseB = NextMI.getOperand(1).getReg();
+  int64_t OffB = NextMI.getOperand(2).getImm();
+
+  if (BaseA != I8085::SP || BaseB != BaseA)
+    return false;
+  if (DestA == I8085::HL || DestA == I8085::SP || DestB == I8085::HL ||
+      DestB == I8085::SP)
+    return false;
+  if (DestA == DestB)
+    return false;
+  if (isHLOrSubRegLive(MBB, MBBI) || isPhysRegLive(MBB, MBBI, I8085::SREG))
+    return false;
+
+  unsigned LowA = 0, HighA = 0, LowB = 0, HighB = 0;
+  if (!getPairRegs(DestA, LowA, HighA) || !getPairRegs(DestB, LowB, HighB))
+    return false;
+
+  const bool FirstIsLower = OffA <= OffB;
+  unsigned LowRegLow = FirstIsLower ? LowA : LowB;
+  unsigned LowRegHigh = FirstIsLower ? HighA : HighB;
+  unsigned HighRegLow = FirstIsLower ? LowB : LowA;
+  unsigned HighRegHigh = FirstIsLower ? HighB : HighA;
+  const int64_t LowOff = FirstIsLower ? OffA : OffB;
+  const int64_t HighOff = FirstIsLower ? OffB : OffA;
+
+  if (HighOff - LowOff < 2 || HighOff - LowOff > 4)
+    return false;
+
+  buildMI(MBB, MBBI, I8085::LXI)
+      .addReg(I8085::HL, RegState::Define)
+      .addImm(LowOff);
+  buildMI(MBB, MBBI, I8085::DAD).addReg(I8085::SP);
+  buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(LowRegLow, RegState::Define);
+  buildMI(MBB, MBBI, I8085::INX).addReg(I8085::HL, RegState::Define);
+  buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(LowRegHigh, RegState::Define);
+
+  for (int64_t Step = LowOff + 1; Step < HighOff; ++Step)
+    buildMI(MBB, MBBI, I8085::INX).addReg(I8085::HL, RegState::Define);
+
+  buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(HighRegLow, RegState::Define);
+  buildMI(MBB, MBBI, I8085::INX).addReg(I8085::HL, RegState::Define);
+  buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(HighRegHigh, RegState::Define);
+
+  NextMI.eraseFromParent();
+  MI.eraseFromParent();
+  return true;
+}
+
+bool I8085ExpandPseudo::tryExpandAdjacentStore16Pair(Block &MBB, BlockIt MBBI) {
+  MachineInstr &MI = *MBBI;
+  auto NextIt = nextNonDebugInstr(MBB, std::next(MBBI));
+  if (NextIt == MBB.end() || NextIt->getOpcode() != I8085::STORE_16)
+    return false;
+
+  MachineInstr &NextMI = *NextIt;
+  unsigned BaseA = MI.getOperand(0).getReg();
+  int64_t OffA = MI.getOperand(1).getImm();
+  unsigned SrcA = MI.getOperand(2).getReg();
+  unsigned BaseB = NextMI.getOperand(0).getReg();
+  int64_t OffB = NextMI.getOperand(1).getImm();
+  unsigned SrcB = NextMI.getOperand(2).getReg();
+
+  if (BaseA != I8085::SP || BaseB != BaseA)
+    return false;
+  if (SrcA == I8085::HL || SrcA == I8085::SP || SrcB == I8085::HL ||
+      SrcB == I8085::SP)
+    return false;
+  if (isHLOrSubRegLive(MBB, MBBI) || isPhysRegLive(MBB, MBBI, I8085::SREG))
+    return false;
+
+  unsigned LowA = 0, HighA = 0, LowB = 0, HighB = 0;
+  if (!getPairRegs(SrcA, LowA, HighA) || !getPairRegs(SrcB, LowB, HighB))
+    return false;
+
+  const bool FirstIsLower = OffA <= OffB;
+  unsigned LowRegLow = FirstIsLower ? LowA : LowB;
+  unsigned LowRegHigh = FirstIsLower ? HighA : HighB;
+  unsigned HighRegLow = FirstIsLower ? LowB : LowA;
+  unsigned HighRegHigh = FirstIsLower ? HighB : HighA;
+  const int64_t LowOff = FirstIsLower ? OffA : OffB;
+  const int64_t HighOff = FirstIsLower ? OffB : OffA;
+
+  if (HighOff - LowOff < 2 || HighOff - LowOff > 4)
+    return false;
+
+  buildMI(MBB, MBBI, I8085::LXI)
+      .addReg(I8085::HL, RegState::Define)
+      .addImm(LowOff);
+  buildMI(MBB, MBBI, I8085::DAD).addReg(I8085::SP);
+  buildMI(MBB, MBBI, I8085::MOV_M).addReg(LowRegLow);
+  buildMI(MBB, MBBI, I8085::INX).addReg(I8085::HL, RegState::Define);
+  buildMI(MBB, MBBI, I8085::MOV_M).addReg(LowRegHigh);
+
+  for (int64_t Step = LowOff + 1; Step < HighOff; ++Step)
+    buildMI(MBB, MBBI, I8085::INX).addReg(I8085::HL, RegState::Define);
+
+  buildMI(MBB, MBBI, I8085::MOV_M).addReg(HighRegLow);
+  buildMI(MBB, MBBI, I8085::INX).addReg(I8085::HL, RegState::Define);
+  buildMI(MBB, MBBI, I8085::MOV_M).addReg(HighRegHigh);
+
+  NextMI.eraseFromParent();
+  MI.eraseFromParent();
+  return true;
 }
 
 bool I8085ExpandPseudo::expandMBB(MachineBasicBlock &MBB) {
@@ -829,6 +955,11 @@ bool I8085ExpandPseudo::expand<I8085::STORE_16_WITH_IMM_ADDR>(Block &MBB, BlockI
 template <>
 bool I8085ExpandPseudo::expand<I8085::STORE_16>(Block &MBB, BlockIt MBBI) {
   MachineInstr &MI = *MBBI;
+
+  // Two nearby SP-relative stores can share one address setup and walk HL
+  // forward, which is smaller than emitting two independent LXI/DAD pairs.
+  if (tryExpandAdjacentStore16Pair(MBB, MBBI))
+    return true;
   
   unsigned lowReg,highReg;
   unsigned baseReg = MI.getOperand(0).getReg();
@@ -1144,6 +1275,11 @@ bool I8085ExpandPseudo::expand<I8085::LOAD_8_WITH_ADDR>(Block &MBB, BlockIt MBBI
 template <>
 bool I8085ExpandPseudo::expand<I8085::LOAD_16_WITH_ADDR>(Block &MBB, BlockIt MBBI) {
   MachineInstr &MI = *MBBI;
+
+  // Likewise for two nearby SP-relative loads when HL and flags are already
+  // free: one computed address plus a short HL walk beats a second LXI/DAD.
+  if (tryExpandAdjacentLoad16Pair(MBB, MBBI))
+    return true;
   
   unsigned lowReg,highReg;
   unsigned destReg = MI.getOperand(0).getReg();

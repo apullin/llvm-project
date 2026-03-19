@@ -446,6 +446,13 @@ I8085TargetLowering::I8085TargetLowering(const I8085TargetMachine &TM,
   setLibcallName(RTLIB::SDIVREM_I8, "__sdivmod8");
   setLibcallName(RTLIB::SDIVREM_I16, "__sdivmod16");
 
+  // These combined div/rem helpers return quotient and remainder directly in
+  // registers, not via a C ABI struct return slot.
+  setLibcallCallingConv(RTLIB::UDIVREM_I8, CallingConv::I8085_BUILTIN);
+  setLibcallCallingConv(RTLIB::UDIVREM_I16, CallingConv::I8085_BUILTIN);
+  setLibcallCallingConv(RTLIB::SDIVREM_I8, CallingConv::I8085_BUILTIN);
+  setLibcallCallingConv(RTLIB::SDIVREM_I16, CallingConv::I8085_BUILTIN);
+
   setLibcallName(RTLIB::ADD_F32, "__addsf3");
   setLibcallName(RTLIB::SUB_F32, "__subsf3");
   setLibcallName(RTLIB::MUL_F32, "__mulsf3");

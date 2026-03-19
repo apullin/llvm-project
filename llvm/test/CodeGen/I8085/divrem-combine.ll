@@ -30,3 +30,18 @@ entry:
   store volatile i8 %rt, ptr %out1
   ret void
 }
+
+define void @qr3_i8(ptr %out, i8 %x) {
+; CHECK-LABEL: qr3_i8:
+; CHECK: MVI A, 3
+; CHECK: CALL __udivmod8
+; CHECK: STAX D
+; CHECK: MOV M, C
+entry:
+  %q = udiv i8 %x, 3
+  store volatile i8 %q, ptr %out
+  %r = urem i8 %x, 3
+  %out1 = getelementptr inbounds i8, ptr %out, i16 1
+  store volatile i8 %r, ptr %out1
+  ret void
+}

@@ -19,6 +19,7 @@ add_llvm_target(I8085CodeGen
   I8085AsmPrinter.cpp
   I8085ExpandCopies.cpp
   I8085ExpandPseudoInsts.cpp
+  I8085ForcedHints.cpp
   I8085HLTracking.cpp
   I8085ExpandPseudoInsts32.cpp
   I8085FrameLowering.cpp

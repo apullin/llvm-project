@@ -29,6 +29,7 @@ FunctionPass *createI8085ISelDag(I8085TargetMachine &TM,
                                
 FunctionPass *createI8085ExpandPseudoPass();
 FunctionPass *createI8085ExpandPseudo32Pass();
+FunctionPass *createI8085AddrHintsPass();
 FunctionPass *createI8085StoreRegClassPass();
 FunctionPass *createI8085ExpandCopiesPass();
 FunctionPass *createI8085PeepholePass();
@@ -39,6 +40,7 @@ FunctionPass *createI8085HLTrackingPass();
 
 void initializeI8085ExpandPseudoPass(PassRegistry &);
 void initializeI8085ExpandPseudo32Pass(PassRegistry &);
+void initializeI8085AddrHintsPass(PassRegistry &);
 void initializeI8085StoreRegClassPass(PassRegistry &);
 void initializeI8085ExpandCopiesPass(PassRegistry &);
 void initializeI8085PeepholePass(PassRegistry &);

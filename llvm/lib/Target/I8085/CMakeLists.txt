@@ -15,6 +15,7 @@ tablegen(LLVM I8085GenSubtargetInfo.inc -gen-subtarget)
 add_public_tablegen_target(I8085CommonTableGen)
 
 add_llvm_target(I8085CodeGen
+  I8085AddrHints.cpp
   I8085AsmPrinter.cpp
   I8085ExpandCopies.cpp
   I8085ExpandPseudoInsts.cpp

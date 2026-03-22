@@ -10,7 +10,6 @@
 define i16 @get_point_x(%struct.Point* %p) {
 ; CHECK-LABEL: get_point_x:
 ; CHECK: DAD SP
-; CHECK: MOV B, M
 ; CHECK-NOT: ADD
 ; CHECK: MOV C, M
 ; CHECK: INX H
@@ -28,9 +27,9 @@ define i16 @get_point_y(%struct.Point* %p) {
 ; CHECK: LXI B, 2
 ; CHECK: ADD C
 ; CHECK: ADC B
-; CHECK: LDAX D
-; CHECK: INX D
-; CHECK: LDAX D
+; CHECK: MOV C, M
+; CHECK: INX H
+; CHECK: MOV B, M
 ; CHECK: RET
 entry:
   %yptr = getelementptr %struct.Point, %struct.Point* %p, i16 0, i32 1
@@ -44,9 +43,9 @@ define i16 @get_rect_x2(%struct.Rect* %r) {
 ; CHECK: LXI B, 4
 ; CHECK: ADD C
 ; CHECK: ADC B
-; CHECK: LDAX D
-; CHECK: INX D
-; CHECK: LDAX D
+; CHECK: MOV C, M
+; CHECK: INX H
+; CHECK: MOV B, M
 ; CHECK: RET
 entry:
   %p2ptr = getelementptr %struct.Rect, %struct.Rect* %r, i16 0, i32 1

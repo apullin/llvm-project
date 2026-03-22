@@ -10,13 +10,13 @@ declare {i8, i1} @llvm.uadd.with.overflow.i8(i8, i8)
 ; Unsigned add with overflow, return overflow flag
 define i8 @uadd_overflow_i16(i16 %a, i16 %b, i16* %out) {
 ; CHECK-LABEL: uadd_overflow_i16:
-; CHECK: ADD L
-; CHECK: ADC H
-; CHECK: MOV M, C
-; CHECK: INX H
-; CHECK: MOV M, B
-; CHECK: SUB
-; CHECK: SBB
+; CHECK: ADD E
+; CHECK: ADC D
+; CHECK: STAX D
+; CHECK: INX D
+; CHECK: STAX D
+; CHECK: SUB E
+; CHECK: SBB D
 ; CHECK: JNC
 ; CHECK: MVI A, 1
 ; CHECK: RET

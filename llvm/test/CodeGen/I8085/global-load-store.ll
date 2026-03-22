@@ -56,11 +56,9 @@ entry:
 ; Access global array element via GEP (index * 2 + base)
 define i16 @load_array_elem(i16 %idx) {
 ; CHECK-LABEL: load_array_elem:
+; CHECK: LXI B, array
 ; CHECK: ADD C
 ; CHECK: ADC B
-; CHECK: LXI D, array
-; CHECK: ADD E
-; CHECK: ADC D
 ; CHECK: MOV C, M
 ; CHECK: INX H
 ; CHECK: MOV B, M
@@ -74,10 +72,10 @@ entry:
 ; Store to global array element
 define void @store_array_elem(i16 %idx, i16 %val) {
 ; CHECK-LABEL: store_array_elem:
+; CHECK: LXI B, array
 ; CHECK: ADD C
 ; CHECK: ADC B
-; CHECK: LXI D, array
-; CHECK: STAX B
+; CHECK: STAX D
 ; CHECK: RET
 entry:
   %ptr = getelementptr [4 x i16], [4 x i16]* @array, i16 0, i16 %idx

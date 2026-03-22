@@ -8,7 +8,7 @@ declare void @sink(i8)
 
 define i16 @switch_jumptable(i8 %x) {
 ; CHECK-LABEL: switch_jumptable:
-; CHECK: LXI D, JTI0_0
+; CHECK: LXI B, JTI0_0
 ; CHECK: PCHL
 ; CHECK: JTI0_0:
 ; OBJ: JTI0_0

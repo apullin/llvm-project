@@ -50,13 +50,26 @@ public:
       for (auto &MI : MBB) {
         int AddrIdx = -1;
         SmallVector<MCRegister, 2> Prefs;
+        const bool IsVolatileMem = llvm::any_of(
+            MI.memoperands(),
+            [](const MachineMemOperand *MMO) { return MMO && MMO->isVolatile(); });
 
         switch (MI.getOpcode()) {
         case I8085::LOAD_8_ADDR_CONTENT:
-        case I8085::LOAD_16_ADDR_CONTENT:
           AddrIdx = 1;
           Prefs.push_back(I8085::HL);
           Prefs.push_back(I8085::BC);
+          break;
+        case I8085::LOAD_16_ADDR_CONTENT:
+          AddrIdx = 1;
+          if (IsVolatileMem) {
+            Prefs.push_back(I8085::BC);
+            Prefs.push_back(I8085::DE);
+            Prefs.push_back(I8085::HL);
+          } else {
+            Prefs.push_back(I8085::HL);
+            Prefs.push_back(I8085::BC);
+          }
           break;
         case I8085::LOAD_32_ADDR_CONTENT:
           AddrIdx = 1;

@@ -166,18 +166,18 @@ define i8 @br_usub_ov(i8 %a, i8 %b) {
 ; CHECK-NEXT:    MOV A, M
 ; CHECK-NEXT:    SUB B
 ; CHECK-NEXT:    JNC LBB2_1
-; CHECK-NEXT:  ; %bb.3: ; %entry
+; CHECK-NEXT:  ; %bb.2: ; %entry
 ; CHECK-NEXT:    MVI A, 0
 ; CHECK-NEXT:    ORA A
-; CHECK-NEXT:    JNZ LBB2_5
-; CHECK-NEXT:  LBB2_4: ; %t
+; CHECK-NEXT:    JNZ LBB2_4
+; CHECK-NEXT:  LBB2_3: ; %t
 ; CHECK-NEXT:    MVI A, 1
 ; CHECK-NEXT:    RET
 ; CHECK-NEXT:  LBB2_1:
 ; CHECK-NEXT:    MVI A, 1
 ; CHECK-NEXT:    ORA A
-; CHECK-NEXT:    JZ LBB2_4
-; CHECK-NEXT:  LBB2_5: ; %f
+; CHECK-NEXT:    JZ LBB2_3
+; CHECK-NEXT:  LBB2_4: ; %f
 ; CHECK-NEXT:    MVI A, 0
 ; CHECK-NEXT:    RET
 entry:

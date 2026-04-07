@@ -460,6 +460,11 @@ bool I8085ExpandPseudo32::runOnMachineFunction(MachineFunction &MF) {
     }
   }
 
+  // Renumber blocks once after all expansions — see comment in
+  // I8085ExpandPseudo::runOnMachineFunction for rationale.
+  if (Modified)
+    MF.RenumberBlocks();
+
   return Modified;
 }
 
@@ -1895,7 +1900,6 @@ template <> bool I8085ExpandPseudo32::expand<I8085::JMP_32_IF_NOT_EQUAL>(Block &
   for (MachineBasicBlock *CmpMBB : CmpMBBs)
     MF->insert(InsertPos, CmpMBB);
   MF->insert(InsertPos, TailMBB);
-  MF->RenumberBlocks();
 
   // Splice continuation code from MBB into TailMBB.
   TailMBB->splice(TailMBB->begin(), &MBB, std::next(MBBI), MBB.end());
@@ -1985,8 +1989,6 @@ template <> bool I8085ExpandPseudo32::expand<I8085::JMP_32_IF_ULT>(Block &MBB, B
     MF->insert(InsertPos, CmpMBB);
   MF->insert(InsertPos, TailMBB);
   MF->insert(InsertPos, LtMBB);
-  // Renumber ALL blocks to avoid conflicts with existing block numbers.
-  MF->RenumberBlocks();
 
   TailMBB->splice(TailMBB->begin(), &MBB, std::next(MBBI), MBB.end());
   TailMBB->transferSuccessorsAndUpdatePHIs(&MBB);

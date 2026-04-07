@@ -405,6 +405,15 @@ bool I8085ExpandPseudo::runOnMachineFunction(MachineFunction &MF) {
     } while (ContinueExpanding);
   }
 
+  // Renumber blocks once after all expansions.  Mid-expansion calls to
+  // RenumberBlocks() are unsafe because MachineBasicBlock::getSymbol()
+  // caches the block number into the MCSymbol name on first call, and
+  // RenumberBlocks() temporarily sets evicted blocks to -1.  If any
+  // pass or verifier calls getSymbol() during that window, the -1 is
+  // baked into the symbol permanently, producing labels like LBB0_-1.
+  if (Modified)
+    MF.RenumberBlocks();
+
   return Modified;
 }
 
@@ -714,8 +723,6 @@ bool I8085ExpandPseudo::expand<I8085::CALL_INDIRECT>(Block &MBB, BlockIt MBBI) {
   MachineBasicBlock *ReturnMBB = MF->CreateMachineBasicBlock(LLVMBB);
   auto InsertPos = std::next(MBB.getIterator());
   MF->insert(InsertPos, ReturnMBB);
-  // Renumber ALL blocks to avoid conflicts with existing block numbers.
-  MF->RenumberBlocks();
 
   ReturnMBB->splice(ReturnMBB->begin(), &MBB, std::next(MBBI), MBB.end());
   ReturnMBB->transferSuccessorsAndUpdatePHIs(&MBB);
@@ -2754,8 +2761,6 @@ template <> bool I8085ExpandPseudo::expand<I8085::JMP_16_IF_NOT_EQUAL>(Block &MB
   MF->insert(InsertPos, CmpLowMBB);
   MF->insert(InsertPos, TailMBB);
   MF->insert(InsertPos, DiffMBB);
-  // Renumber ALL blocks to avoid conflicts with existing block numbers.
-  MF->RenumberBlocks();
 
   TailMBB->splice(TailMBB->begin(), &MBB, std::next(MBBI), MBB.end());
   TailMBB->transferSuccessorsAndUpdatePHIs(&MBB);

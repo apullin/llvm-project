@@ -868,6 +868,107 @@ bool I8085ExpandPseudo::expand<I8085::LOAD_8_WITH_IMM_ADDR>(Block &MBB, BlockIt 
   return true;
 }
 
+template <>
+bool I8085ExpandPseudo::expand<I8085::LOAD_8_STATIC_ADDR>(Block &MBB, BlockIt MBBI) {
+  MachineInstr &MI = *MBBI;
+
+  unsigned DestReg = MI.getOperand(0).getReg();
+  const MachineOperand &AddrMO = MI.getOperand(1);
+
+  const bool DestIsH = DestReg == I8085::H;
+  const bool DestIsL = DestReg == I8085::L;
+  const bool OtherSubLive =
+      DestIsH ? isPhysRegLive(MBB, MBBI, I8085::L)
+              : (DestIsL && isPhysRegLive(MBB, MBBI, I8085::H));
+  const bool PreserveHL =
+      OtherSubLive || (!DestIsH && !DestIsL && isHLOrSubRegLive(MBB, MBBI));
+  const bool PreserveA = OtherSubLive && isPhysRegLive(MBB, MBBI, I8085::A);
+
+  if (DestReg == I8085::A || PreserveHL) {
+    const bool PreserveATemp =
+        DestReg != I8085::A && isPhysRegLive(MBB, MBBI, I8085::A);
+    if (PreserveATemp)
+      buildMI(MBB, MBBI, I8085::PUSH).addReg(I8085::PSW);
+
+    MachineInstrBuilder Load = buildMI(MBB, MBBI, I8085::LDA);
+    addAddrOperand(Load, AddrMO);
+
+    if (DestReg != I8085::A)
+      buildMI(MBB, MBBI, I8085::MOV)
+          .addReg(DestReg, RegState::Define)
+          .addReg(I8085::A);
+    if (PreserveATemp)
+      buildMI(MBB, MBBI, I8085::POP).addReg(I8085::PSW, RegState::Define);
+
+    MI.eraseFromParent();
+    return true;
+  }
+
+  if (OtherSubLive && PreserveA)
+    buildMI(MBB, MBBI, I8085::PUSH).addReg(I8085::PSW);
+  if (PreserveHL)
+    buildMI(MBB, MBBI, I8085::PUSH).addReg(I8085::HL);
+
+  MachineInstrBuilder Addr =
+      buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL, RegState::Define);
+  addAddrOperand(Addr, AddrMO);
+
+  if (OtherSubLive) {
+    buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::A, RegState::Define);
+    buildMI(MBB, MBBI, I8085::POP).addReg(I8085::HL, RegState::Define);
+    buildMI(MBB, MBBI, I8085::MOV)
+        .addReg(DestReg, RegState::Define)
+        .addReg(I8085::A);
+    if (PreserveA)
+      buildMI(MBB, MBBI, I8085::POP).addReg(I8085::PSW, RegState::Define);
+  } else {
+    buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(DestReg, RegState::Define);
+    if (PreserveHL)
+      buildMI(MBB, MBBI, I8085::POP).addReg(I8085::HL, RegState::Define);
+  }
+
+  MI.eraseFromParent();
+  return true;
+}
+
+template <>
+bool I8085ExpandPseudo::expand<I8085::LOAD_16_STATIC_ADDR>(Block &MBB, BlockIt MBBI) {
+  MachineInstr &MI = *MBBI;
+
+  unsigned DestReg = MI.getOperand(0).getReg();
+  const MachineOperand &AddrMO = MI.getOperand(1);
+
+  if (DestReg == I8085::SP)
+    return false;
+
+  unsigned LowReg = 0, HighReg = 0;
+  const bool DestIsHL = DestReg == I8085::HL;
+  if (!DestIsHL && !getPairRegs(DestReg, LowReg, HighReg))
+    return false;
+
+  const bool PreserveHL = !DestIsHL && isHLOrSubRegLive(MBB, MBBI);
+  if (PreserveHL)
+    buildMI(MBB, MBBI, I8085::PUSH).addReg(I8085::HL);
+
+  MachineInstrBuilder Load =
+      buildMI(MBB, MBBI, I8085::LHLD);
+  addAddrOperand(Load, AddrMO);
+
+  if (!DestIsHL) {
+    buildMI(MBB, MBBI, I8085::MOV)
+        .addReg(HighReg, RegState::Define)
+        .addReg(I8085::H);
+    buildMI(MBB, MBBI, I8085::MOV)
+        .addReg(LowReg, RegState::Define)
+        .addReg(I8085::L);
+    if (PreserveHL)
+      buildMI(MBB, MBBI, I8085::POP).addReg(I8085::HL, RegState::Define);
+  }
+
+  MI.eraseFromParent();
+  return true;
+}
+
 
 template <>
 bool I8085ExpandPseudo::expand<I8085::LOAD_16_WITH_IMM_ADDR>(Block &MBB, BlockIt MBBI) {
@@ -932,6 +1033,81 @@ bool I8085ExpandPseudo::expand<I8085::STORE_8_WITH_IMM_ADDR>(Block &MBB, BlockIt
                                  .addReg(I8085::HL, RegState::Define);
   addAddrOperand(Addr, AddrMO);
   buildMI(MBB, MBBI, I8085::MOV_M).addReg(srcReg);
+
+  MI.eraseFromParent();
+  return true;
+}
+
+template <>
+bool I8085ExpandPseudo::expand<I8085::STORE_8_STATIC_ADDR>(Block &MBB, BlockIt MBBI) {
+  MachineInstr &MI = *MBBI;
+
+  unsigned SrcReg = MI.getOperand(1).getReg();
+  const MachineOperand &AddrMO = MI.getOperand(0);
+  const bool PreserveHL = isHLOrSubRegLive(MBB, MBBI);
+
+  if (SrcReg == I8085::A || (PreserveHL && !isPhysRegLive(MBB, MBBI, I8085::A))) {
+    if (SrcReg != I8085::A)
+      buildMI(MBB, MBBI, I8085::MOV)
+          .addReg(I8085::A, RegState::Define)
+          .addReg(SrcReg);
+
+    MachineInstrBuilder Store = buildMI(MBB, MBBI, I8085::STA);
+    addAddrOperand(Store, AddrMO);
+
+    MI.eraseFromParent();
+    return true;
+  }
+
+  if (PreserveHL)
+    buildMI(MBB, MBBI, I8085::PUSH).addReg(I8085::HL);
+
+  MachineInstrBuilder Addr =
+      buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL, RegState::Define);
+  addAddrOperand(Addr, AddrMO);
+  buildMI(MBB, MBBI, I8085::MOV_M).addReg(SrcReg);
+
+  if (PreserveHL)
+    buildMI(MBB, MBBI, I8085::POP).addReg(I8085::HL, RegState::Define);
+
+  MI.eraseFromParent();
+  return true;
+}
+
+template <>
+bool I8085ExpandPseudo::expand<I8085::STORE_16_STATIC_ADDR>(Block &MBB, BlockIt MBBI) {
+  MachineInstr &MI = *MBBI;
+
+  const MachineOperand &AddrMO = MI.getOperand(0);
+  unsigned SrcReg = MI.getOperand(1).getReg();
+
+  if (SrcReg == I8085::SP)
+    return false;
+
+  unsigned LowReg = 0, HighReg = 0;
+  const bool SrcIsHL = SrcReg == I8085::HL;
+  if (!SrcIsHL && !getPairRegs(SrcReg, LowReg, HighReg))
+    return false;
+
+  const bool PreserveHL = !SrcIsHL && isHLOrSubRegLive(MBB, MBBI);
+  if (PreserveHL)
+    buildMI(MBB, MBBI, I8085::PUSH).addReg(I8085::HL);
+
+  if (!SrcIsHL) {
+    buildMI(MBB, MBBI, I8085::MOV)
+        .addReg(I8085::H, RegState::Define)
+        .addReg(HighReg);
+    buildMI(MBB, MBBI, I8085::MOV)
+        .addReg(I8085::L, RegState::Define)
+        .addReg(LowReg);
+  }
+
+  MachineInstrBuilder Store =
+      buildMI(MBB, MBBI, I8085::SHLD);
+  addAddrOperand(Store, AddrMO);
+
+  if (PreserveHL)
+    buildMI(MBB, MBBI, I8085::POP).addReg(I8085::HL, RegState::Define);
 
   MI.eraseFromParent();
   return true;
@@ -3274,10 +3450,14 @@ bool I8085ExpandPseudo::expandMI(Block &MBB, BlockIt MBBI) {
     EXPAND(I8085::LOAD_16_WITH_ADDR);
     EXPAND(I8085::LOAD_8_WITH_ADDR);
     EXPAND(I8085::LOAD_8_WITH_IMM_ADDR);
+    EXPAND(I8085::LOAD_8_STATIC_ADDR);
+    EXPAND(I8085::LOAD_16_STATIC_ADDR);
     EXPAND(I8085::LOAD_16_WITH_IMM_ADDR);
     EXPAND(I8085::LOAD_16);
     EXPAND(I8085::FRMIDX);
     EXPAND(I8085::STORE_8_WITH_IMM_ADDR);
+    EXPAND(I8085::STORE_8_STATIC_ADDR);
+    EXPAND(I8085::STORE_16_STATIC_ADDR);
     EXPAND(I8085::STORE_16_WITH_IMM_ADDR);
     EXPAND(I8085::STORE_16);
     EXPAND(I8085::SHRINK_STACK_BY);

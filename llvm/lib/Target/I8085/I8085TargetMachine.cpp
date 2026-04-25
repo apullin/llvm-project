@@ -72,6 +72,7 @@ public:
   void addIRPasses() override;
   bool addInstSelector() override;
   void addPreRegAlloc() override;
+  void addPostRegAlloc() override;
   void addMachineLateOptimization() override;
   void addPreSched2() override;
   void addPreEmitPass() override;
@@ -144,6 +145,7 @@ extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializeI8085Target() {
   initializeI8085FrameAnalyzerPass(PR);
   initializeI8085DAGToDAGISelLegacyPass(PR);
   initializeI8085SelectToBranchPass(PR);
+  initializeI8085StaticScratchPass(PR);
 }
 
 const I8085Subtarget *I8085TargetMachine::getSubtargetImpl() const {
@@ -176,6 +178,10 @@ void I8085PassConfig::addPreRegAlloc() {
   addPass(createI8085AddrHintsPass());
   addPass(createI8085ForcedHintsPass());
   addPass(createI8085StoreRegClassPass());
+}
+
+void I8085PassConfig::addPostRegAlloc() {
+  addPass(createI8085StaticScratchPass());
 }
 
 void I8085PassConfig::addMachineLateOptimization() {

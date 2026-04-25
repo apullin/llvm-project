@@ -460,8 +460,6 @@ let Uses = [H,L] in {
 
   let Uses=[H,L] in def SHLD : F6<0b00100010,(outs), (ins imm16Addr: $k), "SHLD $k", []>;
 
-  let Defs=[H,L] in def LHLD : F6<0b00101010,(outs), (ins imm16Addr: $k), "LHLD $k", []>;
-  
   let Uses=[H,L] in def MOV_M  : FMOV_T_M<(outs), (ins GR8: $rs), "MOV M, $rs", []>;
 
   let Uses=[H,L] in def MOV_FROM_M  : FMOV_F_M<(outs GR8: $rd), (ins), "MOV $rd, M", []>;
@@ -469,6 +467,8 @@ let Uses = [H,L] in {
   let Uses=[H,L] in
   def MVI_M : F5<0b00110110,(outs), (ins I8085Imm8: $k), "MVI M, $k", []>;
 }          
+
+let Defs=[H,L] in def LHLD : F6<0b00101010,(outs), (ins imm16Addr: $k), "LHLD $k", []>;
 
 let Uses=[A] in def STA : F6<0b00110010,(outs), (ins imm16Addr: $k), "STA $k", []>;
 let Defs=[A] in def LDA : F6<0b00111010,(outs), (ins imm16Addr: $k), "LDA $k", []>;
@@ -554,6 +554,17 @@ let Defs=[HL] in def LOAD_8_WITH_IMM_ADDR : I8085Pseudo<(outs GR8: $dst),
                        (ins imm16Addr: $src),
                        "LOAD_8_ADDR $dst, $src", []>;  
 
+// Static-scratch variants are introduced after register allocation.  They use
+// HL internally but preserve it during expansion when it is live, so do not
+// declare HL as a def here.
+let mayLoad = 1 in def LOAD_8_STATIC_ADDR : I8085Pseudo<(outs GR8: $dst),
+                       (ins imm16Addr: $src),
+                       "LOAD_8_STATIC_ADDR $dst, $src", []>;
+
+let mayLoad = 1 in def LOAD_16_STATIC_ADDR : I8085Pseudo<(outs GR16: $dst),
+                       (ins imm16Addr: $src),
+                       "LOAD_16_STATIC_ADDR $dst, $src", []>;
+
 let Defs=[HL, A] in def LOAD_16_WITH_IMM_ADDR : I8085Pseudo<(outs GR16: $dst),
                        (ins imm16Addr: $src),
                        "LOAD_16_ADDR $dst, $src", []>;
@@ -588,6 +599,14 @@ let Defs=[HL, A] in def STORE_16_ADDR_CONTENT : I8085Pseudo<(outs),
 let Defs=[HL], mayStore = 1 in def STORE_8_WITH_IMM_ADDR : I8085Pseudo<(outs),
                        (ins imm16Addr: $addr, GR8NoHL: $src),
                        "STORE_8_ADDR $addr, $src", []>;
+
+let mayStore = 1 in def STORE_8_STATIC_ADDR : I8085Pseudo<(outs),
+                       (ins imm16Addr: $addr, GR8NoHL: $src),
+                       "STORE_8_STATIC_ADDR $addr, $src", []>;
+
+let mayStore = 1 in def STORE_16_STATIC_ADDR : I8085Pseudo<(outs),
+                       (ins imm16Addr: $addr, GR16: $src),
+                       "STORE_16_STATIC_ADDR $addr, $src", []>;
 
 let Defs=[HL], mayStore = 1 in def STORE_16_WITH_IMM_ADDR : I8085Pseudo<(outs),
                        (ins imm16Addr: $addr, GR16BD: $src),

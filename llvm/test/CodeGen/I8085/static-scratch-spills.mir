@@ -1,0 +1,46 @@
+# RUN: llc -O2 -mtriple=i8085-unknown-elf -run-pass=i8085-static-scratch -i8085-static-scratch-bytes=8 %s -o - | FileCheck %s
+
+--- |
+  target triple = "i8085-unknown-elf"
+
+  define void @spill8() #0 { ret void }
+  define void @spill16() #0 { ret void }
+
+  attributes #0 = { norecurse }
+...
+
+---
+name:            spill8
+tracksRegLiveness: true
+stack:
+  - { id: 0, type: spill-slot, size: 1, alignment: 1 }
+body:             |
+  bb.0:
+    liveins: $a
+
+    ; CHECK-LABEL: name:            spill8
+    ; CHECK: STORE_8_STATIC_ADDR @__i8085_static_scratch.spill8.0
+    ; CHECK: $a = LOAD_8_STATIC_ADDR @__i8085_static_scratch.spill8.0
+    ; CHECK-NOT: %stack.0
+    STORE_8 %stack.0, 0, killed $a, implicit $sp
+    $a = LOAD_8_WITH_ADDR %stack.0, 0, implicit $sp
+    RET implicit $sp, implicit-def $sp
+...
+
+---
+name:            spill16
+tracksRegLiveness: true
+stack:
+  - { id: 0, type: spill-slot, size: 2, alignment: 1 }
+body:             |
+  bb.0:
+    liveins: $bc
+
+    ; CHECK-LABEL: name:            spill16
+    ; CHECK: STORE_16_STATIC_ADDR @__i8085_static_scratch.spill16.0
+    ; CHECK: $de = LOAD_16_STATIC_ADDR @__i8085_static_scratch.spill16.0
+    ; CHECK-NOT: %stack.0
+    STORE_16 %stack.0, 0, killed $bc, implicit $sp
+    $de = LOAD_16_WITH_ADDR %stack.0, 0, implicit $sp
+    RET implicit $sp, implicit-def $sp
+...

@@ -21,6 +21,7 @@
 #include "MCTargetDesc/I8085MCTargetDesc.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/STLExtras.h"
+#include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/CodeGen/MachineFrameInfo.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
@@ -29,9 +30,13 @@
 #include "llvm/IR/DerivedTypes.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/GlobalVariable.h"
+#include "llvm/IR/InstIterator.h"
+#include "llvm/IR/Instructions.h"
 #include "llvm/IR/Module.h"
 #include "llvm/Support/CommandLine.h"
+#include "llvm/Support/raw_ostream.h"
 #include "llvm/Target/TargetMachine.h"
+#include <limits>
 #include <tuple>
 
 using namespace llvm;
@@ -46,7 +51,29 @@ static cl::opt<unsigned> I8085StaticScratchBytes(
 static cl::opt<bool> I8085StaticScratchUnsafeRecursive(
     "i8085-static-scratch-unsafe-recursive", cl::Hidden, cl::init(false),
     cl::desc("Allow i8085 static scratch spill slots in functions not proven "
-             "norecurse"));
+             "norecurse, excluding direct recursive SCCs"));
+
+static cl::opt<bool> I8085StaticScratchAllowKnownRecursive(
+    "i8085-static-scratch-allow-known-recursive", cl::Hidden, cl::init(false),
+    cl::desc("Allow i8085 static scratch spill slots even in functions found "
+             "in a direct recursive SCC"));
+
+static cl::list<std::string> I8085StaticScratchSkipFunctions(
+    "i8085-static-scratch-skip-function", cl::Hidden, cl::ZeroOrMore,
+    cl::desc("Do not use i8085 static scratch spill slots in this function"));
+
+static cl::list<std::string> I8085StaticScratchOnlyFunctions(
+    "i8085-static-scratch-only-function", cl::Hidden, cl::ZeroOrMore,
+    cl::desc("Only use i8085 static scratch spill slots in this function"));
+
+static cl::opt<int> I8085StaticScratchOnlyFrameIndex(
+    "i8085-static-scratch-only-frame-index", cl::Hidden,
+    cl::init(std::numeric_limits<int>::min()),
+    cl::desc("Only use i8085 static scratch for this machine frame index"));
+
+static cl::opt<bool> I8085StaticScratchDump(
+    "i8085-static-scratch-dump", cl::Hidden, cl::init(false),
+    cl::desc("Dump i8085 static scratch frame-object conversions"));
 
 namespace {
 
@@ -71,8 +98,13 @@ public:
 
 private:
   const TargetInstrInfo *TII = nullptr;
+  DenseMap<const Function *, bool> DirectRecursiveSCC;
 
   bool isSupportedAccess(const MachineInstr &MI, int &FrameIndex) const;
+  bool isInDirectRecursiveSCC(const Function &F);
+  bool mayBeLiveAcrossCall(const MachineFunction &MF, int FrameIndex) const;
+  void dumpConversion(const MachineFunction &MF, int FrameIndex,
+                      const SlotInfo &Info, const GlobalVariable &GV) const;
   GlobalVariable *createScratchGlobal(MachineFunction &MF, int FrameIndex,
                                       unsigned Size) const;
   bool rewriteAccess(MachineInstr &MI, GlobalVariable *GV) const;
@@ -111,18 +143,107 @@ bool I8085StaticScratch::isSupportedAccess(const MachineInstr &MI,
   }
 }
 
-GlobalVariable *
-I8085StaticScratch::createScratchGlobal(MachineFunction &MF, int FrameIndex,
-                                        unsigned Size) const {
+static const Function *getDirectCallee(const Instruction &I) {
+  const auto *CB = dyn_cast<CallBase>(&I);
+  if (!CB)
+    return nullptr;
+
+  return dyn_cast<Function>(CB->getCalledOperand()->stripPointerCasts());
+}
+
+bool I8085StaticScratch::isInDirectRecursiveSCC(const Function &F) {
+  auto It = DirectRecursiveSCC.find(&F);
+  if (It != DirectRecursiveSCC.end())
+    return It->second;
+
+  SmallPtrSet<const Function *, 16> Visited;
+  SmallVector<const Function *, 16> Worklist;
+
+  for (const Instruction &I : instructions(F)) {
+    const Function *Callee = getDirectCallee(I);
+    if (!Callee || Callee->isDeclaration())
+      continue;
+    if (Callee == &F)
+      return DirectRecursiveSCC[&F] = true;
+    Worklist.push_back(Callee);
+  }
+
+  while (!Worklist.empty()) {
+    const Function *Cur = Worklist.pop_back_val();
+    if (!Visited.insert(Cur).second)
+      continue;
+
+    for (const Instruction &I : instructions(Cur)) {
+      const Function *Callee = getDirectCallee(I);
+      if (!Callee || Callee->isDeclaration())
+        continue;
+      if (Callee == &F)
+        return DirectRecursiveSCC[&F] = true;
+      Worklist.push_back(Callee);
+    }
+  }
+
+  return DirectRecursiveSCC[&F] = false;
+}
+
+bool I8085StaticScratch::mayBeLiveAcrossCall(const MachineFunction &MF,
+                                             int FrameIndex) const {
+  bool AfterStore = false;
+  for (const MachineBasicBlock &MBB : MF) {
+    for (const MachineInstr &MI : MBB) {
+      if (AfterStore && MI.isCall())
+        return true;
+
+      int FI = 0;
+      if (!isSupportedAccess(MI, FI) || FI != FrameIndex)
+        continue;
+
+      switch (MI.getOpcode()) {
+      case I8085::STORE_8:
+      case I8085::STORE_16:
+        AfterStore = true;
+        break;
+      case I8085::LOAD_8_WITH_ADDR:
+      case I8085::LOAD_16_WITH_ADDR:
+        AfterStore = false;
+        break;
+      default:
+        break;
+      }
+    }
+  }
+
+  return false;
+}
+
+void I8085StaticScratch::dumpConversion(const MachineFunction &MF,
+                                        int FrameIndex, const SlotInfo &Info,
+                                        const GlobalVariable &GV) const {
+  const MachineFrameInfo &MFI = MF.getFrameInfo();
+  errs() << "i8085-static-scratch: function=" << MF.getName()
+         << " frame-index=" << FrameIndex << " size=" << Info.Size
+         << " accesses=" << Info.Accesses
+         << " offset=" << MFI.getObjectOffset(FrameIndex)
+         << " spill=" << MFI.isSpillSlotObjectIndex(FrameIndex)
+         << " aliased=" << MFI.isAliasedObjectIndex(FrameIndex)
+         << " immutable=" << MFI.isImmutableObjectIndex(FrameIndex)
+         << " stack-id=" << unsigned(MFI.getStackID(FrameIndex))
+         << " has-calls=" << MFI.hasCalls()
+         << " live-across-call=" << mayBeLiveAcrossCall(MF, FrameIndex)
+         << " symbol=" << GV.getName() << " address=<linker-assigned>\n";
+}
+
+GlobalVariable *I8085StaticScratch::createScratchGlobal(MachineFunction &MF,
+                                                        int FrameIndex,
+                                                        unsigned Size) const {
   Module *M = const_cast<Module *>(MF.getFunction().getParent());
   LLVMContext &Ctx = M->getContext();
   auto *Ty = ArrayType::get(Type::getInt8Ty(Ctx), Size);
-  auto *GV = new GlobalVariable(
-      *M, Ty, false, GlobalValue::PrivateLinkage,
-      Constant::getNullValue(Ty),
-      (Twine("__i8085_static_scratch.") + MF.getName() + "." +
-       Twine(FrameIndex))
-          .str());
+  auto *GV = new GlobalVariable(*M, Ty, false, GlobalValue::PrivateLinkage,
+                                Constant::getNullValue(Ty),
+                                (Twine("__i8085_static_scratch.") +
+                                 MF.getName() + "." + Twine(FrameIndex))
+                                    .str());
   GV->setAlignment(Align(1));
   return GV;
 }
@@ -184,9 +305,18 @@ bool I8085StaticScratch::rewriteAccess(MachineInstr &MI,
 bool I8085StaticScratch::runOnMachineFunction(MachineFunction &MF) {
   if (I8085StaticScratchBytes == 0)
     return false;
+  if (!I8085StaticScratchOnlyFunctions.empty() &&
+      !llvm::is_contained(I8085StaticScratchOnlyFunctions, MF.getName()))
+    return false;
+  if (llvm::is_contained(I8085StaticScratchSkipFunctions, MF.getName()))
+    return false;
   if (MF.getTarget().getOptLevel() == CodeGenOptLevel::None)
     return false;
   if (!I8085StaticScratchUnsafeRecursive && !MF.getFunction().doesNotRecurse())
+    return false;
+  if (I8085StaticScratchUnsafeRecursive &&
+      !I8085StaticScratchAllowKnownRecursive &&
+      isInDirectRecursiveSCC(MF.getFunction()))
     return false;
 
   const auto &ST = MF.getSubtarget();
@@ -238,10 +368,15 @@ bool I8085StaticScratch::runOnMachineFunction(MachineFunction &MF) {
   bool Changed = false;
   for (int FI : Candidates) {
     SlotInfo &Info = Slots[FI];
+    if (I8085StaticScratchOnlyFrameIndex != std::numeric_limits<int>::min() &&
+        FI != I8085StaticScratchOnlyFrameIndex)
+      continue;
     if (UsedBytes + Info.Size > I8085StaticScratchBytes)
       continue;
 
     GlobalVariable *GV = createScratchGlobal(MF, FI, Info.Size);
+    if (I8085StaticScratchDump)
+      dumpConversion(MF, FI, Info, *GV);
     for (MachineInstr *MI : Info.Instrs)
       Changed |= rewriteAccess(*MI, GV);
     MFI.RemoveStackObject(FI);

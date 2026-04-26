@@ -12,6 +12,11 @@
   define void @spill16() #0 { ret void }
   define void @two_slots() #0 { ret void }
   define void @unknown_nonrecursive() { ret void }
+  define void @unknown_call_mixed() {
+    call void @external_callee()
+    ret void
+  }
+  declare void @external_callee()
   define void @direct_recursive() {
     call void @direct_recursive()
     ret void
@@ -115,12 +120,45 @@ body:             |
     liveins: $a
 
     ; CHECK-LABEL: name:            unknown_nonrecursive
+    ; CHECK: STORE_8_STATIC_ADDR @__i8085_static_scratch.unknown_nonrecursive.0
+    ; CHECK: $a = LOAD_8_STATIC_ADDR @__i8085_static_scratch.unknown_nonrecursive.0
     ; SKIP-LABEL: name:            unknown_nonrecursive
     ; UNSAFE-LABEL: name:            unknown_nonrecursive
     ; UNSAFE: STORE_8_STATIC_ADDR @__i8085_static_scratch.unknown_nonrecursive.0
     ; UNSAFE: $a = LOAD_8_STATIC_ADDR @__i8085_static_scratch.unknown_nonrecursive.0
     STORE_8 %stack.0, 0, killed $a, implicit $sp
     $a = LOAD_8_WITH_ADDR %stack.0, 0, implicit $sp
+    RET implicit $sp, implicit-def $sp
+...
+
+---
+name:            unknown_call_mixed
+tracksRegLiveness: true
+stack:
+  - { id: 0, type: spill-slot, size: 1, alignment: 1 }
+  - { id: 1, type: spill-slot, size: 1, alignment: 1 }
+body:             |
+  bb.0:
+    liveins: $a
+
+    ; CHECK-LABEL: name:            unknown_call_mixed
+    ; CHECK: STORE_8 %stack.0
+    ; CHECK: CALL @external_callee
+    ; CHECK: $a = LOAD_8_WITH_ADDR %stack.0
+    ; CHECK: STORE_8_STATIC_ADDR @__i8085_static_scratch.unknown_call_mixed.1
+    ; CHECK: $c = LOAD_8_STATIC_ADDR @__i8085_static_scratch.unknown_call_mixed.1
+    ; UNSAFE-LABEL: name:            unknown_call_mixed
+    ; UNSAFE: STORE_8_STATIC_ADDR @__i8085_static_scratch.unknown_call_mixed.0
+    ; UNSAFE: CALL @external_callee
+    ; UNSAFE: $a = LOAD_8_STATIC_ADDR @__i8085_static_scratch.unknown_call_mixed.0
+    ; UNSAFE: STORE_8_STATIC_ADDR @__i8085_static_scratch.unknown_call_mixed.1
+    ; UNSAFE: $c = LOAD_8_STATIC_ADDR @__i8085_static_scratch.unknown_call_mixed.1
+    STORE_8 %stack.0, 0, killed $a, implicit $sp
+    CALL @external_callee, csr_normal, implicit-def $sp, implicit-def dead $a, implicit-def dead $b, implicit-def dead $c, implicit-def dead $d, implicit-def dead $e, implicit-def dead $h, implicit-def dead $l, implicit $sp
+    $a = LOAD_8_WITH_ADDR %stack.0, 0, implicit $sp
+    $c = MVI 7
+    STORE_8 %stack.1, 0, killed $c, implicit $sp
+    $c = LOAD_8_WITH_ADDR %stack.1, 0, implicit $sp
     RET implicit $sp, implicit-def $sp
 ...
 
@@ -138,8 +176,10 @@ body:             |
     ; UNSAFE: $a = LOAD_8_WITH_ADDR %stack.0
     ; ALLOW-LABEL: name:            direct_recursive
     ; ALLOW: STORE_8_STATIC_ADDR @__i8085_static_scratch.direct_recursive.0
+    ; ALLOW: CALL @direct_recursive
     ; ALLOW: $a = LOAD_8_STATIC_ADDR @__i8085_static_scratch.direct_recursive.0
     STORE_8 %stack.0, 0, killed $a, implicit $sp
+    CALL @direct_recursive, csr_normal, implicit-def $sp, implicit-def dead $a, implicit-def dead $b, implicit-def dead $c, implicit-def dead $d, implicit-def dead $e, implicit-def dead $h, implicit-def dead $l, implicit $sp
     $a = LOAD_8_WITH_ADDR %stack.0, 0, implicit $sp
     RET implicit $sp, implicit-def $sp
 ...
@@ -155,8 +195,10 @@ body:             |
 
     ; UNSAFE-LABEL: name:            mutual_a
     ; UNSAFE: STORE_8 %stack.0
+    ; UNSAFE: CALL @mutual_b
     ; UNSAFE: $a = LOAD_8_WITH_ADDR %stack.0
     STORE_8 %stack.0, 0, killed $a, implicit $sp
+    CALL @mutual_b, csr_normal, implicit-def $sp, implicit-def dead $a, implicit-def dead $b, implicit-def dead $c, implicit-def dead $d, implicit-def dead $e, implicit-def dead $h, implicit-def dead $l, implicit $sp
     $a = LOAD_8_WITH_ADDR %stack.0, 0, implicit $sp
     RET implicit $sp, implicit-def $sp
 ...
@@ -172,8 +214,10 @@ body:             |
 
     ; UNSAFE-LABEL: name:            mutual_b
     ; UNSAFE: STORE_8 %stack.0
+    ; UNSAFE: CALL @mutual_a
     ; UNSAFE: $a = LOAD_8_WITH_ADDR %stack.0
     STORE_8 %stack.0, 0, killed $a, implicit $sp
+    CALL @mutual_a, csr_normal, implicit-def $sp, implicit-def dead $a, implicit-def dead $b, implicit-def dead $c, implicit-def dead $d, implicit-def dead $e, implicit-def dead $h, implicit-def dead $l, implicit $sp
     $a = LOAD_8_WITH_ADDR %stack.0, 0, implicit $sp
     RET implicit $sp, implicit-def $sp
 ...

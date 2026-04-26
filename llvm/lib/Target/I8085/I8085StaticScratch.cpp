@@ -45,18 +45,19 @@ using namespace llvm;
 
 static cl::opt<unsigned> I8085StaticScratchBytes(
     "i8085-static-scratch-bytes", cl::Hidden, cl::init(0),
-    cl::desc("Maximum bytes of private static RAM to use per norecurse "
-             "function for i8085 spill slots"));
+    cl::desc("Maximum bytes of private static RAM to use per function for "
+             "i8085 spill slots"));
 
 static cl::opt<bool> I8085StaticScratchUnsafeRecursive(
     "i8085-static-scratch-unsafe-recursive", cl::Hidden, cl::init(false),
-    cl::desc("Allow i8085 static scratch spill slots in functions not proven "
-             "norecurse, excluding direct recursive SCCs"));
+    cl::desc("Allow i8085 static scratch spill slots that are live across "
+             "calls in functions not proven norecurse, excluding direct "
+             "recursive SCCs"));
 
 static cl::opt<bool> I8085StaticScratchAllowKnownRecursive(
     "i8085-static-scratch-allow-known-recursive", cl::Hidden, cl::init(false),
-    cl::desc("Allow i8085 static scratch spill slots even in functions found "
-             "in a direct recursive SCC"));
+    cl::desc("Allow i8085 static scratch spill slots that are live across "
+             "calls even in functions found in a direct recursive SCC"));
 
 static cl::list<std::string> I8085StaticScratchSkipFunctions(
     "i8085-static-scratch-skip-function", cl::Hidden, cl::ZeroOrMore,
@@ -80,6 +81,7 @@ namespace {
 struct SlotInfo {
   unsigned Size = 0;
   unsigned Accesses = 0;
+  bool LiveAcrossCall = false;
   bool Supported = true;
   SmallVector<MachineInstr *, 4> Instrs;
 };
@@ -188,27 +190,57 @@ bool I8085StaticScratch::isInDirectRecursiveSCC(const Function &F) {
 
 bool I8085StaticScratch::mayBeLiveAcrossCall(const MachineFunction &MF,
                                              int FrameIndex) const {
-  bool AfterStore = false;
+  DenseMap<const MachineBasicBlock *, bool> LiveIn;
+  DenseMap<const MachineBasicBlock *, bool> LiveOut;
+  SmallVector<const MachineBasicBlock *, 16> Blocks;
+
   for (const MachineBasicBlock &MBB : MF) {
-    for (const MachineInstr &MI : MBB) {
-      if (AfterStore && MI.isCall())
-        return true;
+    Blocks.push_back(&MBB);
+    LiveIn[&MBB] = false;
+    LiveOut[&MBB] = false;
+  }
 
-      int FI = 0;
-      if (!isSupportedAccess(MI, FI) || FI != FrameIndex)
-        continue;
+  bool Changed = true;
+  while (Changed) {
+    Changed = false;
 
-      switch (MI.getOpcode()) {
-      case I8085::STORE_8:
-      case I8085::STORE_16:
-        AfterStore = true;
-        break;
-      case I8085::LOAD_8_WITH_ADDR:
-      case I8085::LOAD_16_WITH_ADDR:
-        AfterStore = false;
-        break;
-      default:
-        break;
+    for (const MachineBasicBlock *MBB : llvm::reverse(Blocks)) {
+      bool Out = false;
+      for (const MachineBasicBlock *Succ : MBB->successors())
+        Out |= LiveIn.lookup(Succ);
+
+      bool Live = Out;
+      for (const MachineInstr &MI : llvm::reverse(*MBB)) {
+        if (Live && MI.isCall())
+          return true;
+
+        int FI = 0;
+        if (isSupportedAccess(MI, FI) && FI == FrameIndex) {
+          switch (MI.getOpcode()) {
+          case I8085::STORE_8:
+          case I8085::STORE_16:
+            Live = false;
+            break;
+          case I8085::LOAD_8_WITH_ADDR:
+          case I8085::LOAD_16_WITH_ADDR:
+            Live = true;
+            break;
+          default:
+            break;
+          }
+          continue;
+        }
+
+        for (const MachineOperand &MO : MI.operands()) {
+          if (MO.isFI() && MO.getIndex() == FrameIndex)
+            return true;
+        }
+      }
+
+      if (LiveIn.lookup(MBB) != Live || LiveOut.lookup(MBB) != Out) {
+        LiveIn[MBB] = Live;
+        LiveOut[MBB] = Out;
+        Changed = true;
       }
     }
   }
@@ -229,7 +261,7 @@ void I8085StaticScratch::dumpConversion(const MachineFunction &MF,
          << " immutable=" << MFI.isImmutableObjectIndex(FrameIndex)
          << " stack-id=" << unsigned(MFI.getStackID(FrameIndex))
          << " has-calls=" << MFI.hasCalls()
-         << " live-across-call=" << mayBeLiveAcrossCall(MF, FrameIndex)
+         << " live-across-call=" << Info.LiveAcrossCall
          << " symbol=" << GV.getName() << " address=<linker-assigned>\n";
 }
 
@@ -312,12 +344,6 @@ bool I8085StaticScratch::runOnMachineFunction(MachineFunction &MF) {
     return false;
   if (MF.getTarget().getOptLevel() == CodeGenOptLevel::None)
     return false;
-  if (!I8085StaticScratchUnsafeRecursive && !MF.getFunction().doesNotRecurse())
-    return false;
-  if (I8085StaticScratchUnsafeRecursive &&
-      !I8085StaticScratchAllowKnownRecursive &&
-      isInDirectRecursiveSCC(MF.getFunction()))
-    return false;
 
   const auto &ST = MF.getSubtarget();
   TII = ST.getInstrInfo();
@@ -355,6 +381,7 @@ bool I8085StaticScratch::runOnMachineFunction(MachineFunction &MF) {
     SlotInfo &Info = KV.second;
     if (!Info.Supported || Info.Accesses == 0)
       continue;
+    Info.LiveAcrossCall = mayBeLiveAcrossCall(MF, FI);
     Candidates.push_back(FI);
   }
 
@@ -366,11 +393,25 @@ bool I8085StaticScratch::runOnMachineFunction(MachineFunction &MF) {
 
   unsigned UsedBytes = 0;
   bool Changed = false;
+  bool CheckedDirectRecursive = false;
+  bool IsDirectRecursive = false;
   for (int FI : Candidates) {
     SlotInfo &Info = Slots[FI];
     if (I8085StaticScratchOnlyFrameIndex != std::numeric_limits<int>::min() &&
         FI != I8085StaticScratchOnlyFrameIndex)
       continue;
+    if (Info.LiveAcrossCall && !MF.getFunction().doesNotRecurse()) {
+      if (!I8085StaticScratchUnsafeRecursive)
+        continue;
+      if (!I8085StaticScratchAllowKnownRecursive) {
+        if (!CheckedDirectRecursive) {
+          IsDirectRecursive = isInDirectRecursiveSCC(MF.getFunction());
+          CheckedDirectRecursive = true;
+        }
+        if (IsDirectRecursive)
+          continue;
+      }
+    }
     if (UsedBytes + Info.Size > I8085StaticScratchBytes)
       continue;
 

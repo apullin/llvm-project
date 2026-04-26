@@ -59,6 +59,12 @@ static cl::opt<bool> I8085StaticScratchAllowKnownRecursive(
     cl::desc("Allow i8085 static scratch spill slots that are live across "
              "calls even in functions found in a direct recursive SCC"));
 
+static cl::list<std::string> I8085StaticScratchAssumeNonReentrantFunctions(
+    "i8085-static-scratch-assume-nonreentrant-function", cl::Hidden,
+    cl::ZeroOrMore,
+    cl::desc("Assume this function cannot be re-entered while active, allowing "
+             "i8085 static scratch spill slots that are live across calls"));
+
 static cl::list<std::string> I8085StaticScratchSkipFunctions(
     "i8085-static-scratch-skip-function", cl::Hidden, cl::ZeroOrMore,
     cl::desc("Do not use i8085 static scratch spill slots in this function"));
@@ -105,6 +111,7 @@ private:
   bool isSupportedAccess(const MachineInstr &MI, int &FrameIndex) const;
   bool isInDirectRecursiveSCC(const Function &F);
   bool mayBeLiveAcrossCall(const MachineFunction &MF, int FrameIndex) const;
+  bool hasNonReentrantContract(const MachineFunction &MF) const;
   void dumpConversion(const MachineFunction &MF, int FrameIndex,
                       const SlotInfo &Info, const GlobalVariable &GV) const;
   GlobalVariable *createScratchGlobal(MachineFunction &MF, int FrameIndex,
@@ -246,6 +253,13 @@ bool I8085StaticScratch::mayBeLiveAcrossCall(const MachineFunction &MF,
   }
 
   return false;
+}
+
+bool I8085StaticScratch::hasNonReentrantContract(
+    const MachineFunction &MF) const {
+  return MF.getFunction().hasFnAttribute("i8085-nonreentrant") ||
+         llvm::is_contained(I8085StaticScratchAssumeNonReentrantFunctions,
+                            MF.getName());
 }
 
 void I8085StaticScratch::dumpConversion(const MachineFunction &MF,
@@ -401,7 +415,7 @@ bool I8085StaticScratch::runOnMachineFunction(MachineFunction &MF) {
         FI != I8085StaticScratchOnlyFrameIndex)
       continue;
     if (Info.LiveAcrossCall && !MF.getFunction().doesNotRecurse()) {
-      if (!I8085StaticScratchUnsafeRecursive)
+      if (!I8085StaticScratchUnsafeRecursive && !hasNonReentrantContract(MF))
         continue;
       if (!I8085StaticScratchAllowKnownRecursive) {
         if (!CheckedDirectRecursive) {

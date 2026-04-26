@@ -2,6 +2,7 @@
 # RUN: llc -O2 -mtriple=i8085-unknown-elf -run-pass=i8085-static-scratch -i8085-static-scratch-bytes=8 -i8085-static-scratch-skip-function=spill8 %s -o - | FileCheck %s --check-prefix=SKIP
 # RUN: llc -O2 -mtriple=i8085-unknown-elf -run-pass=i8085-static-scratch -i8085-static-scratch-bytes=8 -i8085-static-scratch-only-function=spill8 %s -o - | FileCheck %s --check-prefix=ONLY
 # RUN: llc -O2 -mtriple=i8085-unknown-elf -run-pass=i8085-static-scratch -i8085-static-scratch-bytes=8 -i8085-static-scratch-only-frame-index=1 %s -o - | FileCheck %s --check-prefix=ONLYFI
+# RUN: llc -O2 -mtriple=i8085-unknown-elf -run-pass=i8085-static-scratch -i8085-static-scratch-bytes=8 -i8085-static-scratch-assume-nonreentrant-function=unknown_call_mixed -i8085-static-scratch-assume-nonreentrant-function=direct_recursive %s -o - | FileCheck %s --check-prefix=ASSUME
 # RUN: llc -O2 -mtriple=i8085-unknown-elf -run-pass=i8085-static-scratch -i8085-static-scratch-bytes=8 -i8085-static-scratch-unsafe-recursive %s -o - | FileCheck %s --check-prefix=UNSAFE
 # RUN: llc -O2 -mtriple=i8085-unknown-elf -run-pass=i8085-static-scratch -i8085-static-scratch-bytes=8 -i8085-static-scratch-unsafe-recursive -i8085-static-scratch-allow-known-recursive %s -o - | FileCheck %s --check-prefix=ALLOW
 
@@ -13,6 +14,10 @@
   define void @two_slots() #0 { ret void }
   define void @unknown_nonrecursive() { ret void }
   define void @unknown_call_mixed() {
+    call void @external_callee()
+    ret void
+  }
+  define void @unknown_attr_nonreentrant() #1 {
     call void @external_callee()
     ret void
   }
@@ -31,6 +36,7 @@
   }
 
   attributes #0 = { norecurse }
+  attributes #1 = { "i8085-nonreentrant" }
 ...
 
 ---
@@ -153,12 +159,37 @@ body:             |
     ; UNSAFE: $a = LOAD_8_STATIC_ADDR @__i8085_static_scratch.unknown_call_mixed.0
     ; UNSAFE: STORE_8_STATIC_ADDR @__i8085_static_scratch.unknown_call_mixed.1
     ; UNSAFE: $c = LOAD_8_STATIC_ADDR @__i8085_static_scratch.unknown_call_mixed.1
+    ; ASSUME-LABEL: name:            unknown_call_mixed
+    ; ASSUME: STORE_8_STATIC_ADDR @__i8085_static_scratch.unknown_call_mixed.0
+    ; ASSUME: CALL @external_callee
+    ; ASSUME: $a = LOAD_8_STATIC_ADDR @__i8085_static_scratch.unknown_call_mixed.0
+    ; ASSUME: STORE_8_STATIC_ADDR @__i8085_static_scratch.unknown_call_mixed.1
+    ; ASSUME: $c = LOAD_8_STATIC_ADDR @__i8085_static_scratch.unknown_call_mixed.1
     STORE_8 %stack.0, 0, killed $a, implicit $sp
     CALL @external_callee, csr_normal, implicit-def $sp, implicit-def dead $a, implicit-def dead $b, implicit-def dead $c, implicit-def dead $d, implicit-def dead $e, implicit-def dead $h, implicit-def dead $l, implicit $sp
     $a = LOAD_8_WITH_ADDR %stack.0, 0, implicit $sp
     $c = MVI 7
     STORE_8 %stack.1, 0, killed $c, implicit $sp
     $c = LOAD_8_WITH_ADDR %stack.1, 0, implicit $sp
+    RET implicit $sp, implicit-def $sp
+...
+
+---
+name:            unknown_attr_nonreentrant
+tracksRegLiveness: true
+stack:
+  - { id: 0, type: spill-slot, size: 1, alignment: 1 }
+body:             |
+  bb.0:
+    liveins: $a
+
+    ; CHECK-LABEL: name:            unknown_attr_nonreentrant
+    ; CHECK: STORE_8_STATIC_ADDR @__i8085_static_scratch.unknown_attr_nonreentrant.0
+    ; CHECK: CALL @external_callee
+    ; CHECK: $a = LOAD_8_STATIC_ADDR @__i8085_static_scratch.unknown_attr_nonreentrant.0
+    STORE_8 %stack.0, 0, killed $a, implicit $sp
+    CALL @external_callee, csr_normal, implicit-def $sp, implicit-def dead $a, implicit-def dead $b, implicit-def dead $c, implicit-def dead $d, implicit-def dead $e, implicit-def dead $h, implicit-def dead $l, implicit $sp
+    $a = LOAD_8_WITH_ADDR %stack.0, 0, implicit $sp
     RET implicit $sp, implicit-def $sp
 ...
 
@@ -171,6 +202,10 @@ body:             |
   bb.0:
     liveins: $a
 
+    ; ASSUME-LABEL: name:            direct_recursive
+    ; ASSUME: STORE_8 %stack.0
+    ; ASSUME: CALL @direct_recursive
+    ; ASSUME: $a = LOAD_8_WITH_ADDR %stack.0
     ; UNSAFE-LABEL: name:            direct_recursive
     ; UNSAFE: STORE_8 %stack.0
     ; UNSAFE: $a = LOAD_8_WITH_ADDR %stack.0

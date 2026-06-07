@@ -19,6 +19,7 @@
 
 #include "llvm/CodeGen/MachineFunctionPass.h"
 #include "llvm/Support/ErrorHandling.h"
+#include "llvm/Support/MathExtras.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/CodeGen/MachineInstrBuilder.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
@@ -2995,7 +2996,7 @@ template <> bool I8085ExpandPseudo::expand<I8085::MUL_16_IMM>(Block &MBB, BlockI
   };
 
   // Determine the best decomposition strategy (mirrors ISel cost model)
-  unsigned TZ = __builtin_ctz(CVal);
+  unsigned TZ = llvm::countr_zero(CVal);
   uint16_t Core = CVal >> TZ;
 
   struct BestDecomp {
@@ -3014,18 +3015,18 @@ template <> bool I8085ExpandPseudo::expand<I8085::MUL_16_IMM>(Block &MBB, BlockI
 
   // Strategy 1: (2^a + 1) * 2^tz
   if (Core >= 3 && ((Core - 1) & (Core - 2)) == 0) {
-    unsigned A = __builtin_ctz(Core - 1);
+    unsigned A = llvm::countr_zero((uint16_t)(Core - 1));
     tryBetter(1, A + 3 + TZ, A * 10 + 18 + TZ * 10, A);
   }
   // Strategy 2: (2^a - 1) * 2^tz
   if (Core >= 3 && ((Core + 1) & Core) == 0) {
-    unsigned A = __builtin_ctz(Core + 1);
+    unsigned A = llvm::countr_zero((uint16_t)(Core + 1));
     tryBetter(2, A + 8 + TZ, A * 10 + 32 + TZ * 10, A);
   }
   // Strategy 3: popcount 2
-  if (__builtin_popcount(CVal) == 2) {
-    unsigned B = __builtin_ctz(CVal);
-    unsigned A = 15 - __builtin_clz(CVal);
+  if (llvm::popcount(CVal) == 2) {
+    unsigned B = llvm::countr_zero(CVal);
+    unsigned A = 15 - llvm::countl_zero(CVal);
     tryBetter(3, B + 2 + (A - B) + 1, B * 10 + 8 + (A - B) * 10 + 10, A, B);
   }
   // Strategy 4: run of 1s
@@ -3033,8 +3034,8 @@ template <> bool I8085ExpandPseudo::expand<I8085::MUL_16_IMM>(Block &MBB, BlockI
     uint16_t Lo = CVal & (-CVal);
     uint16_t Sum = CVal + Lo;
     if (Sum && (Sum & (Sum - 1)) == 0) {
-      unsigned A = __builtin_ctz(Sum);
-      unsigned B = __builtin_ctz(Lo);
+      unsigned A = llvm::countr_zero(Sum);
+      unsigned B = llvm::countr_zero(Lo);
       tryBetter(4, B + 2 + (A - B) + 6, B * 10 + 8 + (A - B) * 10 + 24, A, B);
     }
   }
@@ -3047,11 +3048,11 @@ template <> bool I8085ExpandPseudo::expand<I8085::MUL_16_IMM>(Block &MBB, BlockI
       uint16_t F2 = Core / F1;
       if (F2 <= 1) continue;
       if (F2 >= 3 && ((F2 - 1) & (F2 - 2)) == 0) {
-        unsigned B = __builtin_ctz(F2 - 1);
+        unsigned B = llvm::countr_zero((uint16_t)(F2 - 1));
         tryBetter(5, A + 3 + B + 3 + TZ, A * 10 + 18 + B * 10 + 18 + TZ * 10, A, B);
       }
       if ((F2 & (F2 - 1)) == 0) {
-        unsigned B = __builtin_ctz(F2);
+        unsigned B = llvm::countr_zero(F2);
         tryBetter(6, A + 3 + B + TZ, A * 10 + 18 + B * 10 + TZ * 10, A, B);
       }
     }
@@ -3061,13 +3062,13 @@ template <> bool I8085ExpandPseudo::expand<I8085::MUL_16_IMM>(Block &MBB, BlockI
     uint16_t Cp = CVal + 1;
     if (Cp > 0) {
       if ((Cp & (Cp - 1)) == 0) {
-        unsigned N = __builtin_ctz(Cp);
+        unsigned N = llvm::countr_zero(Cp);
         tryBetter(71, N + 8, N * 10 + 32, N);
       } else {
-        unsigned TZp = __builtin_ctz(Cp);
+        unsigned TZp = llvm::countr_zero(Cp);
         uint16_t Corep = Cp >> TZp;
         if (Corep >= 3 && ((Corep - 1) & (Corep - 2)) == 0) {
-          unsigned A = __builtin_ctz(Corep - 1);
+          unsigned A = llvm::countr_zero((uint16_t)(Corep - 1));
           tryBetter(72, A + 3 + TZp + 8, A * 10 + 18 + TZp * 10 + 32, A, TZp);
         }
       }
@@ -3078,13 +3079,13 @@ template <> bool I8085ExpandPseudo::expand<I8085::MUL_16_IMM>(Block &MBB, BlockI
     uint16_t Cm = CVal - 1;
     if (Cm > 1) {
       if ((Cm & (Cm - 1)) == 0) {
-        unsigned N = __builtin_ctz(Cm);
+        unsigned N = llvm::countr_zero(Cm);
         tryBetter(81, N + 3, N * 10 + 18, N);
       } else {
-        unsigned TZp = __builtin_ctz(Cm);
+        unsigned TZp = llvm::countr_zero(Cm);
         uint16_t Corep = Cm >> TZp;
         if (Corep >= 3 && ((Corep - 1) & (Corep - 2)) == 0) {
-          unsigned A = __builtin_ctz(Corep - 1);
+          unsigned A = llvm::countr_zero((uint16_t)(Corep - 1));
           tryBetter(82, A + 3 + TZp + 3, A * 10 + 18 + TZp * 10 + 18, A, TZp);
         }
       }

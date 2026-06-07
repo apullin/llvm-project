@@ -29,6 +29,7 @@
 #include "llvm/Support/Alignment.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/KnownBits.h"
+#include "llvm/Support/MathExtras.h"
 #include "llvm/ADT/Twine.h"
 #include "llvm/Support/raw_ostream.h"
 
@@ -1588,31 +1589,31 @@ SDValue I8085TargetLowering::LowerOperation(SDValue Op, SelectionDAG &DAG) const
               bool IsOptForSize = Fn.hasOptSize();
               // Cost estimation (same as ISel and pseudo expansion)
               auto estimateCost = [](uint16_t C) -> std::pair<unsigned, unsigned> {
-                unsigned TZ = __builtin_ctz(C);
+                unsigned TZ = llvm::countr_zero(C);
                 uint16_t Core = C >> TZ;
                 unsigned BestB = UINT_MAX, BestC = UINT_MAX;
                 auto tryB = [&](unsigned B, unsigned Cy) {
                   if (B < BestB || (B == BestB && Cy < BestC)) { BestB = B; BestC = Cy; }
                 };
                 if (Core >= 3 && ((Core-1)&(Core-2)) == 0) {
-                  unsigned A = __builtin_ctz(Core-1);
+                  unsigned A = llvm::countr_zero((uint16_t)(Core-1));
                   tryB(A+3+TZ, A*10+18+TZ*10);
                 }
                 if (Core >= 3 && ((Core+1)&Core) == 0) {
-                  unsigned A = __builtin_ctz(Core+1);
+                  unsigned A = llvm::countr_zero((unsigned)(Core+1));
                   tryB(A+8+TZ, A*10+32+TZ*10);
                 }
-                if (__builtin_popcount(C) == 2) {
-                  unsigned B = __builtin_ctz(C);
-                  unsigned A = 15 - __builtin_clz(C);
+                if (llvm::popcount(C) == 2) {
+                  unsigned B = llvm::countr_zero(C);
+                  unsigned A = 15 - llvm::countl_zero(C);
                   tryB(B+2+(A-B)+1, B*10+8+(A-B)*10+10);
                 }
                 {
                   uint16_t Lo = C & (-C);
                   uint16_t Sum = C + Lo;
                   if (Sum && (Sum & (Sum-1)) == 0) {
-                    unsigned A = __builtin_ctz(Sum);
-                    unsigned B = __builtin_ctz(Lo);
+                    unsigned A = llvm::countr_zero(Sum);
+                    unsigned B = llvm::countr_zero(Lo);
                     tryB(B+2+(A-B)+6, B*10+8+(A-B)*10+24);
                   }
                 }
@@ -1624,11 +1625,11 @@ SDValue I8085TargetLowering::LowerOperation(SDValue Op, SelectionDAG &DAG) const
                     uint16_t F2 = Core/F1;
                     if (F2 <= 1) continue;
                     if (F2 >= 3 && ((F2-1)&(F2-2)) == 0) {
-                      unsigned B = __builtin_ctz(F2-1);
+                      unsigned B = llvm::countr_zero((uint16_t)(F2-1));
                       tryB(A+3+B+3+TZ, A*10+18+B*10+18+TZ*10);
                     }
                     if ((F2 & (F2-1)) == 0) {
-                      unsigned B = __builtin_ctz(F2);
+                      unsigned B = llvm::countr_zero(F2);
                       tryB(A+3+B+TZ, A*10+18+B*10+TZ*10);
                     }
                   }
@@ -1637,13 +1638,13 @@ SDValue I8085TargetLowering::LowerOperation(SDValue Op, SelectionDAG &DAG) const
                   uint16_t Cp = C+1;
                   if (Cp > 0) {
                     if ((Cp&(Cp-1)) == 0) {
-                      unsigned N = __builtin_ctz(Cp);
+                      unsigned N = llvm::countr_zero(Cp);
                       tryB(N+8, N*10+32);
                     } else {
-                      unsigned TZp = __builtin_ctz(Cp);
+                      unsigned TZp = llvm::countr_zero(Cp);
                       uint16_t Corep = Cp>>TZp;
                       if (Corep >= 3 && ((Corep-1)&(Corep-2)) == 0) {
-                        unsigned A = __builtin_ctz(Corep-1);
+                        unsigned A = llvm::countr_zero((uint16_t)(Corep-1));
                         tryB(A+3+TZp+8, A*10+18+TZp*10+32);
                       }
                     }
@@ -1653,13 +1654,13 @@ SDValue I8085TargetLowering::LowerOperation(SDValue Op, SelectionDAG &DAG) const
                   uint16_t Cm = C-1;
                   if (Cm > 1) {
                     if ((Cm&(Cm-1)) == 0) {
-                      unsigned N = __builtin_ctz(Cm);
+                      unsigned N = llvm::countr_zero(Cm);
                       tryB(N+3, N*10+18);
                     } else {
-                      unsigned TZp = __builtin_ctz(Cm);
+                      unsigned TZp = llvm::countr_zero(Cm);
                       uint16_t Corep = Cm>>TZp;
                       if (Corep >= 3 && ((Corep-1)&(Corep-2)) == 0) {
-                        unsigned A = __builtin_ctz(Corep-1);
+                        unsigned A = llvm::countr_zero((uint16_t)(Corep-1));
                         tryB(A+3+TZp+3, A*10+18+TZp*10+18);
                       }
                     }

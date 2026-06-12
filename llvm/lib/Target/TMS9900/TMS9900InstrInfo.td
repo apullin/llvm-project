@@ -1651,6 +1651,23 @@ def BL_ext : TMS9900Inst<(outs), (ins calltarget:$target),
   let Size = 4;
   let isCodeGenOnly = 1;
 }
+
+// BL used by the MachineOutliner. This is not a normal ABI call; the generic
+// outliner adds implicit operands for values used/defined by the outlined
+// sequence. The architectural effect here is only R11 = return address.
+let isCall = 1, Defs = [R11], isCodeGenOnly = 1 in
+def BL_OUTLINE : TMS9900Inst<(outs), (ins calltarget:$target),
+                             "BL\t@$target",
+                             []> {
+  bits<16> target;
+  bits<32> Inst;
+  let Inst{15-6} = 0b0000011010;
+  let Inst{5-4} = 0b10;
+  let Inst{3-0} = 0b0000;
+  let Inst{31-16} = target;
+  let Size = 4;
+  let SchedRW = [WriteCall];
+}
 }
 
 // BLWP - Branch and Load Workspace Pointer (general addressing)

@@ -14,11 +14,16 @@
 #include "TMS9900.h"
 #include "TMS9900Subtarget.h"
 #include "TMS9900TargetMachine.h"
+#include "llvm/CodeGen/MachineModuleInfo.h"
+#include "llvm/CodeGen/MachineOutliner.h"
 #include "llvm/CodeGen/ISDOpcodes.h"
 #include "llvm/CodeGen/MachineFrameInfo.h"
 #include "llvm/CodeGen/MachineFunction.h"
 #include "llvm/CodeGen/MachineInstrBuilder.h"
 #include "llvm/CodeGen/MachineMemOperand.h"
+#include "llvm/IR/Attributes.h"
+#include "llvm/IR/Function.h"
+#include "llvm/IR/Module.h"
 #include "llvm/MC/TargetRegistry.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/MathExtras.h"
@@ -95,6 +100,205 @@ static unsigned getJumpOpcodeForCC(ISD::CondCode CC) {
 TMS9900InstrInfo::TMS9900InstrInfo(const TMS9900Subtarget &STI)
     : TMS9900GenInstrInfo(TMS9900::ADJCALLSTACKDOWN, TMS9900::ADJCALLSTACKUP),
       RI(STI) {}
+
+enum TMS9900MachineOutlinerConstructionID {
+  MachineOutlinerDefault,
+  MachineOutlinerTailCall,
+};
+
+static bool isPureTMS9900OutlinerOpcode(unsigned Opcode) {
+  switch (Opcode) {
+  case TMS9900::MOVrr:
+  case TMS9900::MOVBrr:
+  case TMS9900::LI:
+  case TMS9900::CLRr:
+  case TMS9900::SETOr:
+  case TMS9900::SWPBr:
+  case TMS9900::Arr:
+  case TMS9900::ABrr:
+  case TMS9900::AI:
+  case TMS9900::Srr:
+  case TMS9900::SBrr:
+  case TMS9900::INCr:
+  case TMS9900::INCTr:
+  case TMS9900::DECr:
+  case TMS9900::DECTr:
+  case TMS9900::NEGr:
+  case TMS9900::ABSr:
+  case TMS9900::INVr:
+  case TMS9900::SOCrr:
+  case TMS9900::SOCBrr:
+  case TMS9900::ORI:
+  case TMS9900::SZCrr:
+  case TMS9900::SZCBrr:
+  case TMS9900::ANDI:
+  case TMS9900::XORrr:
+  case TMS9900::COCrr:
+  case TMS9900::CZCrr:
+  case TMS9900::SLAri:
+  case TMS9900::SRAri:
+  case TMS9900::SRLri:
+  case TMS9900::SRCri:
+  case TMS9900::SLAr0:
+  case TMS9900::SRAr0:
+  case TMS9900::SRLr0:
+  case TMS9900::Crr:
+  case TMS9900::CBrr:
+  case TMS9900::CI:
+    return true;
+  default:
+    return false;
+  }
+}
+
+static bool isTMS9900OutlinerMemoryOpcode(unsigned Opcode) {
+  switch (Opcode) {
+  case TMS9900::MOVxm:
+  case TMS9900::MOVmx:
+  case TMS9900::MOVBxm:
+  case TMS9900::MOVBmx:
+    return true;
+  default:
+    return false;
+  }
+}
+
+bool TMS9900InstrInfo::isFunctionSafeToOutlineFrom(
+    MachineFunction &MF, bool OutlineFromLinkOnceODRs) const {
+  const Function &F = MF.getFunction();
+
+  if (!OutlineFromLinkOnceODRs && F.hasLinkOnceODRLinkage())
+    return false;
+  if (F.hasSection())
+    return false;
+  if (F.hasFnAttribute(Attribute::Naked) || F.hasFnAttribute("interrupt"))
+    return false;
+
+  return true;
+}
+
+bool TMS9900InstrInfo::shouldOutlineFromFunctionByDefault(
+    MachineFunction &MF) const {
+  return MF.getFunction().hasMinSize();
+}
+
+std::optional<std::unique_ptr<outliner::OutlinedFunction>>
+TMS9900InstrInfo::getOutliningCandidateInfo(
+    const MachineModuleInfo &MMI,
+    std::vector<outliner::Candidate> &RepeatedSequenceLocs,
+    unsigned MinRepeats) const {
+  if (RepeatedSequenceLocs.size() < MinRepeats)
+    return std::nullopt;
+
+  const bool IsTailCallOutline =
+      RepeatedSequenceLocs[0].back().getOpcode() == TMS9900::RET_REAL;
+
+  if (!IsTailCallOutline) {
+    // The MachineOutliner runs after prologue/epilogue insertion. On TMS9900,
+    // BL writes the return address to R11. Leaf functions still hold their own
+    // incoming return address in R11 at this point, so inserting a BL would
+    // corrupt the final B *R11 return. Functions that already had calls have
+    // already saved/restored R11 in their prologue/epilogue, so BL-based
+    // outlining is safe there.
+    llvm::erase_if(RepeatedSequenceLocs, [](outliner::Candidate &C) {
+      return !C.getMF()->getFrameInfo().hasCalls();
+    });
+
+    if (RepeatedSequenceLocs.size() < MinRepeats)
+      return std::nullopt;
+  }
+
+  unsigned SequenceSize = 0;
+  for (MachineInstr &MI : RepeatedSequenceLocs[0])
+    SequenceSize += getInstSizeInBytes(MI);
+
+  if (IsTailCallOutline) {
+    // B @symbol is 4 bytes and reuses the current R11 return address, so
+    // suffixes ending in B *R11 can be outlined safely even from leaf
+    // functions.
+    constexpr unsigned BranchOverhead = 4;
+    for (outliner::Candidate &C : RepeatedSequenceLocs)
+      C.setCallInfo(MachineOutlinerTailCall, BranchOverhead);
+
+    return std::make_unique<outliner::OutlinedFunction>(
+        RepeatedSequenceLocs, SequenceSize, 0, MachineOutlinerTailCall);
+  }
+
+  // BL @symbol is 4 bytes and writes only the TMS9900 link register R11.
+  constexpr unsigned CallOverhead = 4;
+  for (outliner::Candidate &C : RepeatedSequenceLocs)
+    C.setCallInfo(MachineOutlinerDefault, CallOverhead);
+
+  // Outlined functions return with B *R11, a 2-byte instruction.
+  constexpr unsigned FrameOverhead = 2;
+  return std::make_unique<outliner::OutlinedFunction>(
+      RepeatedSequenceLocs, SequenceSize, FrameOverhead,
+      MachineOutlinerDefault);
+}
+
+outliner::InstrType TMS9900InstrInfo::getOutliningTypeImpl(
+    const MachineModuleInfo &MMI, MachineBasicBlock::iterator &MBBI,
+    unsigned Flags) const {
+  MachineInstr &MI = *MBBI;
+  const MachineFunction *MF = MI.getMF();
+  const TargetRegisterInfo *TRI = MF->getSubtarget().getRegisterInfo();
+
+  if (MI.isDebugInstr() || MI.isPosition())
+    return outliner::InstrType::Invisible;
+
+  if (MI.getOpcode() == TMS9900::RET_REAL)
+    return outliner::InstrType::LegalTerminator;
+
+  if (MI.isCFIInstruction() || MI.isInlineAsm() || MI.isCall() ||
+      MI.isBranch() || MI.isReturn() || MI.isTerminator() || MI.isBarrier())
+    return outliner::InstrType::Illegal;
+
+  if (MI.getDesc().isPseudo())
+    return outliner::InstrType::Illegal;
+
+  if ((MI.mayLoad() || MI.mayStore()) &&
+      !isTMS9900OutlinerMemoryOpcode(MI.getOpcode()))
+    return outliner::InstrType::Illegal;
+
+  if (!isPureTMS9900OutlinerOpcode(MI.getOpcode()) &&
+      !isTMS9900OutlinerMemoryOpcode(MI.getOpcode()))
+    return outliner::InstrType::Illegal;
+
+  // BL/B-based outlining leaves R10/SP alone, so stack-relative loads and
+  // stores are safe. Do not outline instructions that change SP itself.
+  if (MI.modifiesRegister(TMS9900::R10, TRI) ||
+      MI.readsRegister(TMS9900::R11, TRI) ||
+      MI.modifiesRegister(TMS9900::R11, TRI))
+    return outliner::InstrType::Illegal;
+
+  return outliner::InstrType::Legal;
+}
+
+void TMS9900InstrInfo::buildOutlinedFrame(
+    MachineBasicBlock &MBB, MachineFunction &MF,
+    const outliner::OutlinedFunction &OF) const {
+  if (OF.FrameConstructionID == MachineOutlinerTailCall)
+    return;
+
+  assert(OF.FrameConstructionID == MachineOutlinerDefault &&
+         "unexpected TMS9900 outliner frame construction ID");
+  MBB.addLiveIn(TMS9900::R11);
+  MBB.insert(MBB.end(), BuildMI(MF, DebugLoc(), get(TMS9900::RET_REAL)));
+}
+
+MachineBasicBlock::iterator TMS9900InstrInfo::insertOutlinedCall(
+    Module &M, MachineBasicBlock &MBB, MachineBasicBlock::iterator &It,
+    MachineFunction &MF, outliner::Candidate &C) const {
+  if (C.CallConstructionID == MachineOutlinerTailCall)
+    It = MBB.insert(It, BuildMI(*MBB.getParent(), DebugLoc(),
+                                get(TMS9900::TAIL_B))
+                            .addGlobalAddress(M.getNamedValue(MF.getName())));
+  else
+    It = MBB.insert(It, BuildMI(*MBB.getParent(), DebugLoc(),
+                                get(TMS9900::BL_OUTLINE))
+                            .addGlobalAddress(M.getNamedValue(MF.getName())));
+  return It;
+}
 
 void TMS9900InstrInfo::copyPhysReg(MachineBasicBlock &MBB,
                                     MachineBasicBlock::iterator I,

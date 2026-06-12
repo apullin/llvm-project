@@ -1,0 +1,321 @@
+# RUN: llc -mtriple=tms9900 -enable-machine-outliner=always -run-pass=machine-outliner -verify-machineinstrs -simplify-mir %s -o - | FileCheck %s
+
+--- |
+  @foo = external global i16
+  declare void @callee()
+
+  define void @outline_a() { ret void }
+  define void @outline_b() { ret void }
+  define void @leaf_a() { ret void }
+  define void @leaf_b() { ret void }
+  define void @tail_a() { ret void }
+  define void @tail_b() { ret void }
+  define void @stack_a() { ret void }
+  define void @stack_b() { ret void }
+  define void @memory_a() { ret void }
+  define void @memory_b() { ret void }
+  define void @r11_a() { ret void }
+  define void @r11_b() { ret void }
+  define void @r10_a() { ret void }
+  define void @r10_b() { ret void }
+  define void @call_a() { ret void }
+  define void @call_b() { ret void }
+...
+
+---
+name: outline_a
+tracksRegLiveness: true
+frameInfo:
+  hasCalls: true
+body: |
+  bb.0:
+    ; CHECK-LABEL: name: outline_a
+    ; CHECK: BL_OUTLINE @[[PUREFN:OUTLINED_FUNCTION_[0-9]+]]
+    ; CHECK-NEXT: RET
+    $r1 = LI 4660, implicit-def $st
+    $r2 = MOVrr $r1, implicit-def $st
+    $r2 = AI $r2, 3, implicit-def $st
+    $r3 = MOVrr $r2, implicit-def $st
+    $r3 = INCr $r3, implicit-def $st
+    $r4 = MOVrr $r3, implicit-def $st
+    RET
+...
+
+---
+name: outline_b
+tracksRegLiveness: true
+frameInfo:
+  hasCalls: true
+body: |
+  bb.0:
+    ; CHECK-LABEL: name: outline_b
+    ; CHECK: BL_OUTLINE @[[PUREFN]]
+    ; CHECK-NEXT: RET
+    $r1 = LI 4660, implicit-def $st
+    $r2 = MOVrr $r1, implicit-def $st
+    $r2 = AI $r2, 3, implicit-def $st
+    $r3 = MOVrr $r2, implicit-def $st
+    $r3 = INCr $r3, implicit-def $st
+    $r4 = MOVrr $r3, implicit-def $st
+    RET
+...
+
+---
+name: leaf_a
+tracksRegLiveness: true
+body: |
+  bb.0:
+    ; CHECK-LABEL: name: leaf_a
+    ; CHECK-NOT: BL_OUTLINE @OUTLINED_FUNCTION
+    ; CHECK: $r1 = LI 4660
+    ; CHECK: RET
+    $r1 = LI 4660, implicit-def $st
+    $r2 = MOVrr $r1, implicit-def $st
+    $r2 = AI $r2, 3, implicit-def $st
+    $r3 = MOVrr $r2, implicit-def $st
+    $r3 = INCr $r3, implicit-def $st
+    $r4 = MOVrr $r3, implicit-def $st
+    RET
+...
+
+---
+name: leaf_b
+tracksRegLiveness: true
+body: |
+  bb.0:
+    ; CHECK-LABEL: name: leaf_b
+    ; CHECK-NOT: BL_OUTLINE @OUTLINED_FUNCTION
+    ; CHECK: $r1 = LI 4660
+    ; CHECK: RET
+    $r1 = LI 4660, implicit-def $st
+    $r2 = MOVrr $r1, implicit-def $st
+    $r2 = AI $r2, 3, implicit-def $st
+    $r3 = MOVrr $r2, implicit-def $st
+    $r3 = INCr $r3, implicit-def $st
+    $r4 = MOVrr $r3, implicit-def $st
+    RET
+...
+
+---
+name: memory_a
+tracksRegLiveness: true
+frameInfo:
+  hasCalls: true
+body: |
+  bb.0:
+    $r1 = MOVam @foo, implicit-def $st
+    $r2 = MOVam @foo, implicit-def $st
+    $r3 = MOVam @foo, implicit-def $st
+    RET
+...
+
+---
+name: tail_a
+tracksRegLiveness: true
+body: |
+  bb.0:
+    ; CHECK-LABEL: name: tail_a
+    ; CHECK: TAIL_B @[[TAILFN:OUTLINED_FUNCTION_[0-9]+]]
+    $r1 = LI 22136, implicit-def $st
+    $r2 = MOVrr $r1, implicit-def $st
+    $r2 = AI $r2, 5, implicit-def $st
+    $r3 = MOVrr $r2, implicit-def $st
+    RET_REAL implicit $r11
+...
+
+---
+name: tail_b
+tracksRegLiveness: true
+body: |
+  bb.0:
+    ; CHECK-LABEL: name: tail_b
+    ; CHECK: TAIL_B @[[TAILFN]]
+    $r1 = LI 22136, implicit-def $st
+    $r2 = MOVrr $r1, implicit-def $st
+    $r2 = AI $r2, 5, implicit-def $st
+    $r3 = MOVrr $r2, implicit-def $st
+    RET_REAL implicit $r11
+...
+
+---
+name: stack_a
+tracksRegLiveness: true
+frameInfo:
+  hasCalls: true
+body: |
+  bb.0:
+    ; CHECK-LABEL: name: stack_a
+    ; CHECK: BL_OUTLINE @[[STACKFN:OUTLINED_FUNCTION_[0-9]+]]
+    ; CHECK: RET
+    $r1 = MOVxm 2, $r10, implicit-def $st
+    MOVmx 4, $r10, $r1, implicit-def $st
+    $r2 = MOVBxm 6, $r10, implicit-def $st
+    MOVBmx 8, $r10, $r2, implicit-def $st
+    RET
+...
+
+---
+name: stack_b
+tracksRegLiveness: true
+frameInfo:
+  hasCalls: true
+body: |
+  bb.0:
+    ; CHECK-LABEL: name: stack_b
+    ; CHECK: BL_OUTLINE @[[STACKFN]]
+    ; CHECK: RET
+    $r1 = MOVxm 2, $r10, implicit-def $st
+    MOVmx 4, $r10, $r1, implicit-def $st
+    $r2 = MOVBxm 6, $r10, implicit-def $st
+    MOVBmx 8, $r10, $r2, implicit-def $st
+    RET
+...
+
+# CHECK-LABEL: name: memory_a
+# CHECK-NOT: BL_OUTLINE @OUTLINED_FUNCTION
+# CHECK: MOVam @foo
+# CHECK: RET
+
+---
+name: memory_b
+tracksRegLiveness: true
+frameInfo:
+  hasCalls: true
+body: |
+  bb.0:
+    ; CHECK-LABEL: name: memory_b
+    ; CHECK-NOT: BL_OUTLINE @OUTLINED_FUNCTION
+    ; CHECK: MOVam @foo
+    ; CHECK: RET
+    $r1 = MOVam @foo, implicit-def $st
+    $r2 = MOVam @foo, implicit-def $st
+    $r3 = MOVam @foo, implicit-def $st
+    RET
+...
+
+---
+name: r11_a
+tracksRegLiveness: true
+frameInfo:
+  hasCalls: true
+body: |
+  bb.0:
+    ; CHECK-LABEL: name: r11_a
+    ; CHECK-NOT: BL_OUTLINE @OUTLINED_FUNCTION
+    ; CHECK: MOVrr $r11
+    ; CHECK: RET
+    $r1 = MOVrr $r11, implicit-def $st
+    $r2 = MOVrr $r1, implicit-def $st
+    $r3 = MOVrr $r2, implicit-def $st
+    RET
+...
+
+---
+name: r11_b
+tracksRegLiveness: true
+frameInfo:
+  hasCalls: true
+body: |
+  bb.0:
+    ; CHECK-LABEL: name: r11_b
+    ; CHECK-NOT: BL_OUTLINE @OUTLINED_FUNCTION
+    ; CHECK: MOVrr $r11
+    ; CHECK: RET
+    $r1 = MOVrr $r11, implicit-def $st
+    $r2 = MOVrr $r1, implicit-def $st
+    $r3 = MOVrr $r2, implicit-def $st
+    RET
+...
+
+---
+name: r10_a
+tracksRegLiveness: true
+frameInfo:
+  hasCalls: true
+body: |
+  bb.0:
+    ; CHECK-LABEL: name: r10_a
+    ; CHECK-NOT: BL_OUTLINE @OUTLINED_FUNCTION
+    ; CHECK: $r10 = AI
+    ; CHECK: RET
+    $r10 = AI $r10, 2, implicit-def $st
+    $r1 = MOVrr $r10, implicit-def $st
+    $r2 = MOVrr $r1, implicit-def $st
+    RET
+...
+
+---
+name: r10_b
+tracksRegLiveness: true
+frameInfo:
+  hasCalls: true
+body: |
+  bb.0:
+    ; CHECK-LABEL: name: r10_b
+    ; CHECK-NOT: BL_OUTLINE @OUTLINED_FUNCTION
+    ; CHECK: $r10 = AI
+    ; CHECK: RET
+    $r10 = AI $r10, 2, implicit-def $st
+    $r1 = MOVrr $r10, implicit-def $st
+    $r2 = MOVrr $r1, implicit-def $st
+    RET
+...
+
+---
+name: call_a
+tracksRegLiveness: true
+frameInfo:
+  hasCalls: true
+body: |
+  bb.0:
+    ; CHECK-LABEL: name: call_a
+    ; CHECK-NOT: BL_OUTLINE @OUTLINED_FUNCTION
+    ; CHECK: BL_sym @callee
+    ; CHECK: RET
+    BL_sym @callee, implicit-def $r11
+    BL_sym @callee, implicit-def $r11
+    BL_sym @callee, implicit-def $r11
+    RET
+...
+
+---
+name: call_b
+tracksRegLiveness: true
+frameInfo:
+  hasCalls: true
+body: |
+  bb.0:
+    ; CHECK-LABEL: name: call_b
+    ; CHECK-NOT: BL_OUTLINE @OUTLINED_FUNCTION
+    ; CHECK: BL_sym @callee
+    ; CHECK: RET
+    BL_sym @callee, implicit-def $r11
+    BL_sym @callee, implicit-def $r11
+    BL_sym @callee, implicit-def $r11
+    RET
+...
+
+# CHECK: name: [[TAILFN]]
+# CHECK: $r1 = LI 22136, implicit-def $st
+# CHECK-NEXT: $r2 = MOVrr $r1, implicit-def $st
+# CHECK-NEXT: $r2 = AI $r2, 5, implicit-def $st
+# CHECK-NEXT: $r3 = MOVrr $r2, implicit-def $st
+# CHECK-NEXT: RET_REAL implicit $r11
+
+# CHECK: name: [[STACKFN]]
+# CHECK: $r1 = MOVxm 2, $r10, implicit-def $st
+# CHECK-NEXT: MOVmx 4, $r10, $r1, implicit-def $st
+# CHECK-NEXT: $r2 = MOVBxm 6, $r10, implicit-def $st
+# CHECK-NEXT: MOVBmx 8, $r10, $r2, implicit-def $st
+# CHECK-NEXT: RET_REAL implicit $r11
+
+# CHECK: name: [[PUREFN]]
+# CHECK: liveins: $r11
+# CHECK: $r1 = LI 4660, implicit-def $st
+# CHECK-NEXT: $r2 = MOVrr $r1, implicit-def $st
+# CHECK-NEXT: $r2 = AI $r2, 3, implicit-def $st
+# CHECK-NEXT: $r3 = MOVrr $r2, implicit-def $st
+# CHECK-NEXT: $r3 = INCr $r3, implicit-def $st
+# CHECK-NEXT: $r4 = MOVrr $r3, implicit-def $st
+# CHECK-NEXT: RET_REAL implicit $r11
+...

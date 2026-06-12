@@ -76,6 +76,8 @@ TMS9900TargetMachine::TMS9900TargetMachine(const Target &T, const Triple &TT,
       Subtarget(TT, CPU.empty() ? std::string("tms9900") : std::string(CPU),
                 std::string(FS), *this) {
   initAsmInfo();
+  setMachineOutliner(true);
+  setSupportsDefaultOutlining(true);
 }
 
 namespace {

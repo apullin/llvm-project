@@ -12,7 +12,9 @@
 
 #include "I8085InstrInfo.h"
 
+#include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/STLExtras.h"
+#include "llvm/ADT/SmallVector.h"
 #include "llvm/CodeGen/MachineConstantPool.h"
 #include "llvm/CodeGen/MachineFrameInfo.h"
 #include "llvm/CodeGen/MachineInstrBuilder.h"
@@ -526,7 +528,10 @@ bool I8085InstrInfo::isBranchOffsetInRange(unsigned BranchOp,
   }
 }
 
-enum I8085MachineOutlinerConstructionID { MachineOutlinerDefault };
+enum I8085MachineOutlinerConstructionID {
+  MachineOutlinerDefault,
+  MachineOutlinerTailCall,
+};
 
 static bool isDADSP(const MachineInstr &MI) {
   return MI.getOpcode() == I8085::DAD && MI.getOperand(0).isReg() &&
@@ -606,6 +611,106 @@ static bool hasSafeStackRelativeFixups(outliner::Candidate &C) {
   return true;
 }
 
+static bool regOverlapsAny(Register Reg, ArrayRef<Register> Regs,
+                           const TargetRegisterInfo &TRI) {
+  return any_of(Regs, [&](Register Other) {
+    return TRI.regsOverlap(Reg, Other);
+  });
+}
+
+static void addUniqueReg(SmallVectorImpl<Register> &Regs, Register Reg,
+                         const TargetRegisterInfo &TRI) {
+  if (!regOverlapsAny(Reg, Regs, TRI))
+    Regs.push_back(Reg);
+}
+
+static SmallVector<Register, 8>
+getExposedUses(outliner::Candidate &C, const TargetRegisterInfo &TRI) {
+  SmallVector<Register, 8> UseRegs;
+
+  for (auto It = C.end(); It != C.begin();) {
+    --It;
+
+    SmallVector<Register, 8> InstrUseRegs;
+    for (MachineOperand &MOP : It->operands()) {
+      if (!MOP.isReg() || !MOP.getReg().isPhysical())
+        continue;
+
+      Register Reg = MOP.getReg();
+      if (MOP.isDef()) {
+        if (!regOverlapsAny(Reg, InstrUseRegs, TRI))
+          llvm::erase_if(UseRegs, [&](Register UseReg) {
+            return TRI.regsOverlap(Reg, UseReg);
+          });
+      } else if (!MOP.isUndef()) {
+        addUniqueReg(UseRegs, Reg, TRI);
+        addUniqueReg(InstrUseRegs, Reg, TRI);
+      }
+    }
+  }
+
+  return UseRegs;
+}
+
+static bool isLiveInToBlock(Register Reg, const MachineBasicBlock &MBB,
+                            const TargetRegisterInfo &TRI) {
+  for (const MachineBasicBlock::RegisterMaskPair &LiveIn : MBB.liveins())
+    if (TRI.regsOverlap(Reg, Register(LiveIn.PhysReg)))
+      return true;
+  return false;
+}
+
+static bool hasPriorDef(Register Reg, outliner::Candidate &C,
+                        const TargetRegisterInfo &TRI) {
+  MachineBasicBlock &MBB = *C.getMBB();
+  for (auto It = MBB.begin(), End = C.begin(); It != End; ++It)
+    for (MachineOperand &MOP : It->operands())
+      if (MOP.isReg() && MOP.isDef() && MOP.getReg().isPhysical() &&
+          TRI.regsOverlap(Reg, MOP.getReg()))
+        return true;
+
+  return false;
+}
+
+static bool candidateDefinesRegisterAlias(outliner::Candidate &C, Register Reg,
+                                          const TargetRegisterInfo &TRI) {
+  for (MachineInstr &MI : C)
+    for (MachineOperand &MOP : MI.operands())
+      if (MOP.isReg() && MOP.isDef() && MOP.getReg().isPhysical() &&
+          TRI.regsOverlap(Reg, MOP.getReg()))
+        return true;
+
+  return false;
+}
+
+static void addPairAliasDefs(MachineInstrBuilder &MIB, outliner::Candidate &C,
+                             const TargetRegisterInfo &TRI) {
+  // The generic outliner adds implicit operands using exact register numbers.
+  // Add pair aliases so a tail jump that outlines B/C definitions can also
+  // satisfy a cloned RET's implicit BC use.
+  if (candidateDefinesRegisterAlias(C, Register(I8085::BC), TRI))
+    MIB.addReg(I8085::BC, RegState::ImplicitDefine);
+  if (candidateDefinesRegisterAlias(C, Register(I8085::DE), TRI))
+    MIB.addReg(I8085::DE, RegState::ImplicitDefine);
+  if (candidateDefinesRegisterAlias(C, Register(I8085::HL), TRI))
+    MIB.addReg(I8085::HL, RegState::ImplicitDefine);
+}
+
+static bool hasSafeTailCallReplacement(outliner::Candidate &C,
+                                       const TargetRegisterInfo &TRI) {
+  MachineBasicBlock &MBB = *C.getMBB();
+
+  for (Register Reg : getExposedUses(C, TRI)) {
+    if (TRI.regsOverlap(Reg, Register(I8085::SP)))
+      continue;
+
+    if (!isLiveInToBlock(Reg, MBB, TRI) && !hasPriorDef(Reg, C, TRI))
+      return false;
+  }
+
+  return true;
+}
+
 bool I8085InstrInfo::isFunctionSafeToOutlineFrom(
     MachineFunction &MF, bool OutlineFromLinkOnceODRs) const {
   const Function &F = MF.getFunction();
@@ -629,6 +734,12 @@ std::optional<outliner::OutlinedFunction>
 I8085InstrInfo::getOutliningCandidateInfo(
     const MachineModuleInfo &MMI,
     std::vector<outliner::Candidate> &RepeatedSequenceLocs) const {
+  if (RepeatedSequenceLocs.empty())
+    return std::nullopt;
+
+  const TargetRegisterInfo *TRI =
+      RepeatedSequenceLocs[0].getMF()->getSubtarget().getRegisterInfo();
+
   llvm::erase_if(RepeatedSequenceLocs, [](outliner::Candidate &C) {
     return !hasSafeStackRelativeFixups(C);
   });
@@ -636,14 +747,32 @@ I8085InstrInfo::getOutliningCandidateInfo(
   if (RepeatedSequenceLocs.size() < 2)
     return std::nullopt;
 
+  if (RepeatedSequenceLocs[0].back().getOpcode() == I8085::RET) {
+    llvm::erase_if(RepeatedSequenceLocs, [&](outliner::Candidate &C) {
+      return !hasSafeTailCallReplacement(C, *TRI);
+    });
+
+    if (RepeatedSequenceLocs.size() < 2)
+      return std::nullopt;
+  }
+
   unsigned SequenceSize = 0;
   for (MachineInstr &MI : RepeatedSequenceLocs[0])
     SequenceSize += getInstSizeInBytes(MI);
 
+  constexpr unsigned BranchOverhead = 3;
+
+  if (RepeatedSequenceLocs[0].back().getOpcode() == I8085::RET) {
+    for (outliner::Candidate &C : RepeatedSequenceLocs)
+      C.setCallInfo(MachineOutlinerTailCall, BranchOverhead);
+
+    return outliner::OutlinedFunction(RepeatedSequenceLocs, SequenceSize, 0,
+                                      MachineOutlinerTailCall);
+  }
+
   // I8085 CALL addr16 is 3 bytes and does not modify condition flags.
-  constexpr unsigned CallOverhead = 3;
   for (outliner::Candidate &C : RepeatedSequenceLocs)
-    C.setCallInfo(MachineOutlinerDefault, CallOverhead);
+    C.setCallInfo(MachineOutlinerDefault, BranchOverhead);
 
   // Default outlined functions return with RET, a 1-byte instruction.
   constexpr unsigned FrameOverhead = 1;
@@ -661,6 +790,9 @@ I8085InstrInfo::getOutliningTypeImpl(const MachineModuleInfo &MMI,
 
   if (MI.isDebugInstr() || MI.isPosition() || MI.isCFIInstruction())
     return outliner::InstrType::Invisible;
+
+  if (MI.getOpcode() == I8085::RET)
+    return outliner::InstrType::LegalTerminator;
 
   if (MI.isInlineAsm() || MI.isCall() || MI.isBranch() || MI.isReturn() ||
       MI.isTerminator() || MI.isBarrier())
@@ -694,26 +826,41 @@ I8085InstrInfo::getOutliningTypeImpl(const MachineModuleInfo &MMI,
 void I8085InstrInfo::buildOutlinedFrame(
     MachineBasicBlock &MBB, MachineFunction &MF,
     const outliner::OutlinedFunction &OF) const {
-  for (auto It = MBB.begin(), End = MBB.end(); It != End; ++It) {
-    if (!isDADSP(*It))
-      continue;
+  if (OF.FrameConstructionID == MachineOutlinerDefault) {
+    for (auto It = MBB.begin(), End = MBB.end(); It != End; ++It) {
+      if (!isDADSP(*It))
+        continue;
 
-    assert(It != MBB.begin() &&
-           "DAD SP candidate should include a preceding LXI H,imm");
-    MachineInstr &LXI = *std::prev(It);
-    assert(isLXIHLImm(LXI) && "DAD SP candidate should have LXI H,imm");
-    MachineOperand &Offset = LXI.getOperand(1);
-    Offset.setImm(Offset.getImm() + 2);
+      assert(It != MBB.begin() &&
+             "DAD SP candidate should include a preceding LXI H,imm");
+      MachineInstr &LXI = *std::prev(It);
+      assert(isLXIHLImm(LXI) && "DAD SP candidate should have LXI H,imm");
+      MachineOperand &Offset = LXI.getOperand(1);
+      Offset.setImm(Offset.getImm() + 2);
+    }
+
+    MBB.insert(MBB.end(), BuildMI(MF, DebugLoc(), get(I8085::RET)));
+    return;
   }
 
-  MBB.insert(MBB.end(), BuildMI(MF, DebugLoc(), get(I8085::RET)));
+  assert(OF.FrameConstructionID == MachineOutlinerTailCall &&
+         "unexpected I8085 outliner frame construction ID");
 }
 
 MachineBasicBlock::iterator I8085InstrInfo::insertOutlinedCall(
     Module &M, MachineBasicBlock &MBB, MachineBasicBlock::iterator &It,
     MachineFunction &MF, outliner::Candidate &C) const {
-  It = MBB.insert(It, BuildMI(MF, DebugLoc(), get(I8085::CALL_OUTLINE))
-                          .addGlobalAddress(M.getNamedValue(MF.getName())));
+  if (C.CallConstructionID == MachineOutlinerTailCall) {
+    MachineInstrBuilder MIB =
+        BuildMI(MF, DebugLoc(), get(I8085::TCRETURN))
+            .addGlobalAddress(M.getNamedValue(MF.getName()))
+            .addImm(0);
+    const TargetRegisterInfo &TRI = *MF.getSubtarget().getRegisterInfo();
+    addPairAliasDefs(MIB, C, TRI);
+    It = MBB.insert(It, MIB);
+  } else
+    It = MBB.insert(It, BuildMI(MF, DebugLoc(), get(I8085::CALL_OUTLINE))
+                            .addGlobalAddress(M.getNamedValue(MF.getName())));
   return It;
 }
 

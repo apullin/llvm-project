@@ -18,7 +18,8 @@ body:             |
   bb.0:
     ; CHECK-LABEL: name: outline_a
     ; CHECK: CALL_OUTLINE @[[PUREFN:OUTLINED_FUNCTION_[0-9]+]]
-    ; CHECK-NEXT: RET
+    ; CHECK: $a = MVI 2
+    ; CHECK: RET
     $a = MVI 1
     $b = MOV $a
     $c = MOV $b
@@ -27,6 +28,7 @@ body:             |
     $h = MOV $e
     $l = MOV $h
     NOP
+    $a = MVI 2
     RET implicit $sp, implicit-def $sp
 ...
 
@@ -37,7 +39,8 @@ body:             |
   bb.0:
     ; CHECK-LABEL: name: outline_b
     ; CHECK: CALL_OUTLINE @[[PUREFN]]
-    ; CHECK-NEXT: RET
+    ; CHECK: $a = MVI 3
+    ; CHECK: RET
     $a = MVI 1
     $b = MOV $a
     $c = MOV $b
@@ -46,6 +49,7 @@ body:             |
     $h = MOV $e
     $l = MOV $h
     NOP
+    $a = MVI 3
     RET implicit $sp, implicit-def $sp
 ...
 
@@ -56,7 +60,8 @@ body:             |
   bb.0:
     ; CHECK-LABEL: name: sp_a
     ; CHECK: CALL_OUTLINE @[[SPFN:OUTLINED_FUNCTION_[0-9]+]]
-    ; CHECK-NEXT: RET
+    ; CHECK: $b = MVI 1
+    ; CHECK: RET
     $hl = LXI 4
     DAD $sp, implicit-def $sreg, implicit $h, implicit $l, implicit-def $h, implicit-def $l
     $a = MOV_FROM_M implicit $h, implicit $l
@@ -66,6 +71,7 @@ body:             |
     $hl = LXI 4
     DAD $sp, implicit-def $sreg, implicit $h, implicit $l, implicit-def $h, implicit-def $l
     $a = MOV_FROM_M implicit $h, implicit $l
+    $b = MVI 1
     RET implicit $sp, implicit-def $sp
 ...
 
@@ -76,7 +82,8 @@ body:             |
   bb.0:
     ; CHECK-LABEL: name: sp_b
     ; CHECK: CALL_OUTLINE @[[SPFN]]
-    ; CHECK-NEXT: RET
+    ; CHECK: $b = MVI 2
+    ; CHECK: RET
     $hl = LXI 4
     DAD $sp, implicit-def $sreg, implicit $h, implicit $l, implicit-def $h, implicit-def $l
     $a = MOV_FROM_M implicit $h, implicit $l
@@ -86,6 +93,7 @@ body:             |
     $hl = LXI 4
     DAD $sp, implicit-def $sreg, implicit $h, implicit $l, implicit-def $h, implicit-def $l
     $a = MOV_FROM_M implicit $h, implicit $l
+    $b = MVI 2
     RET implicit $sp, implicit-def $sp
 ...
 
@@ -109,6 +117,7 @@ body:             |
     NOP
     DAD $sp, implicit-def $sreg, implicit $h, implicit $l, implicit-def $h, implicit-def $l
     $a = MOV_FROM_M implicit $h, implicit $l
+    $b = MVI 1
     RET implicit $sp, implicit-def $sp
 ...
 
@@ -132,6 +141,7 @@ body:             |
     NOP
     DAD $sp, implicit-def $sreg, implicit $h, implicit $l, implicit-def $h, implicit-def $l
     $a = MOV_FROM_M implicit $h, implicit $l
+    $b = MVI 2
     RET implicit $sp, implicit-def $sp
 ...
 
@@ -143,8 +153,7 @@ body:             |
 # CHECK: RET
 
 # CHECK: name: [[PUREFN]]
-# CHECK: $a = MVI 1
-# CHECK-NEXT: $b = MOV $a
+# CHECK: $b = MOV $a
 # CHECK-NEXT: $c = MOV $b
 # CHECK-NEXT: $d = MOV $c
 # CHECK-NEXT: $e = MOV $d

@@ -7,6 +7,8 @@
   define void @outline_b() { ret void }
   define void @sp_a() { ret void }
   define void @sp_b() { ret void }
+  define void @bad_sp_a() { ret void }
+  define void @bad_sp_b() { ret void }
 ...
 
 ---
@@ -15,7 +17,7 @@ tracksRegLiveness: true
 body:             |
   bb.0:
     ; CHECK-LABEL: name: outline_a
-    ; CHECK: CALL_OUTLINE @OUTLINED_FUNCTION_0
+    ; CHECK: CALL_OUTLINE @[[PUREFN:OUTLINED_FUNCTION_[0-9]+]]
     ; CHECK-NEXT: RET
     $a = MVI 1
     $b = MOV $a
@@ -34,7 +36,7 @@ tracksRegLiveness: true
 body:             |
   bb.0:
     ; CHECK-LABEL: name: outline_b
-    ; CHECK: CALL_OUTLINE @OUTLINED_FUNCTION_0
+    ; CHECK: CALL_OUTLINE @[[PUREFN]]
     ; CHECK-NEXT: RET
     $a = MVI 1
     $b = MOV $a
@@ -53,11 +55,8 @@ tracksRegLiveness: true
 body:             |
   bb.0:
     ; CHECK-LABEL: name: sp_a
-    ; CHECK-NOT: CALL_OUTLINE @OUTLINED_FUNCTION
-    ; CHECK: $hl = LXI 4
-    ; CHECK-NEXT: DAD $sp
-    ; CHECK-NEXT: $a = MOV_FROM_M
-    ; CHECK: RET
+    ; CHECK: CALL_OUTLINE @[[SPFN:OUTLINED_FUNCTION_[0-9]+]]
+    ; CHECK-NEXT: RET
     $hl = LXI 4
     DAD $sp, implicit-def $sreg, implicit $h, implicit $l, implicit-def $h, implicit-def $l
     $a = MOV_FROM_M implicit $h, implicit $l
@@ -76,11 +75,8 @@ tracksRegLiveness: true
 body:             |
   bb.0:
     ; CHECK-LABEL: name: sp_b
-    ; CHECK-NOT: CALL_OUTLINE @OUTLINED_FUNCTION
-    ; CHECK: $hl = LXI 4
-    ; CHECK-NEXT: DAD $sp
-    ; CHECK-NEXT: $a = MOV_FROM_M
-    ; CHECK: RET
+    ; CHECK: CALL_OUTLINE @[[SPFN]]
+    ; CHECK-NEXT: RET
     $hl = LXI 4
     DAD $sp, implicit-def $sreg, implicit $h, implicit $l, implicit-def $h, implicit-def $l
     $a = MOV_FROM_M implicit $h, implicit $l
@@ -93,7 +89,60 @@ body:             |
     RET implicit $sp, implicit-def $sp
 ...
 
-# CHECK-LABEL: name: OUTLINED_FUNCTION_0
+---
+name:            bad_sp_a
+tracksRegLiveness: true
+body:             |
+  bb.0:
+    ; CHECK-LABEL: name: bad_sp_a
+    ; CHECK-NOT: CALL_OUTLINE @OUTLINED_FUNCTION
+    ; CHECK: RET
+    $hl = LXI 0
+    NOP
+    DAD $sp, implicit-def $sreg, implicit $h, implicit $l, implicit-def $h, implicit-def $l
+    $a = MOV_FROM_M implicit $h, implicit $l
+    $hl = LXI 0
+    NOP
+    DAD $sp, implicit-def $sreg, implicit $h, implicit $l, implicit-def $h, implicit-def $l
+    $a = MOV_FROM_M implicit $h, implicit $l
+    $hl = LXI 0
+    NOP
+    DAD $sp, implicit-def $sreg, implicit $h, implicit $l, implicit-def $h, implicit-def $l
+    $a = MOV_FROM_M implicit $h, implicit $l
+    RET implicit $sp, implicit-def $sp
+...
+
+---
+name:            bad_sp_b
+tracksRegLiveness: true
+body:             |
+  bb.0:
+    ; CHECK-LABEL: name: bad_sp_b
+    ; CHECK-NOT: CALL_OUTLINE @OUTLINED_FUNCTION
+    ; CHECK: RET
+    $hl = LXI 0
+    NOP
+    DAD $sp, implicit-def $sreg, implicit $h, implicit $l, implicit-def $h, implicit-def $l
+    $a = MOV_FROM_M implicit $h, implicit $l
+    $hl = LXI 0
+    NOP
+    DAD $sp, implicit-def $sreg, implicit $h, implicit $l, implicit-def $h, implicit-def $l
+    $a = MOV_FROM_M implicit $h, implicit $l
+    $hl = LXI 0
+    NOP
+    DAD $sp, implicit-def $sreg, implicit $h, implicit $l, implicit-def $h, implicit-def $l
+    $a = MOV_FROM_M implicit $h, implicit $l
+    RET implicit $sp, implicit-def $sp
+...
+
+# CHECK: name: [[SPFN]]
+# CHECK: $hl = LXI 6
+# CHECK-NEXT: DAD $sp
+# CHECK-NEXT: $a = MOV_FROM_M
+# CHECK: $hl = LXI 6
+# CHECK: RET
+
+# CHECK: name: [[PUREFN]]
 # CHECK: $a = MVI 1
 # CHECK-NEXT: $b = MOV $a
 # CHECK-NEXT: $c = MOV $b

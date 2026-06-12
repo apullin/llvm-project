@@ -528,7 +528,28 @@ bool I8085InstrInfo::isBranchOffsetInRange(unsigned BranchOp,
 
 enum I8085MachineOutlinerConstructionID { MachineOutlinerDefault };
 
-static bool isPureI8085OutlinerOpcode(unsigned Opcode) {
+static bool isDADSP(const MachineInstr &MI) {
+  return MI.getOpcode() == I8085::DAD && MI.getOperand(0).isReg() &&
+         MI.getOperand(0).getReg() == I8085::SP;
+}
+
+static bool isLXIHLImm(const MachineInstr &MI) {
+  return MI.getOpcode() == I8085::LXI && MI.getOperand(0).isReg() &&
+         MI.getOperand(0).getReg() == I8085::HL && MI.getOperand(1).isImm();
+}
+
+static bool isI8085OutlinerMemoryOpcode(unsigned Opcode) {
+  switch (Opcode) {
+  case I8085::MOV_FROM_M:
+  case I8085::MOV_M:
+  case I8085::MVI_M:
+    return true;
+  default:
+    return false;
+  }
+}
+
+static bool isI8085OutlinerOpcode(unsigned Opcode) {
   switch (Opcode) {
   case I8085::ACI:
   case I8085::ADC:
@@ -548,7 +569,10 @@ static bool isPureI8085OutlinerOpcode(unsigned Opcode) {
   case I8085::INX:
   case I8085::LXI:
   case I8085::MOV:
+  case I8085::MOV_FROM_M:
+  case I8085::MOV_M:
   case I8085::MVI:
+  case I8085::MVI_M:
   case I8085::NOP:
   case I8085::ORA:
   case I8085::ORI:
@@ -568,6 +592,18 @@ static bool isPureI8085OutlinerOpcode(unsigned Opcode) {
   default:
     return false;
   }
+}
+
+static bool hasSafeStackRelativeFixups(outliner::Candidate &C) {
+  for (auto It = C.begin(), End = C.end(); It != End; ++It) {
+    if (!isDADSP(*It))
+      continue;
+    if (It == C.begin())
+      return false;
+    if (!isLXIHLImm(*std::prev(It)))
+      return false;
+  }
+  return true;
 }
 
 bool I8085InstrInfo::isFunctionSafeToOutlineFrom(
@@ -593,6 +629,10 @@ std::optional<outliner::OutlinedFunction>
 I8085InstrInfo::getOutliningCandidateInfo(
     const MachineModuleInfo &MMI,
     std::vector<outliner::Candidate> &RepeatedSequenceLocs) const {
+  llvm::erase_if(RepeatedSequenceLocs, [](outliner::Candidate &C) {
+    return !hasSafeStackRelativeFixups(C);
+  });
+
   if (RepeatedSequenceLocs.size() < 2)
     return std::nullopt;
 
@@ -626,20 +666,26 @@ I8085InstrInfo::getOutliningTypeImpl(const MachineModuleInfo &MMI,
       MI.isTerminator() || MI.isBarrier())
     return outliner::InstrType::Illegal;
 
-  if (MI.getDesc().isPseudo() || MI.mayLoad() || MI.mayStore())
+  if (MI.getDesc().isPseudo())
+    return outliner::InstrType::Illegal;
+
+  if ((MI.mayLoad() || MI.mayStore()) &&
+      !isI8085OutlinerMemoryOpcode(MI.getOpcode()))
     return outliner::InstrType::Illegal;
 
   // Most patternless I8085 real instructions are conservatively tagged with
-  // unmodeled side effects. Keep Stage 1 useful, but only for an explicit set
-  // of register/immediate operations with no memory or I/O behavior.
+  // unmodeled side effects. Keep outlining useful, but only for an explicit
+  // set of register/immediate operations and selected HL memory operations.
   if (MI.hasUnmodeledSideEffects() &&
-      !isPureI8085OutlinerOpcode(MI.getOpcode()))
+      !isI8085OutlinerOpcode(MI.getOpcode()))
     return outliner::InstrType::Illegal;
 
-  // Stage 1 deliberately rejects all SP-touching sequences. CALL pushes a
-  // 2-byte return address, so SP-relative idioms like LXI H,off / DAD SP need
-  // offset repair before they are safe to outline.
-  if (MI.readsRegister(I8085::SP, TRI) || MI.modifiesRegister(I8085::SP, TRI))
+  // CALL pushes a 2-byte return address. Only allow DAD SP when
+  // getOutliningCandidateInfo can prove the candidate contains the immediately
+  // preceding LXI H,imm, which buildOutlinedFrame then repairs by +2.
+  if ((MI.readsRegister(I8085::SP, TRI) ||
+       MI.modifiesRegister(I8085::SP, TRI)) &&
+      !isDADSP(MI))
     return outliner::InstrType::Illegal;
 
   return outliner::InstrType::Legal;
@@ -648,6 +694,18 @@ I8085InstrInfo::getOutliningTypeImpl(const MachineModuleInfo &MMI,
 void I8085InstrInfo::buildOutlinedFrame(
     MachineBasicBlock &MBB, MachineFunction &MF,
     const outliner::OutlinedFunction &OF) const {
+  for (auto It = MBB.begin(), End = MBB.end(); It != End; ++It) {
+    if (!isDADSP(*It))
+      continue;
+
+    assert(It != MBB.begin() &&
+           "DAD SP candidate should include a preceding LXI H,imm");
+    MachineInstr &LXI = *std::prev(It);
+    assert(isLXIHLImm(LXI) && "DAD SP candidate should have LXI H,imm");
+    MachineOperand &Offset = LXI.getOperand(1);
+    Offset.setImm(Offset.getImm() + 2);
+  }
+
   MBB.insert(MBB.end(), BuildMI(MF, DebugLoc(), get(I8085::RET)));
 }
 

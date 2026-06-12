@@ -56,6 +56,10 @@ I8085TargetMachine::I8085TargetMachine(const Target &T, const Triple &TT,
       SubTarget(TT, std::string(getCPU(CPU)), std::string(FS), *this) {
   this->TLOF = std::make_unique<I8085TargetObjectFile>();
   initAsmInfo();
+
+  // I8085 supports explicit MachineOutliner runs. Leave default outlining off
+  // until SP-relative fixups and benchmark coverage are mature enough for -Oz.
+  setMachineOutliner(true);
 }
 
 namespace {

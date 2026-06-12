@@ -624,6 +624,11 @@ let Uses = [SP], Defs = [SP, A, B, C, D, E, H, L] in def CALL : F6<0b11001101,(o
                                        "CALL $k", [(I8085call imm:$k)]>;
 }
 
+let isCall = 1, isCodeGenOnly = 1 in {
+let Uses = [SP], Defs = [SP] in def CALL_OUTLINE : F6<0b11001101,(outs), (ins imm16Addr:$k),
+                                       "CALL $k", []>;
+}
+
 let isCall = 1 in {
 let Uses = [SP, HL], Defs = [SP, A, B, C, D, E, H, L] in def CALL_INDIRECT : I8085Pseudo<(outs), (ins),
                                        "CALL_INDIRECT", []>;

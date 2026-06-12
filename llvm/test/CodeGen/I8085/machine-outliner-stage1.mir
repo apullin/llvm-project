@@ -1,0 +1,105 @@
+# RUN: llc -mtriple=i8085-unknown-elf -run-pass=machine-outliner -verify-machineinstrs -simplify-mir %s -o - | FileCheck %s
+
+--- |
+  target triple = "i8085-unknown-elf"
+
+  define void @outline_a() { ret void }
+  define void @outline_b() { ret void }
+  define void @sp_a() { ret void }
+  define void @sp_b() { ret void }
+...
+
+---
+name:            outline_a
+tracksRegLiveness: true
+body:             |
+  bb.0:
+    ; CHECK-LABEL: name: outline_a
+    ; CHECK: CALL_OUTLINE @OUTLINED_FUNCTION_0
+    ; CHECK-NEXT: RET
+    $a = MVI 1
+    $b = MOV $a
+    $c = MOV $b
+    $d = MOV $c
+    $e = MOV $d
+    $h = MOV $e
+    $l = MOV $h
+    NOP
+    RET implicit $sp, implicit-def $sp
+...
+
+---
+name:            outline_b
+tracksRegLiveness: true
+body:             |
+  bb.0:
+    ; CHECK-LABEL: name: outline_b
+    ; CHECK: CALL_OUTLINE @OUTLINED_FUNCTION_0
+    ; CHECK-NEXT: RET
+    $a = MVI 1
+    $b = MOV $a
+    $c = MOV $b
+    $d = MOV $c
+    $e = MOV $d
+    $h = MOV $e
+    $l = MOV $h
+    NOP
+    RET implicit $sp, implicit-def $sp
+...
+
+---
+name:            sp_a
+tracksRegLiveness: true
+body:             |
+  bb.0:
+    ; CHECK-LABEL: name: sp_a
+    ; CHECK-NOT: CALL_OUTLINE @OUTLINED_FUNCTION
+    ; CHECK: $hl = LXI 4
+    ; CHECK-NEXT: DAD $sp
+    ; CHECK-NEXT: $a = MOV_FROM_M
+    ; CHECK: RET
+    $hl = LXI 4
+    DAD $sp, implicit-def $sreg, implicit $h, implicit $l, implicit-def $h, implicit-def $l
+    $a = MOV_FROM_M implicit $h, implicit $l
+    $hl = LXI 4
+    DAD $sp, implicit-def $sreg, implicit $h, implicit $l, implicit-def $h, implicit-def $l
+    $a = MOV_FROM_M implicit $h, implicit $l
+    $hl = LXI 4
+    DAD $sp, implicit-def $sreg, implicit $h, implicit $l, implicit-def $h, implicit-def $l
+    $a = MOV_FROM_M implicit $h, implicit $l
+    RET implicit $sp, implicit-def $sp
+...
+
+---
+name:            sp_b
+tracksRegLiveness: true
+body:             |
+  bb.0:
+    ; CHECK-LABEL: name: sp_b
+    ; CHECK-NOT: CALL_OUTLINE @OUTLINED_FUNCTION
+    ; CHECK: $hl = LXI 4
+    ; CHECK-NEXT: DAD $sp
+    ; CHECK-NEXT: $a = MOV_FROM_M
+    ; CHECK: RET
+    $hl = LXI 4
+    DAD $sp, implicit-def $sreg, implicit $h, implicit $l, implicit-def $h, implicit-def $l
+    $a = MOV_FROM_M implicit $h, implicit $l
+    $hl = LXI 4
+    DAD $sp, implicit-def $sreg, implicit $h, implicit $l, implicit-def $h, implicit-def $l
+    $a = MOV_FROM_M implicit $h, implicit $l
+    $hl = LXI 4
+    DAD $sp, implicit-def $sreg, implicit $h, implicit $l, implicit-def $h, implicit-def $l
+    $a = MOV_FROM_M implicit $h, implicit $l
+    RET implicit $sp, implicit-def $sp
+...
+
+# CHECK-LABEL: name: OUTLINED_FUNCTION_0
+# CHECK: $a = MVI 1
+# CHECK-NEXT: $b = MOV $a
+# CHECK-NEXT: $c = MOV $b
+# CHECK-NEXT: $d = MOV $c
+# CHECK-NEXT: $e = MOV $d
+# CHECK-NEXT: $h = MOV $e
+# CHECK-NEXT: $l = MOV $h
+# CHECK-NEXT: NOP
+# CHECK-NEXT: RET

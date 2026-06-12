@@ -17,8 +17,12 @@
 #include "llvm/CodeGen/MachineFrameInfo.h"
 #include "llvm/CodeGen/MachineInstrBuilder.h"
 #include "llvm/CodeGen/MachineMemOperand.h"
+#include "llvm/CodeGen/MachineModuleInfo.h"
+#include "llvm/CodeGen/MachineOutliner.h"
+#include "llvm/IR/Attributes.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/Function.h"
+#include "llvm/IR/Module.h"
 #include "llvm/MC/MCContext.h"
 #include "llvm/MC/TargetRegistry.h"
 #include "llvm/Support/Debug.h"
@@ -520,6 +524,139 @@ bool I8085InstrInfo::isBranchOffsetInRange(unsigned BranchOp,
   case I8085::JPO:
     return true;
   }
+}
+
+enum I8085MachineOutlinerConstructionID { MachineOutlinerDefault };
+
+static bool isPureI8085OutlinerOpcode(unsigned Opcode) {
+  switch (Opcode) {
+  case I8085::ACI:
+  case I8085::ADC:
+  case I8085::ADD:
+  case I8085::ADI:
+  case I8085::ANA:
+  case I8085::ANI:
+  case I8085::CMA:
+  case I8085::CMC:
+  case I8085::CMP:
+  case I8085::CPI:
+  case I8085::DAA:
+  case I8085::DAD:
+  case I8085::DCR:
+  case I8085::DCX:
+  case I8085::INR:
+  case I8085::INX:
+  case I8085::LXI:
+  case I8085::MOV:
+  case I8085::MVI:
+  case I8085::NOP:
+  case I8085::ORA:
+  case I8085::ORI:
+  case I8085::RAL:
+  case I8085::RAR:
+  case I8085::RLC:
+  case I8085::RRC:
+  case I8085::SBB:
+  case I8085::SBI:
+  case I8085::STC:
+  case I8085::SUB:
+  case I8085::SUI:
+  case I8085::XCHG:
+  case I8085::XRA:
+  case I8085::XRI:
+    return true;
+  default:
+    return false;
+  }
+}
+
+bool I8085InstrInfo::isFunctionSafeToOutlineFrom(
+    MachineFunction &MF, bool OutlineFromLinkOnceODRs) const {
+  const Function &F = MF.getFunction();
+
+  if (!OutlineFromLinkOnceODRs && F.hasLinkOnceODRLinkage())
+    return false;
+  if (F.hasSection())
+    return false;
+  if (F.hasFnAttribute(Attribute::Naked))
+    return false;
+
+  return true;
+}
+
+bool I8085InstrInfo::shouldOutlineFromFunctionByDefault(
+    MachineFunction &MF) const {
+  return MF.getFunction().hasMinSize();
+}
+
+std::optional<outliner::OutlinedFunction>
+I8085InstrInfo::getOutliningCandidateInfo(
+    const MachineModuleInfo &MMI,
+    std::vector<outliner::Candidate> &RepeatedSequenceLocs) const {
+  if (RepeatedSequenceLocs.size() < 2)
+    return std::nullopt;
+
+  unsigned SequenceSize = 0;
+  for (MachineInstr &MI : RepeatedSequenceLocs[0])
+    SequenceSize += getInstSizeInBytes(MI);
+
+  // I8085 CALL addr16 is 3 bytes and does not modify condition flags.
+  constexpr unsigned CallOverhead = 3;
+  for (outliner::Candidate &C : RepeatedSequenceLocs)
+    C.setCallInfo(MachineOutlinerDefault, CallOverhead);
+
+  // Default outlined functions return with RET, a 1-byte instruction.
+  constexpr unsigned FrameOverhead = 1;
+  return outliner::OutlinedFunction(RepeatedSequenceLocs, SequenceSize,
+                                    FrameOverhead, MachineOutlinerDefault);
+}
+
+outliner::InstrType
+I8085InstrInfo::getOutliningTypeImpl(const MachineModuleInfo &MMI,
+                                     MachineBasicBlock::iterator &MBBI,
+                                     unsigned Flags) const {
+  MachineInstr &MI = *MBBI;
+  const MachineFunction *MF = MI.getMF();
+  const TargetRegisterInfo *TRI = MF->getSubtarget().getRegisterInfo();
+
+  if (MI.isDebugInstr() || MI.isPosition() || MI.isCFIInstruction())
+    return outliner::InstrType::Invisible;
+
+  if (MI.isInlineAsm() || MI.isCall() || MI.isBranch() || MI.isReturn() ||
+      MI.isTerminator() || MI.isBarrier())
+    return outliner::InstrType::Illegal;
+
+  if (MI.getDesc().isPseudo() || MI.mayLoad() || MI.mayStore())
+    return outliner::InstrType::Illegal;
+
+  // Most patternless I8085 real instructions are conservatively tagged with
+  // unmodeled side effects. Keep Stage 1 useful, but only for an explicit set
+  // of register/immediate operations with no memory or I/O behavior.
+  if (MI.hasUnmodeledSideEffects() &&
+      !isPureI8085OutlinerOpcode(MI.getOpcode()))
+    return outliner::InstrType::Illegal;
+
+  // Stage 1 deliberately rejects all SP-touching sequences. CALL pushes a
+  // 2-byte return address, so SP-relative idioms like LXI H,off / DAD SP need
+  // offset repair before they are safe to outline.
+  if (MI.readsRegister(I8085::SP, TRI) || MI.modifiesRegister(I8085::SP, TRI))
+    return outliner::InstrType::Illegal;
+
+  return outliner::InstrType::Legal;
+}
+
+void I8085InstrInfo::buildOutlinedFrame(
+    MachineBasicBlock &MBB, MachineFunction &MF,
+    const outliner::OutlinedFunction &OF) const {
+  MBB.insert(MBB.end(), BuildMI(MF, DebugLoc(), get(I8085::RET)));
+}
+
+MachineBasicBlock::iterator I8085InstrInfo::insertOutlinedCall(
+    Module &M, MachineBasicBlock &MBB, MachineBasicBlock::iterator &It,
+    MachineFunction &MF, outliner::Candidate &C) const {
+  It = MBB.insert(It, BuildMI(MF, DebugLoc(), get(I8085::CALL_OUTLINE))
+                          .addGlobalAddress(M.getNamedValue(MF.getName())));
+  return It;
 }
 
 } // end of namespace llvm

@@ -48,7 +48,7 @@ entry:
 define i16 @cond_add(i16 %a, i16 %b, i1 %cond) {
 ; CHECK-LABEL: cond_add:
 ; CHECK: ANI 1
-; CHECK: JZ
+; CHECK: RZ
 ; CHECK: ADD E
 ; CHECK: ADC D
 ; CHECK: RET

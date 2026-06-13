@@ -150,7 +150,7 @@ let isBarrier = 1, isBranch = 1, isTerminator = 1 in {
                                            "JMP $k", [(br bb: $k)]>; 
 }
 
-let isTerminator = 1, isReturn = 1, isBarrier = 1 in {
+let isTerminator = 1, isReturn = 1, Uses = [SP, SREG], Defs = [SP] in {
    def RNZ : F1<0b11000000,(outs),(ins),"RNZ", []>;
    def RZ  : F1<0b11001000,(outs),(ins),"RZ", []>;
    def RNC : F1<0b11010000,(outs),(ins),"RNC", []>;

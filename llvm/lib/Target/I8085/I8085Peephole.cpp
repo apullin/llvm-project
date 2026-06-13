@@ -17,6 +17,7 @@
 
 #include "llvm/CodeGen/MachineFunctionPass.h"
 #include "llvm/CodeGen/MachineInstr.h"
+#include "llvm/CodeGen/MachineInstrBuilder.h"
 #include "llvm/CodeGen/MachineOperand.h"
 #include "llvm/CodeGen/TargetInstrInfo.h"
 #include "llvm/Support/Debug.h"
@@ -26,6 +27,46 @@ using namespace llvm;
 #define DEBUG_TYPE "i8085-peephole"
 
 namespace {
+static unsigned getConditionalReturnOpcode(unsigned BranchOpc) {
+  switch (BranchOpc) {
+  case I8085::JNZ:
+    return I8085::RNZ;
+  case I8085::JZ:
+    return I8085::RZ;
+  case I8085::JNC:
+    return I8085::RNC;
+  case I8085::JC:
+    return I8085::RC;
+  case I8085::JPO:
+    return I8085::RPO;
+  case I8085::JPE:
+    return I8085::RPE;
+  case I8085::JP:
+    return I8085::RP;
+  case I8085::JM:
+    return I8085::RM;
+  default:
+    return 0;
+  }
+}
+
+static bool beginsWithReturn(const MachineBasicBlock &MBB) {
+  auto I = MBB.getFirstNonDebugInstr(/*SkipPseudoOp=*/false);
+  return I != MBB.end() && I->getOpcode() == I8085::RET;
+}
+
+static bool stillReferencesBlock(MachineBasicBlock &MBB,
+                                 const MachineBasicBlock &Target) {
+  for (const MachineInstr &MI : MBB) {
+    for (const MachineOperand &MO : MI.operands()) {
+      if (MO.isMBB() && MO.getMBB() == &Target)
+        return true;
+    }
+  }
+
+  return MBB.isLayoutSuccessor(&Target) && MBB.canFallThrough();
+}
+
 class I8085Peephole : public MachineFunctionPass {
 public:
   static char ID;
@@ -43,6 +84,23 @@ public:
     for (MachineBasicBlock &MBB : MF) {
       for (auto MI = MBB.begin(); MI != MBB.end();) {
         auto Next = std::next(MI);
+
+        unsigned CondRetOpc = getConditionalReturnOpcode(MI->getOpcode());
+        if (CondRetOpc && MI->getNumOperands() >= 1 &&
+            MI->getOperand(0).isMBB()) {
+          MachineBasicBlock *TargetMBB = MI->getOperand(0).getMBB();
+          if (beginsWithReturn(*TargetMBB)) {
+            BuildMI(MBB, MI, MI->getDebugLoc(),
+                    MF.getSubtarget().getInstrInfo()->get(CondRetOpc));
+            MI = MBB.erase(MI);
+            if (MBB.isSuccessor(TargetMBB) &&
+                !stillReferencesBlock(MBB, *TargetMBB))
+              MBB.removeSuccessor(TargetMBB);
+            Changed = true;
+            continue;
+          }
+        }
+
         if (MI->getOpcode() == I8085::MOV && MI->getNumOperands() >= 2 &&
             MI->getOperand(0).isReg() && MI->getOperand(1).isReg()) {
           Register Dst = MI->getOperand(0).getReg();

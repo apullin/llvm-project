@@ -18,7 +18,7 @@ define i16 @select_const_one_away(i1 %cond) {
 ; CHECK: ANI 1
 ; CHECK: LXI D, 4
 ; CHECK: LXI B, 3
-; CHECK: JNZ
+; CHECK: RNZ
 ; CHECK: RET
 entry:
   %sel = select i1 %cond, i16 3, i16 4
@@ -30,7 +30,7 @@ define i16 @select_const_arbitrary(i1 %cond) {
 ; CHECK: ANI 1
 ; CHECK: LXI D, 1000
 ; CHECK: LXI B, 42
-; CHECK: JNZ
+; CHECK: RNZ
 ; CHECK: RET
 entry:
   %sel = select i1 %cond, i16 42, i16 1000
@@ -55,7 +55,7 @@ define i16 @select_const_zero_nonzero(i1 %cond) {
 ; CHECK: ANI 1
 ; CHECK: LXI D, 255
 ; CHECK: LXI B, 0
-; CHECK: JNZ
+; CHECK: RNZ
 ; CHECK: RET
 entry:
   %sel = select i1 %cond, i16 0, i16 255

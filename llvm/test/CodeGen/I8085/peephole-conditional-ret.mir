@@ -1,0 +1,44 @@
+# RUN: llc -run-pass=i8085-peephole -verify-machineinstrs %s -o - | FileCheck %s
+
+--- |
+  target triple = "i8085-unknown-elf"
+
+  define void @jz_to_ret() { ret void }
+  define void @jp_to_ret() { ret void }
+...
+
+---
+name:            jz_to_ret
+body:             |
+  bb.0:
+    successors: %bb.1(0x80000000), %bb.2(0x80000000)
+    ; CHECK-LABEL: name: jz_to_ret
+    ; CHECK: successors: %bb.1
+    ; CHECK: RZ implicit-def $sp, implicit $sp, implicit $sreg
+    ; CHECK-NEXT: JMP %bb.1
+    ; CHECK-NOT: JZ
+    JZ %bb.2, implicit $sreg
+    JMP %bb.1
+  bb.1:
+    RET implicit $sp, implicit-def $sp
+  bb.2:
+    RET implicit $sp, implicit-def $sp
+...
+
+---
+name:            jp_to_ret
+body:             |
+  bb.0:
+    successors: %bb.1(0x80000000), %bb.2(0x80000000)
+    ; CHECK-LABEL: name: jp_to_ret
+    ; CHECK: successors: %bb.1
+    ; CHECK: RP implicit-def $sp, implicit $sp, implicit $sreg
+    ; CHECK-NEXT: JMP %bb.1
+    ; CHECK-NOT: JP
+    JP %bb.2, implicit $sreg
+    JMP %bb.1
+  bb.1:
+    RET implicit $sp, implicit-def $sp
+  bb.2:
+    RET implicit $sp, implicit-def $sp
+...

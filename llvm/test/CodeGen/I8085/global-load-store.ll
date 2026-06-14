@@ -13,11 +13,10 @@ define void @increment_global() {
 ; CHECK: LXI B, 1
 ; CHECK: LXI H, counter+1
 ; CHECK: MOV D, M
-; CHECK: LXI H, counter
+; CHECK: DCX H
 ; CHECK: MOV E, M
 ; CHECK: ADD C
 ; CHECK: ADC B
-; CHECK: LXI H, counter
 ; CHECK: MOV M, E
 ; CHECK: INX H
 ; CHECK: MOV M, D

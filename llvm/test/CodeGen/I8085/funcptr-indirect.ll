@@ -45,7 +45,7 @@ define i16 @test_global_funcptr(i16 %arg) {
 ; CHECK-LABEL: test_global_funcptr:
 ; CHECK: LXI H, gfptr+1
 ; CHECK: MOV B, M
-; CHECK: LXI H, gfptr
+; CHECK: DCX H
 ; CHECK: MOV C, M
 ; CHECK: PUSH B
 ; CHECK: PCHL

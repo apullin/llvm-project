@@ -12,9 +12,10 @@ Enable it with:
 ```
 
 The pass emits one private global per converted frame object. Those globals are
-placed in `.i8085.scratch` so a linker script can locate scratch storage
-explicitly. If the linker script does not mention the section, placement follows
-the linker's normal orphan-section policy.
+placed in `.bss.i8085.scratch`, a target-specific BSS subsection. Linker scripts
+that already collect `.bss*` will normally place the scratch storage with other
+zero-initialized RAM and keep it out of flat ROM/code images. A tighter linker
+script can still place `.bss.i8085.scratch` explicitly.
 
 ## Safety model
 

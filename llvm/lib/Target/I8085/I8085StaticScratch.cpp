@@ -7,7 +7,7 @@
 //===----------------------------------------------------------------------===//
 //
 // Redirect selected spill stack slots to private absolute RAM symbols in a
-// dedicated .i8085.scratch section.
+// dedicated .bss.i8085.scratch section.
 //
 // This is a conservative prototype for CP/M-style fixed workspace locations.
 // It is gated behind -i8085-static-scratch-bytes=N and currently handles 8-bit
@@ -304,7 +304,7 @@ GlobalVariable *I8085StaticScratch::createScratchGlobal(MachineFunction &MF,
                                  MF.getName() + "." + Twine(FrameIndex))
                                     .str());
   GV->setAlignment(Align(1));
-  GV->setSection(".i8085.scratch");
+  GV->setSection(".bss.i8085.scratch");
   return GV;
 }
 

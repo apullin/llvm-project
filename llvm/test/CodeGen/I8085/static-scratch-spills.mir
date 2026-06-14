@@ -7,7 +7,7 @@
 # RUN: llc -O2 -mtriple=i8085-unknown-elf -run-pass=i8085-static-scratch -i8085-static-scratch-bytes=8 -i8085-static-scratch-unsafe-recursive %s -o - | FileCheck %s --check-prefix=UNSAFE
 # RUN: llc -O2 -mtriple=i8085-unknown-elf -run-pass=i8085-static-scratch -i8085-static-scratch-bytes=8 -i8085-static-scratch-unsafe-recursive -i8085-static-scratch-allow-known-recursive %s -o - | FileCheck %s --check-prefix=ALLOW
 
-# CHECK: @__i8085_static_scratch.spill8.0 = private global [1 x i8] zeroinitializer, section ".i8085.scratch", align 1
+# CHECK: @__i8085_static_scratch.spill8.0 = private global [1 x i8] zeroinitializer, section ".bss.i8085.scratch", align 1
 
 --- |
   target triple = "i8085-unknown-elf"

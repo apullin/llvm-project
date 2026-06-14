@@ -71,6 +71,18 @@ private:
     return BuildMI(MBB, MBBI, MBBI->getDebugLoc(), TII->get(Opcode), DstReg);
   }
 
+  void buildINX(Block &MBB, BlockIt MBBI, Register Reg) {
+    buildMI(MBB, MBBI, I8085::INX)
+        .addReg(Reg, RegState::Define)
+        .addReg(Reg, RegState::Implicit);
+  }
+
+  void buildDCX(Block &MBB, BlockIt MBBI, Register Reg) {
+    buildMI(MBB, MBBI, I8085::DCX)
+        .addReg(Reg, RegState::Define)
+        .addReg(Reg, RegState::Implicit);
+  }
+
   void pushPSW(Block &MBB, BlockIt MBBI, bool CanClobberFlags) {
     if (CanClobberFlags)
       buildMI(MBB, MBBI, I8085::ORI).addImm(0);
@@ -292,14 +304,14 @@ bool I8085ExpandPseudo::tryExpandAdjacentLoad16Pair(Block &MBB, BlockIt MBBI) {
       .addImm(LowOff);
   buildMI(MBB, MBBI, I8085::DAD).addReg(I8085::SP);
   buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(LowRegLow, RegState::Define);
-  buildMI(MBB, MBBI, I8085::INX).addReg(I8085::HL, RegState::Define);
+  buildINX(MBB, MBBI, I8085::HL);
   buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(LowRegHigh, RegState::Define);
 
   for (int64_t Step = LowOff + 1; Step < HighOff; ++Step)
-    buildMI(MBB, MBBI, I8085::INX).addReg(I8085::HL, RegState::Define);
+    buildINX(MBB, MBBI, I8085::HL);
 
   buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(HighRegLow, RegState::Define);
-  buildMI(MBB, MBBI, I8085::INX).addReg(I8085::HL, RegState::Define);
+  buildINX(MBB, MBBI, I8085::HL);
   buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(HighRegHigh, RegState::Define);
 
   NextMI.eraseFromParent();
@@ -349,14 +361,14 @@ bool I8085ExpandPseudo::tryExpandAdjacentStore16Pair(Block &MBB, BlockIt MBBI) {
       .addImm(LowOff);
   buildMI(MBB, MBBI, I8085::DAD).addReg(I8085::SP);
   buildMI(MBB, MBBI, I8085::MOV_M).addReg(LowRegLow);
-  buildMI(MBB, MBBI, I8085::INX).addReg(I8085::HL, RegState::Define);
+  buildINX(MBB, MBBI, I8085::HL);
   buildMI(MBB, MBBI, I8085::MOV_M).addReg(LowRegHigh);
 
   for (int64_t Step = LowOff + 1; Step < HighOff; ++Step)
-    buildMI(MBB, MBBI, I8085::INX).addReg(I8085::HL, RegState::Define);
+    buildINX(MBB, MBBI, I8085::HL);
 
   buildMI(MBB, MBBI, I8085::MOV_M).addReg(HighRegLow);
-  buildMI(MBB, MBBI, I8085::INX).addReg(I8085::HL, RegState::Define);
+  buildINX(MBB, MBBI, I8085::HL);
   buildMI(MBB, MBBI, I8085::MOV_M).addReg(HighRegHigh);
 
   NextMI.eraseFromParent();
@@ -445,14 +457,14 @@ bool I8085ExpandPseudo::expand<I8085::LOAD_16_ADDR_CONTENT>(Block &MBB, BlockIt 
         .addReg(destLowReg, RegState::Define)
         .addReg(I8085::A);
 
-    buildMI(MBB, MBBI, I8085::INX).addReg(srcReg, RegState::Define);
+    buildINX(MBB, MBBI, srcReg);
     buildMI(MBB, MBBI, I8085::LDAX).addReg(srcReg);
     buildMI(MBB, MBBI, I8085::MOV)
         .addReg(destHighReg, RegState::Define)
         .addReg(I8085::A);
 
     if (srcReg != destReg)
-      buildMI(MBB, MBBI, I8085::DCX).addReg(srcReg, RegState::Define);
+      buildDCX(MBB, MBBI, srcReg);
 
     if (PreservePSW)
       buildMI(MBB, MBBI, I8085::POP).addReg(I8085::PSW, RegState::Define);
@@ -494,7 +506,7 @@ bool I8085ExpandPseudo::expand<I8085::LOAD_16_ADDR_CONTENT>(Block &MBB, BlockIt 
     if (PreservePSW)
       pushPSW(MBB, MBBI, CanClobberFlags);
     buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::A, RegState::Define);
-    buildMI(MBB, MBBI, I8085::INX).addReg(I8085::HL, RegState::Define);
+    buildINX(MBB, MBBI, I8085::HL);
     buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::H, RegState::Define);
     buildMI(MBB, MBBI, I8085::MOV)
         .addReg(I8085::L, RegState::Define)
@@ -511,10 +523,10 @@ bool I8085ExpandPseudo::expand<I8085::LOAD_16_ADDR_CONTENT>(Block &MBB, BlockIt 
     return false;
 
   buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(destLowReg, RegState::Define);
-  buildMI(MBB, MBBI, I8085::INX).addReg(I8085::HL, RegState::Define);
+  buildINX(MBB, MBBI, I8085::HL);
   buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(destHighReg, RegState::Define);
   if (srcReg == I8085::HL)
-    buildMI(MBB, MBBI, I8085::DCX).addReg(I8085::HL, RegState::Define);
+    buildDCX(MBB, MBBI, I8085::HL);
 
   MI.eraseFromParent();
   return true;
@@ -642,7 +654,7 @@ bool I8085ExpandPseudo::expand<I8085::STORE_16_ADDR_CONTENT>(Block &MBB, BlockIt
     buildMI(MBB, MBBI, I8085::PUSH).addReg(I8085::HL);
     buildMI(MBB, MBBI, I8085::POP).addReg(I8085::BC, RegState::Define);
     buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::C);
-    buildMI(MBB, MBBI, I8085::INX).addReg(I8085::HL, RegState::Define);
+    buildINX(MBB, MBBI, I8085::HL);
     buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::B);
     buildMI(MBB, MBBI, I8085::POP).addReg(I8085::BC, RegState::Define);
     MI.eraseFromParent();
@@ -663,12 +675,12 @@ bool I8085ExpandPseudo::expand<I8085::STORE_16_ADDR_CONTENT>(Block &MBB, BlockIt
         .addReg(I8085::A, RegState::Define)
         .addReg(srcLow);
     buildMI(MBB, MBBI, I8085::STAX).addReg(addrReg);
-    buildMI(MBB, MBBI, I8085::INX).addReg(addrReg, RegState::Define);
+    buildINX(MBB, MBBI, addrReg);
     buildMI(MBB, MBBI, I8085::MOV)
         .addReg(I8085::A, RegState::Define)
         .addReg(srcHigh);
     buildMI(MBB, MBBI, I8085::STAX).addReg(addrReg);
-    buildMI(MBB, MBBI, I8085::DCX).addReg(addrReg, RegState::Define);
+    buildDCX(MBB, MBBI, addrReg);
     if (PreservePSW)
       buildMI(MBB, MBBI, I8085::POP).addReg(I8085::PSW, RegState::Define);
 
@@ -705,10 +717,10 @@ bool I8085ExpandPseudo::expand<I8085::STORE_16_ADDR_CONTENT>(Block &MBB, BlockIt
   }
 
   buildMI(MBB, MBBI, I8085::MOV_M).addReg(srcLow);
-  buildMI(MBB, MBBI, I8085::INX).addReg(I8085::HL, RegState::Define);
+  buildINX(MBB, MBBI, I8085::HL);
   buildMI(MBB, MBBI, I8085::MOV_M).addReg(srcHigh);
   if (addrReg == I8085::HL)
-    buildMI(MBB, MBBI, I8085::DCX).addReg(I8085::HL, RegState::Define);
+    buildDCX(MBB, MBBI, I8085::HL);
 
   MI.eraseFromParent();
   return true;
@@ -792,10 +804,10 @@ bool I8085ExpandPseudo::expand<I8085::STORE_8>(Block &MBB, BlockIt MBBI) {
   auto addOffsetToHL = [&](int64_t Offset) {
     if (Offset > 0) {
       for (int64_t i = 0; i < Offset; ++i)
-        buildMI(MBB, MBBI, I8085::INX).addReg(I8085::HL, RegState::Define);
+        buildINX(MBB, MBBI, I8085::HL);
     } else if (Offset < 0) {
       for (int64_t i = 0; i < -Offset; ++i)
-        buildMI(MBB, MBBI, I8085::DCX).addReg(I8085::HL, RegState::Define);
+        buildDCX(MBB, MBBI, I8085::HL);
     }
   };
 
@@ -989,7 +1001,7 @@ bool I8085ExpandPseudo::expand<I8085::LOAD_16_WITH_IMM_ADDR>(Block &MBB, BlockIt
                                      .addReg(I8085::HL, RegState::Define);
     addAddrOperand(AddrLo, AddrMO);
     buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::A, RegState::Define);
-    buildMI(MBB, MBBI, I8085::INX).addReg(I8085::HL, RegState::Define);
+    buildINX(MBB, MBBI, I8085::HL);
     buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::H, RegState::Define);
     buildMI(MBB, MBBI, I8085::MOV)
         .addReg(I8085::L, RegState::Define)
@@ -1127,7 +1139,7 @@ bool I8085ExpandPseudo::expand<I8085::STORE_16_WITH_IMM_ADDR>(Block &MBB, BlockI
                                  .addReg(I8085::HL, RegState::Define);
   addAddrOperand(Addr, AddrMO);
   buildMI(MBB, MBBI, I8085::MOV_M).addReg(srcLow);
-  buildMI(MBB, MBBI, I8085::INX).addReg(I8085::HL, RegState::Define);
+  buildINX(MBB, MBBI, I8085::HL);
   buildMI(MBB, MBBI, I8085::MOV_M).addReg(srcHigh);
 
   MI.eraseFromParent();
@@ -1152,10 +1164,10 @@ bool I8085ExpandPseudo::expand<I8085::STORE_16>(Block &MBB, BlockIt MBBI) {
   auto addOffsetToHL = [&](int64_t Offset) {
     if (Offset > 0) {
       for (int64_t i = 0; i < Offset; ++i)
-        buildMI(MBB, MBBI, I8085::INX).addReg(I8085::HL, RegState::Define);
+        buildINX(MBB, MBBI, I8085::HL);
     } else if (Offset < 0) {
       for (int64_t i = 0; i < -Offset; ++i)
-        buildMI(MBB, MBBI, I8085::DCX).addReg(I8085::HL, RegState::Define);
+        buildDCX(MBB, MBBI, I8085::HL);
     }
   };
 
@@ -1191,7 +1203,7 @@ bool I8085ExpandPseudo::expand<I8085::STORE_16>(Block &MBB, BlockIt MBBI) {
 
     buildMI(MBB, MBBI, I8085::POP).addReg(I8085::BC, RegState::Define);
     buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::C);
-    buildMI(MBB, MBBI, I8085::INX).addReg(I8085::HL, RegState::Define);
+    buildINX(MBB, MBBI, I8085::HL);
     buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::B);
 
     if (!SrcIsKill) {
@@ -1241,7 +1253,7 @@ bool I8085ExpandPseudo::expand<I8085::STORE_16>(Block &MBB, BlockIt MBBI) {
   if (baseReg == I8085::HL) {
     addOffsetToHL(offsetToStore);
     buildMI(MBB, MBBI, I8085::MOV_M).addReg(lowReg);
-    buildMI(MBB, MBBI, I8085::INX).addReg(I8085::HL, RegState::Define);
+    buildINX(MBB, MBBI, I8085::HL);
     buildMI(MBB, MBBI, I8085::MOV_M).addReg(highReg);
     if (PreserveHL)
       buildMI(MBB, MBBI, I8085::POP).addReg(I8085::HL, RegState::Define);
@@ -1268,7 +1280,7 @@ bool I8085ExpandPseudo::expand<I8085::STORE_16>(Block &MBB, BlockIt MBBI) {
       buildMI(MBB, MBBI, I8085::POP).addReg(I8085::PSW, RegState::Define);
 
     buildMI(MBB, MBBI, I8085::MOV_M).addReg(lowReg);
-    buildMI(MBB, MBBI, I8085::INX).addReg(I8085::HL, RegState::Define);
+    buildINX(MBB, MBBI, I8085::HL);
     buildMI(MBB, MBBI, I8085::MOV_M).addReg(highReg);
   } else {
     buildMI(MBB, MBBI, I8085::STORE_8)
@@ -1403,10 +1415,10 @@ bool I8085ExpandPseudo::expand<I8085::LOAD_8_WITH_ADDR>(Block &MBB, BlockIt MBBI
   auto addOffsetToHL = [&](int64_t Offset) {
     if (Offset > 0) {
       for (int64_t i = 0; i < Offset; ++i)
-        buildMI(MBB, MBBI, I8085::INX).addReg(I8085::HL, RegState::Define);
+        buildINX(MBB, MBBI, I8085::HL);
     } else if (Offset < 0) {
       for (int64_t i = 0; i < -Offset; ++i)
-        buildMI(MBB, MBBI, I8085::DCX).addReg(I8085::HL, RegState::Define);
+        buildDCX(MBB, MBBI, I8085::HL);
     }
   };
 
@@ -1493,10 +1505,10 @@ bool I8085ExpandPseudo::expand<I8085::LOAD_16_WITH_ADDR>(Block &MBB, BlockIt MBB
   auto addOffsetToHL = [&](int64_t Offset) {
     if (Offset > 0) {
       for (int64_t i = 0; i < Offset; ++i)
-        buildMI(MBB, MBBI, I8085::INX).addReg(I8085::HL, RegState::Define);
+        buildINX(MBB, MBBI, I8085::HL);
     } else if (Offset < 0) {
       for (int64_t i = 0; i < -Offset; ++i)
-        buildMI(MBB, MBBI, I8085::DCX).addReg(I8085::HL, RegState::Define);
+        buildDCX(MBB, MBBI, I8085::HL);
     }
   };
 
@@ -1512,7 +1524,7 @@ bool I8085ExpandPseudo::expand<I8085::LOAD_16_WITH_ADDR>(Block &MBB, BlockIt MBB
     }
 
     buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::A, RegState::Define);
-    buildMI(MBB, MBBI, I8085::INX).addReg(I8085::HL, RegState::Define);
+    buildINX(MBB, MBBI, I8085::HL);
     buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::H, RegState::Define);
     buildMI(MBB, MBBI, I8085::MOV)
         .addReg(I8085::L, RegState::Define)
@@ -1546,7 +1558,7 @@ bool I8085ExpandPseudo::expand<I8085::LOAD_16_WITH_ADDR>(Block &MBB, BlockIt MBB
     if (PreservePSWCarry)
       buildMI(MBB, MBBI, I8085::POP).addReg(I8085::PSW, RegState::Define);
     buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(lowReg, RegState::Define);
-    buildMI(MBB, MBBI, I8085::INX).addReg(I8085::HL, RegState::Define);
+    buildINX(MBB, MBBI, I8085::HL);
     buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(highReg, RegState::Define);
     if (PreservePSW)
       buildMI(MBB, MBBI, I8085::POP).addReg(I8085::PSW, RegState::Define);
@@ -1558,7 +1570,7 @@ bool I8085ExpandPseudo::expand<I8085::LOAD_16_WITH_ADDR>(Block &MBB, BlockIt MBB
   if (baseReg == I8085::HL) {
     addOffsetToHL(offsetToLoad);
     buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(lowReg, RegState::Define);
-    buildMI(MBB, MBBI, I8085::INX).addReg(I8085::HL, RegState::Define);
+    buildINX(MBB, MBBI, I8085::HL);
     buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(highReg, RegState::Define);
     MI.eraseFromParent();
     return true;
@@ -1582,7 +1594,7 @@ bool I8085ExpandPseudo::expand<I8085::LOAD_16_WITH_ADDR>(Block &MBB, BlockIt MBB
     buildMI(MBB, MBBI, I8085::POP).addReg(I8085::PSW, RegState::Define);
 
   buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(lowReg, RegState::Define);
-  buildMI(MBB, MBBI, I8085::INX).addReg(I8085::HL, RegState::Define);
+  buildINX(MBB, MBBI, I8085::HL);
   buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(highReg, RegState::Define);
   
   MI.eraseFromParent();

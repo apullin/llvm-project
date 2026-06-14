@@ -146,6 +146,7 @@ extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializeI8085Target() {
   initializeI8085StoreRegClassPass(PR);
   initializeI8085ExpandCopiesPass(PR);
   initializeI8085PeepholePass(PR);
+  initializeI8085HLTrackingPass(PR);
   initializeI8085FrameAnalyzerPass(PR);
   initializeI8085DAGToDAGISelLegacyPass(PR);
   initializeI8085SelectToBranchPass(PR);

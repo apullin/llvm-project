@@ -117,6 +117,18 @@ private:
     return BuildMI(MBB, MBBI, MBBI->getDebugLoc(), TII->get(Opcode), DstReg);
   }
 
+  void buildINX(Block &MBB, BlockIt MBBI, Register Reg) {
+    buildMI(MBB, MBBI, I8085::INX)
+        .addReg(Reg, RegState::Define)
+        .addReg(Reg, RegState::Implicit);
+  }
+
+  void buildDCX(Block &MBB, BlockIt MBBI, Register Reg) {
+    buildMI(MBB, MBBI, I8085::DCX)
+        .addReg(Reg, RegState::Define)
+        .addReg(Reg, RegState::Implicit);
+  }
+
   MachineRegisterInfo &getRegInfo(Block &MBB) {
     return MBB.getParent()->getRegInfo();
   }
@@ -266,8 +278,12 @@ void I8085ExpandPseudo32::emitScratchAdvance(Block &MBB, BlockIt MBBI,
     return;
   unsigned Opc = (Delta > 0) ? I8085::INX : I8085::DCX;
   int Steps = (Delta > 0) ? Delta : -Delta;
-  for (int i = 0; i < Steps; ++i)
-    buildMI(MBB, MBBI, Opc).addReg(I8085::HL, RegState::Define);
+  for (int i = 0; i < Steps; ++i) {
+    if (Opc == I8085::INX)
+      buildINX(MBB, MBBI, I8085::HL);
+    else
+      buildDCX(MBB, MBBI, I8085::HL);
+  }
 }
 
 /// Compute the cumulative SP adjustment from block start up to (but not
@@ -1024,13 +1040,13 @@ template <> bool I8085ExpandPseudo32::expand<I8085::STORE_32_ADDR_CONTENT>(Block
 
     if (!addrIsHL) {
       for (int j = 0; j < i; ++j)
-        buildMI(MBB, MBBI, I8085::INX).addReg(I8085::HL, RegState::Define);
+        buildINX(MBB, MBBI, I8085::HL);
     }
 
     buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::A);
 
     if (addrIsHL && i < 3) {
-      buildMI(MBB, MBBI, I8085::INX).addReg(I8085::HL, RegState::Define);
+      buildINX(MBB, MBBI, I8085::HL);
       buildMI(MBB, MBBI, I8085::PUSH).addReg(I8085::HL);
     }
   }
@@ -1499,8 +1515,12 @@ template <> bool I8085ExpandPseudo32::expand<I8085::STORE_32>(Block &MBB, BlockI
     offsetToStore += HLSaveBias;
 
   auto bumpHL = [&](int Steps, unsigned Opc) {
-    for (int i = 0; i < Steps; ++i)
-      buildMI(MBB, MBBI, Opc).addReg(I8085::HL, RegState::Define);
+    for (int i = 0; i < Steps; ++i) {
+      if (Opc == I8085::INX)
+        buildINX(MBB, MBBI, I8085::HL);
+      else
+        buildDCX(MBB, MBBI, I8085::HL);
+    }
   };
 
   // If the base is HL, adjust HL in place; this pseudo clobbers HL anyway.
@@ -1514,7 +1534,7 @@ template <> bool I8085ExpandPseudo32::expand<I8085::STORE_32>(Block &MBB, BlockI
       emitScratchLoad(MBB, MBBI, srcReg, i, I8085::A);
       buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::A);
       if (i != 3)
-        buildMI(MBB, MBBI, I8085::INX).addReg(I8085::HL, RegState::Define);
+        buildINX(MBB, MBBI, I8085::HL);
     }
     MI.eraseFromParent();
     return true;
@@ -1586,8 +1606,12 @@ template <> bool I8085ExpandPseudo32::expand<I8085::ADD_32>(Block &MBB, BlockIt 
   unsigned deltaBackOpc = (delta > 0) ? I8085::DCX : I8085::INX;
 
   auto bumpHL = [&](int Steps, unsigned Opc) {
-    for (int i = 0; i < Steps; ++i)
-      buildMI(MBB, MBBI, Opc).addReg(I8085::HL, RegState::Define);
+    for (int i = 0; i < Steps; ++i) {
+      if (Opc == I8085::INX)
+        buildINX(MBB, MBBI, I8085::HL);
+      else
+        buildDCX(MBB, MBBI, I8085::HL);
+    }
   };
 
   emitScratchAddr(MBB, MBBI, destReg, 0);
@@ -1648,8 +1672,12 @@ template <> bool I8085ExpandPseudo32::expand<I8085::SUB_32>(Block &MBB, BlockIt 
   unsigned deltaBackOpc = (delta > 0) ? I8085::DCX : I8085::INX;
 
   auto bumpHL = [&](int Steps, unsigned Opc) {
-    for (int i = 0; i < Steps; ++i)
-      buildMI(MBB, MBBI, Opc).addReg(I8085::HL, RegState::Define);
+    for (int i = 0; i < Steps; ++i) {
+      if (Opc == I8085::INX)
+        buildINX(MBB, MBBI, I8085::HL);
+      else
+        buildDCX(MBB, MBBI, I8085::HL);
+    }
   };
 
   emitScratchAddr(MBB, MBBI, destReg, 0);
@@ -2363,7 +2391,7 @@ template <> bool I8085ExpandPseudo32::expand<I8085::LOAD_32_ADDR_CONTENT>(Block 
       }
 
       for (int j = 0; j < i; ++j)
-        buildMI(MBB, MBBI, I8085::INX).addReg(I8085::HL,RegState::Define);
+        buildINX(MBB, MBBI, I8085::HL);
 
       buildMI(MBB, MBBI,  I8085::MOV_FROM_M).addReg(I8085::A,RegState::Define);
 

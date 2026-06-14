@@ -6,13 +6,19 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// Redirect selected spill stack slots to private absolute RAM symbols.
+// Redirect selected spill stack slots to private absolute RAM symbols in a
+// dedicated .i8085.scratch section.
 //
 // This is a conservative prototype for CP/M-style fixed workspace locations.
 // It is gated behind -i8085-static-scratch-bytes=N and currently handles 8-bit
 // and 16-bit spill slots.  The scratch pseudos preserve HL during late
 // expansion when it is live, matching the safety contract of normal stack
 // pseudos.
+//
+// By default, a slot is converted only when its value is not live across a
+// call.  Wider use requires an explicit nonreentrant contract, either via the
+// "i8085-nonreentrant" function attribute, a function-name option, or the
+// module-wide option below.
 //
 //===----------------------------------------------------------------------===//
 
@@ -51,8 +57,14 @@ static cl::opt<unsigned> I8085StaticScratchBytes(
 static cl::opt<bool> I8085StaticScratchUnsafeRecursive(
     "i8085-static-scratch-unsafe-recursive", cl::Hidden, cl::init(false),
     cl::desc("Allow i8085 static scratch spill slots that are live across "
-             "calls in functions not proven norecurse, excluding direct "
-             "recursive SCCs"));
+             "calls without an explicit nonreentrant contract, excluding "
+             "direct recursive SCCs"));
+
+static cl::opt<bool> I8085StaticScratchAssumeNonReentrant(
+    "i8085-static-scratch-assume-nonreentrant", cl::Hidden, cl::init(false),
+    cl::desc("Assume all optimized functions cannot be re-entered while "
+             "active, allowing i8085 static scratch spill slots that are live "
+             "across calls"));
 
 static cl::opt<bool> I8085StaticScratchAllowKnownRecursive(
     "i8085-static-scratch-allow-known-recursive", cl::Hidden, cl::init(false),
@@ -257,7 +269,8 @@ bool I8085StaticScratch::mayBeLiveAcrossCall(const MachineFunction &MF,
 
 bool I8085StaticScratch::hasNonReentrantContract(
     const MachineFunction &MF) const {
-  return MF.getFunction().hasFnAttribute("i8085-nonreentrant") ||
+  return I8085StaticScratchAssumeNonReentrant ||
+         MF.getFunction().hasFnAttribute("i8085-nonreentrant") ||
          llvm::is_contained(I8085StaticScratchAssumeNonReentrantFunctions,
                             MF.getName());
 }
@@ -291,6 +304,7 @@ GlobalVariable *I8085StaticScratch::createScratchGlobal(MachineFunction &MF,
                                  MF.getName() + "." + Twine(FrameIndex))
                                     .str());
   GV->setAlignment(Align(1));
+  GV->setSection(".i8085.scratch");
   return GV;
 }
 
@@ -414,8 +428,9 @@ bool I8085StaticScratch::runOnMachineFunction(MachineFunction &MF) {
     if (I8085StaticScratchOnlyFrameIndex != std::numeric_limits<int>::min() &&
         FI != I8085StaticScratchOnlyFrameIndex)
       continue;
-    if (Info.LiveAcrossCall && !MF.getFunction().doesNotRecurse()) {
-      if (!I8085StaticScratchUnsafeRecursive && !hasNonReentrantContract(MF))
+    if (Info.LiveAcrossCall) {
+      const bool HasNonReentrantContract = hasNonReentrantContract(MF);
+      if (!HasNonReentrantContract && !I8085StaticScratchUnsafeRecursive)
         continue;
       if (!I8085StaticScratchAllowKnownRecursive) {
         if (!CheckedDirectRecursive) {

@@ -781,7 +781,7 @@ define i1 @fcmp_lt_f32(float %a, float %b) {
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    CMP M
 ; CHECK-NEXT:    JC LBB5_8
-; CHECK-NEXT:    JNZ LBB5_11
+; CHECK-NEXT:    JNZ LBB5_10
 ; CHECK-NEXT:  ; %bb.2:
 ; CHECK-NEXT:    LXI H, 10
 ; CHECK-NEXT:    DAD SP
@@ -790,7 +790,7 @@ define i1 @fcmp_lt_f32(float %a, float %b) {
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    CMP M
 ; CHECK-NEXT:    JC LBB5_8
-; CHECK-NEXT:    JNZ LBB5_11
+; CHECK-NEXT:    JNZ LBB5_10
 ; CHECK-NEXT:  ; %bb.3:
 ; CHECK-NEXT:    LXI H, 9
 ; CHECK-NEXT:    DAD SP
@@ -799,7 +799,7 @@ define i1 @fcmp_lt_f32(float %a, float %b) {
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    CMP M
 ; CHECK-NEXT:    JC LBB5_8
-; CHECK-NEXT:    JNZ LBB5_11
+; CHECK-NEXT:    JNZ LBB5_10
 ; CHECK-NEXT:  ; %bb.4:
 ; CHECK-NEXT:    LXI H, 8
 ; CHECK-NEXT:    DAD SP
@@ -808,17 +808,17 @@ define i1 @fcmp_lt_f32(float %a, float %b) {
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    CMP M
 ; CHECK-NEXT:    JC LBB5_8
-; CHECK-NEXT:    JNZ LBB5_11
-; CHECK-NEXT:  LBB5_11:
+; CHECK-NEXT:    JNZ LBB5_10
+; CHECK-NEXT:  LBB5_10:
 ; CHECK-NEXT:    MVI A, 0
-; CHECK-NEXT:    JMP LBB5_9
+; CHECK-NEXT:    JMP LBB5_11
 ; CHECK-NEXT:  LBB5_6:
 ; CHECK-NEXT:    MOV A, M
 ; CHECK-NEXT:    ANI 128
-; CHECK-NEXT:    JZ LBB5_11
+; CHECK-NEXT:    JZ LBB5_10
 ; CHECK-NEXT:  LBB5_8:
 ; CHECK-NEXT:    MVI A, 1
-; CHECK-NEXT:  LBB5_9:
+; CHECK-NEXT:  LBB5_11:
 ; CHECK-NEXT:    LXI H, 16
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    SPHL
@@ -956,7 +956,7 @@ define i1 @fcmp_gt_f32(float %a, float %b) {
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    CMP M
 ; CHECK-NEXT:    JC LBB6_7
-; CHECK-NEXT:    JNZ LBB6_11
+; CHECK-NEXT:    JNZ LBB6_10
 ; CHECK-NEXT:  ; %bb.2:
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    INX H
@@ -966,7 +966,7 @@ define i1 @fcmp_gt_f32(float %a, float %b) {
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    CMP M
 ; CHECK-NEXT:    JC LBB6_7
-; CHECK-NEXT:    JNZ LBB6_11
+; CHECK-NEXT:    JNZ LBB6_10
 ; CHECK-NEXT:  ; %bb.3:
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    INX H
@@ -976,7 +976,7 @@ define i1 @fcmp_gt_f32(float %a, float %b) {
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    CMP M
 ; CHECK-NEXT:    JC LBB6_7
-; CHECK-NEXT:    JNZ LBB6_11
+; CHECK-NEXT:    JNZ LBB6_10
 ; CHECK-NEXT:  ; %bb.4:
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    INX H
@@ -986,17 +986,17 @@ define i1 @fcmp_gt_f32(float %a, float %b) {
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    CMP M
 ; CHECK-NEXT:    JC LBB6_7
-; CHECK-NEXT:    JNZ LBB6_11
-; CHECK-NEXT:  LBB6_11:
+; CHECK-NEXT:    JNZ LBB6_10
+; CHECK-NEXT:  LBB6_10:
 ; CHECK-NEXT:    MVI A, 0
-; CHECK-NEXT:    JMP LBB6_8
+; CHECK-NEXT:    JMP LBB6_11
 ; CHECK-NEXT:  LBB6_6:
 ; CHECK-NEXT:    MOV A, M
 ; CHECK-NEXT:    ANI 128
-; CHECK-NEXT:    JNZ LBB6_11
+; CHECK-NEXT:    JNZ LBB6_10
 ; CHECK-NEXT:  LBB6_7:
 ; CHECK-NEXT:    MVI A, 1
-; CHECK-NEXT:  LBB6_8:
+; CHECK-NEXT:  LBB6_11:
 ; CHECK-NEXT:    LXI H, 16
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    SPHL

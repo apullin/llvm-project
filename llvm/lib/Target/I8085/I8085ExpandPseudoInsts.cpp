@@ -247,7 +247,7 @@ static void addAddrOperand(MachineInstrBuilder &MIB,
                              MO.getTargetFlags());
     break;
   case MachineOperand::MO_JumpTableIndex:
-    assert((MO.getOffset() + Offset) == 0 &&
+    assert(Offset == 0 &&
            "jump table operand does not support offsets");
     MIB.addJumpTableIndex(MO.getIndex(), MO.getTargetFlags());
     break;

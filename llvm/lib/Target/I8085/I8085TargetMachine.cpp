@@ -215,7 +215,10 @@ void I8085PassConfig::addPreSched2() {
   addPass(createI8085ExpandPseudo32Pass());
   addPass(createI8085ExpandPseudoPass());
   addPass(createI8085ExpandCopiesPass());
-  addPass(createI8085PeepholePass());
+  // Conditional returns have a false-condition fallthrough that generic
+  // block placement cannot represent through analyzeBranch().  Form them only
+  // after block placement in addPreEmitPass().
+  addPass(createI8085PeepholePass(/*EnableConditionalReturns=*/false));
   addPass(createI8085HLTrackingPass());
 }
 
@@ -223,6 +226,7 @@ void I8085PassConfig::addPreEmitPass() {
   // The i8085 uses absolute 16-bit addresses for all branches (JMP, JZ, JNZ,
   // etc.), so every branch can reach every address in the 64KB address space.
   // Branch relaxation is not needed and is therefore not added here.
+  addPass(createI8085PeepholePass(/*EnableConditionalReturns=*/true));
 }
 
 MachineFunctionInfo *I8085TargetMachine::createMachineFunctionInfo(

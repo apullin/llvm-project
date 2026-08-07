@@ -234,11 +234,15 @@ void I8085InstrInfo::storeRegToStackSlot(MachineBasicBlock &MBB,
     }
   }
 
-  BuildMI(MBB, MI, DL, get(Opcode))
-      .addFrameIndex(FrameIndex)
-      .addImm(0)
-      .addReg(SrcReg, getKillRegState(isKill))
-      .addMemOperand(MMO);
+  MachineInstrBuilder Spill =
+      BuildMI(MBB, MI, DL, get(Opcode))
+          .addFrameIndex(FrameIndex)
+          .addImm(0)
+          .addReg(SrcReg, getKillRegState(isKill))
+          .addMemOperand(MMO);
+  for (MachineOperand &MO : Spill->implicit_operands())
+    if (MO.isReg() && MO.isDef())
+      MO.setIsDead();
 }
 
 void I8085InstrInfo::loadRegFromStackSlot(MachineBasicBlock &MBB,
@@ -280,10 +284,13 @@ void I8085InstrInfo::loadRegFromStackSlot(MachineBasicBlock &MBB,
     MRI.constrainRegClass(DestReg, &I8085::GR8NoHLRegClass);
   }
 
-  BuildMI(MBB, MI, DL, get(Opcode), DestReg)
-      .addFrameIndex(FrameIndex)
-      .addImm(0)
-      .addMemOperand(MMO);
+  MachineInstrBuilder Reload = BuildMI(MBB, MI, DL, get(Opcode), DestReg)
+                                   .addFrameIndex(FrameIndex)
+                                   .addImm(0)
+                                   .addMemOperand(MMO);
+  for (MachineOperand &MO : Reload->implicit_operands())
+    if (MO.isReg() && MO.isDef())
+      MO.setIsDead();
 }
 
 
@@ -407,12 +414,27 @@ bool I8085InstrInfo::analyzeBranch(MachineBasicBlock &MBB,
     assert(Cond.size() == 1);
     assert(TBB);
 
-    if (TBB != I->getOperand(0).getMBB())
-      return true;
-
     unsigned OldOpc = Cond[0].getImm();
-    if (OldOpc == Opc)
+    MachineBasicBlock *OldTBB = TBB;
+    MachineBasicBlock *ThisTBB = I->getOperand(0).getMBB();
+    if (OldOpc == Opc && OldTBB == ThisTBB)
       continue;
+
+    // Selection can emit an exhaustive pair such as JZ true; JNZ false.
+    // Model it like the equivalent JZ true; JMP false sequence so generic
+    // block placement does not mistake it for an un-analyzable fallthrough.
+    if (OldOpc == getOppositeBranchOpcode(Opc)) {
+      if (OldTBB == ThisTBB) {
+        TBB = ThisTBB;
+        FBB = nullptr;
+        Cond.clear();
+      } else {
+        TBB = ThisTBB;
+        FBB = OldTBB;
+        Cond[0].setImm(Opc);
+      }
+      continue;
+    }
 
     return true;
   }

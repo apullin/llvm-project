@@ -15,9 +15,8 @@ define i8 @cmp_slt_i8(i8 %a, i8 %b) {
 ; CHECK-NEXT:    MOV A, C
 ; CHECK-NEXT:    XRA B
 ; CHECK-NEXT:    ANI 128
-; CHECK-NEXT:    JZ LBB0_1
 ; CHECK-NEXT:    JNZ LBB0_4
-; CHECK-NEXT:  LBB0_1:
+; CHECK-NEXT:  ; %bb.1:
 ; CHECK-NEXT:    MOV A, C
 ; CHECK-NEXT:    SUB B
 ; CHECK-NEXT:    JC LBB0_2
@@ -27,9 +26,8 @@ define i8 @cmp_slt_i8(i8 %a, i8 %b) {
 ; CHECK-NEXT:  LBB0_4:
 ; CHECK-NEXT:    MOV A, C
 ; CHECK-NEXT:    ANI 128
-; CHECK-NEXT:    JZ LBB0_5
 ; CHECK-NEXT:    JNZ LBB0_2
-; CHECK-NEXT:  LBB0_5:
+; CHECK-NEXT:  ; %bb.5:
 ; CHECK-NEXT:    MVI A, 0
 ; CHECK-NEXT:    RET
 ; CHECK-NEXT:  LBB0_2:
@@ -55,9 +53,8 @@ define i8 @cmp_sgt_i8(i8 %a, i8 %b) {
 ; CHECK-NEXT:    MOV A, C
 ; CHECK-NEXT:    XRA B
 ; CHECK-NEXT:    ANI 128
-; CHECK-NEXT:    JZ LBB1_1
 ; CHECK-NEXT:    JNZ LBB1_3
-; CHECK-NEXT:  LBB1_1:
+; CHECK-NEXT:  ; %bb.1:
 ; CHECK-NEXT:    MOV A, C
 ; CHECK-NEXT:    SUB B
 ; CHECK-NEXT:    MVI A, 1
@@ -69,10 +66,10 @@ define i8 @cmp_sgt_i8(i8 %a, i8 %b) {
 ; CHECK-NEXT:  LBB1_3:
 ; CHECK-NEXT:    MOV A, C
 ; CHECK-NEXT:    ANI 128
-; CHECK-NEXT:    JZ LBB1_4
 ; CHECK-NEXT:    JNZ LBB1_2
-; CHECK-NEXT:  LBB1_4:
+; CHECK-NEXT:  ; %bb.4:
 ; CHECK-NEXT:    MVI A, 1
+; CHECK-NEXT:  ; %bb.5:
 ; CHECK-NEXT:    RET
 
   %cmp = icmp sgt i8 %a, %b

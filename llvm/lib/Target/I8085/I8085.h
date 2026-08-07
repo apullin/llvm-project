@@ -33,7 +33,7 @@ FunctionPass *createI8085AddrHintsPass();
 FunctionPass *createI8085ForcedHintsPass();
 FunctionPass *createI8085StoreRegClassPass();
 FunctionPass *createI8085ExpandCopiesPass();
-FunctionPass *createI8085PeepholePass();
+FunctionPass *createI8085PeepholePass(bool EnableConditionalReturns = true);
 FunctionPass *createI8085FrameAnalyzerPass();
 FunctionPass *createI8085BranchSelectionPass();
 FunctionPass *createI8085SelectToBranchPass();

@@ -134,7 +134,11 @@ def LOAD_32_WITH_IMM_ADDR : I8085Pseudo<(outs GR32: $dst),
                        "LOAD_32_ADDR $dst, $src", []>;
 }
 
-let Uses=[SP], Defs=[A, HL] in {
+// The store expansions preserve A when their fallback paths need it as a byte
+// temporary, and preserve SREG around address-forming DAD instructions.  Do
+// not model A as an unconditional clobber: the fast paths do not touch it, and
+// doing so can kill a value needed by a later store.
+let Uses=[SP], Defs=[HL] in {
 def STORE_32 : I8085Pseudo<(outs),
                             (ins mspibdsp: $dst, GR32: $src),
                             "STORE_32 $dst, $src", [(store i32: $src, addr: $dst)]>;
@@ -151,13 +155,14 @@ def LOAD_32_ADDR_CONTENT : I8085Pseudo<(outs GR32: $dst),
                        (ins GR16: $src),
                        "LOAD_32_ADDR_CONTENT $dst, $src", [(set i32: $dst, (load addr: $src))]>;
 }
-let Uses=[SP], Defs=[A, HL] in {
-
+let Uses=[SP], Defs=[HL] in {
 def STORE_32_ADDR_CONTENT : I8085Pseudo<(outs),
                        (ins GR16: $addr, GR32: $src),
                        "STORE_32_ADDR_CONTENT $addr, $src",
                        [(store i32: $src, i16: $addr)]>;
+}
 
+let Uses=[SP], Defs=[A, HL] in {
 def PACK_16_TO_32 : I8085Pseudo<(outs GR32: $dst),
                        (ins GR16: $lo, GR16: $hi),
                        "PACK_16_TO_32 $dst, $lo, $hi", []>;

@@ -415,7 +415,6 @@ define i8 @br_eq_i64(i64 %a, i64 %b) {
 ; CHECK-NEXT:    MOV M, D
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    MOV M, E
-; CHECK-NEXT:    PUSH H
 ; CHECK-NEXT:    DCX H
 ; CHECK-NEXT:    DCX H
 ; CHECK-NEXT:    DCX H
@@ -426,7 +425,7 @@ define i8 @br_eq_i64(i64 %a, i64 %b) {
 ; CHECK-NEXT:    MOV D, M
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    MOV E, M
-; CHECK-NEXT:    LXI H, 10
+; CHECK-NEXT:    LXI H, 8
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV M, B
 ; CHECK-NEXT:    INX H
@@ -435,7 +434,6 @@ define i8 @br_eq_i64(i64 %a, i64 %b) {
 ; CHECK-NEXT:    MOV M, D
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    MOV M, E
-; CHECK-NEXT:    POP H
 ; CHECK-NEXT:    LXI H, 26
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV B, M
@@ -454,7 +452,6 @@ define i8 @br_eq_i64(i64 %a, i64 %b) {
 ; CHECK-NEXT:    MOV M, D
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    MOV M, E
-; CHECK-NEXT:    PUSH H
 ; CHECK-NEXT:    DCX H
 ; CHECK-NEXT:    DCX H
 ; CHECK-NEXT:    DCX H
@@ -465,7 +462,7 @@ define i8 @br_eq_i64(i64 %a, i64 %b) {
 ; CHECK-NEXT:    MOV D, M
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    MOV E, M
-; CHECK-NEXT:    LXI H, 14
+; CHECK-NEXT:    LXI H, 12
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV M, B
 ; CHECK-NEXT:    INX H
@@ -474,9 +471,9 @@ define i8 @br_eq_i64(i64 %a, i64 %b) {
 ; CHECK-NEXT:    MOV M, D
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    MOV M, E
-; CHECK-NEXT:    POP H
-; CHECK-NEXT:    LXI H, 18
-; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    MOV B, M
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    MOV C, M
@@ -493,8 +490,7 @@ define i8 @br_eq_i64(i64 %a, i64 %b) {
 ; CHECK-NEXT:    MOV M, D
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    MOV M, E
-; CHECK-NEXT:    PUSH H
-; CHECK-NEXT:    LXI H, 14
+; CHECK-NEXT:    LXI H, 12
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV B, M
 ; CHECK-NEXT:    INX H
@@ -503,7 +499,7 @@ define i8 @br_eq_i64(i64 %a, i64 %b) {
 ; CHECK-NEXT:    MOV D, M
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    MOV E, M
-; CHECK-NEXT:    LXI H, 2
+; CHECK-NEXT:    LXI H, 0
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV M, B
 ; CHECK-NEXT:    INX H
@@ -512,9 +508,7 @@ define i8 @br_eq_i64(i64 %a, i64 %b) {
 ; CHECK-NEXT:    MOV M, D
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    MOV M, E
-; CHECK-NEXT:    POP H
-; CHECK-NEXT:    LXI H, 4
-; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    MOV B, M
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    MOV C, M
@@ -547,7 +541,6 @@ define i8 @br_eq_i64(i64 %a, i64 %b) {
 ; CHECK-NEXT:    MOV M, D
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    MOV M, E
-; CHECK-NEXT:    PUSH H
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    MOV B, M
 ; CHECK-NEXT:    INX H
@@ -556,7 +549,7 @@ define i8 @br_eq_i64(i64 %a, i64 %b) {
 ; CHECK-NEXT:    MOV D, M
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    MOV E, M
-; CHECK-NEXT:    LXI H, 2
+; CHECK-NEXT:    LXI H, 0
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV M, B
 ; CHECK-NEXT:    INX H
@@ -565,9 +558,7 @@ define i8 @br_eq_i64(i64 %a, i64 %b) {
 ; CHECK-NEXT:    MOV M, D
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    MOV M, E
-; CHECK-NEXT:    POP H
-; CHECK-NEXT:    LXI H, 4
-; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    MOV B, M
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    MOV C, M
@@ -719,8 +710,7 @@ define i8 @br_ult_i64(i64 %a, i64 %b) {
 ; CHECK-NEXT:    MOV M, D
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    MOV M, E
-; CHECK-NEXT:    PUSH H
-; CHECK-NEXT:    LXI H, 2
+; CHECK-NEXT:    LXI H, 0
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV B, M
 ; CHECK-NEXT:    INX H
@@ -729,7 +719,7 @@ define i8 @br_ult_i64(i64 %a, i64 %b) {
 ; CHECK-NEXT:    MOV D, M
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    MOV E, M
-; CHECK-NEXT:    LXI H, 14
+; CHECK-NEXT:    LXI H, 12
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV M, B
 ; CHECK-NEXT:    INX H
@@ -738,9 +728,7 @@ define i8 @br_ult_i64(i64 %a, i64 %b) {
 ; CHECK-NEXT:    MOV M, D
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    MOV M, E
-; CHECK-NEXT:    POP H
-; CHECK-NEXT:    PUSH H
-; CHECK-NEXT:    LXI H, 6
+; CHECK-NEXT:    LXI H, 4
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV B, M
 ; CHECK-NEXT:    INX H
@@ -757,7 +745,6 @@ define i8 @br_ult_i64(i64 %a, i64 %b) {
 ; CHECK-NEXT:    MOV M, D
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    MOV M, E
-; CHECK-NEXT:    POP H
 ; CHECK-NEXT:    LXI H, 7
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV A, M
@@ -919,7 +906,18 @@ define i8 @br_ult_i64(i64 %a, i64 %b) {
 ; CHECK-NEXT:    LXI H, 3
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    PUSH H
+; CHECK-NEXT:    LXI H, 8
+; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    MOV A, M
+; CHECK-NEXT:    LXI H, 4
+; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    MOV M, A
+; CHECK-NEXT:    LXI H, 9
+; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    MOV A, M
+; CHECK-NEXT:    LXI H, 5
+; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    MOV M, A
 ; CHECK-NEXT:    LXI H, 10
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV A, M
@@ -932,19 +930,6 @@ define i8 @br_ult_i64(i64 %a, i64 %b) {
 ; CHECK-NEXT:    LXI H, 7
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    LXI H, 12
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
-; CHECK-NEXT:    LXI H, 8
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    LXI H, 13
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
-; CHECK-NEXT:    LXI H, 9
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    POP H
 ; CHECK-NEXT:    LXI H, 0
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV A, M
@@ -1060,7 +1045,18 @@ define i8 @br_slt_i64(i64 %a, i64 %b) {
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    MOV M, E
 ; CHECK-NEXT:    MVI B, 1
-; CHECK-NEXT:    PUSH H
+; CHECK-NEXT:    LXI H, 0
+; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    MOV A, M
+; CHECK-NEXT:    LXI H, 12
+; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    MOV M, A
+; CHECK-NEXT:    LXI H, 1
+; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    MOV A, M
+; CHECK-NEXT:    LXI H, 13
+; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    MOV M, A
 ; CHECK-NEXT:    LXI H, 2
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV A, M
@@ -1076,19 +1072,19 @@ define i8 @br_slt_i64(i64 %a, i64 %b) {
 ; CHECK-NEXT:    LXI H, 4
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV A, M
-; CHECK-NEXT:    LXI H, 16
+; CHECK-NEXT:    LXI H, 8
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    LXI H, 5
-; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    DCX H
+; CHECK-NEXT:    DCX H
+; CHECK-NEXT:    DCX H
 ; CHECK-NEXT:    MOV A, M
-; CHECK-NEXT:    LXI H, 17
+; CHECK-NEXT:    LXI H, 9
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    POP H
-; CHECK-NEXT:    PUSH H
-; CHECK-NEXT:    LXI H, 6
-; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    DCX H
+; CHECK-NEXT:    DCX H
+; CHECK-NEXT:    DCX H
 ; CHECK-NEXT:    MOV A, M
 ; CHECK-NEXT:    LXI H, 10
 ; CHECK-NEXT:    DAD SP
@@ -1100,21 +1096,6 @@ define i8 @br_slt_i64(i64 %a, i64 %b) {
 ; CHECK-NEXT:    LXI H, 11
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    DCX H
-; CHECK-NEXT:    DCX H
-; CHECK-NEXT:    DCX H
-; CHECK-NEXT:    MOV A, M
-; CHECK-NEXT:    LXI H, 12
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    DCX H
-; CHECK-NEXT:    DCX H
-; CHECK-NEXT:    DCX H
-; CHECK-NEXT:    MOV A, M
-; CHECK-NEXT:    LXI H, 13
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    POP H
 ; CHECK-NEXT:    LXI H, 3
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV A, M
@@ -1283,7 +1264,18 @@ define i8 @br_slt_i64(i64 %a, i64 %b) {
 ; CHECK-NEXT:    LXI H, 3
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    PUSH H
+; CHECK-NEXT:    LXI H, 8
+; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    MOV A, M
+; CHECK-NEXT:    LXI H, 4
+; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    MOV M, A
+; CHECK-NEXT:    LXI H, 9
+; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    MOV A, M
+; CHECK-NEXT:    LXI H, 5
+; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    MOV M, A
 ; CHECK-NEXT:    LXI H, 10
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV A, M
@@ -1296,19 +1288,6 @@ define i8 @br_slt_i64(i64 %a, i64 %b) {
 ; CHECK-NEXT:    LXI H, 7
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    LXI H, 12
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
-; CHECK-NEXT:    LXI H, 8
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    LXI H, 13
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
-; CHECK-NEXT:    LXI H, 9
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    POP H
 ; CHECK-NEXT:    LXI H, 0
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV A, M

@@ -158,6 +158,19 @@ private:
            hasAvailablePhysRegValue(MBB, MBBI, I8085::L);
   }
 
+  bool isPhysRegLive(Block &MBB, BlockIt MBBI, Register Reg) const {
+    LivePhysRegs LiveRegs(*TRI);
+    LiveRegs.addLiveOuts(MBB);
+    for (auto I = MBB.rbegin(), E = MBBI.getReverse(); I != E; ++I)
+      LiveRegs.stepBackward(*I);
+    return LiveRegs.contains(Reg);
+  }
+
+  bool shouldPreservePSW(Block &MBB, BlockIt MBBI) const {
+    return isPhysRegLive(MBB, MBBI, I8085::A) ||
+           isPhysRegLive(MBB, MBBI, I8085::SREG);
+  }
+
 };
 
 char I8085ExpandPseudo32::ID = 0;
@@ -183,7 +196,7 @@ static void addAddrOperand(MachineInstrBuilder &MIB,
                              MO.getTargetFlags());
     break;
   case MachineOperand::MO_JumpTableIndex:
-    assert((MO.getOffset() + Offset) == 0 &&
+    assert(Offset == 0 &&
            "jump table operand does not support offsets");
     MIB.addJumpTableIndex(MO.getIndex(), MO.getTargetFlags());
     break;
@@ -1006,6 +1019,12 @@ template <> bool I8085ExpandPseudo32::expand<I8085::STORE_32_ADDR_CONTENT>(Block
   if (!haveAddr)
     return false;
 
+  const bool PreservePSW = shouldPreservePSW(MBB, MBBI);
+  if (PreservePSW) {
+    buildMI(MBB, MBBI, I8085::PUSH).addReg(I8085::PSW);
+    HLSaveBias += 2;
+  }
+
   auto emitScratchLoadWithBias = [&](int SpBias, unsigned Reg, int ByteIndex,
                                      unsigned DestReg) {
     int64_t Offset = getScratchOffset(Reg, ByteIndex) + SpBias;
@@ -1049,6 +1068,11 @@ template <> bool I8085ExpandPseudo32::expand<I8085::STORE_32_ADDR_CONTENT>(Block
       buildINX(MBB, MBBI, I8085::HL);
       buildMI(MBB, MBBI, I8085::PUSH).addReg(I8085::HL);
     }
+  }
+
+  if (PreservePSW) {
+    HLSaveBias -= 2;
+    buildMI(MBB, MBBI, I8085::POP).addReg(I8085::PSW, RegState::Define);
   }
 
   MI.eraseFromParent();
@@ -1525,6 +1549,11 @@ template <> bool I8085ExpandPseudo32::expand<I8085::STORE_32>(Block &MBB, BlockI
 
   // If the base is HL, adjust HL in place; this pseudo clobbers HL anyway.
   if (baseReg == I8085::HL) {
+    const bool PreservePSW = shouldPreservePSW(MBB, MBBI);
+    if (PreservePSW) {
+      buildMI(MBB, MBBI, I8085::PUSH).addReg(I8085::PSW);
+      HLSaveBias += 2;
+    }
     if (offsetToStore != 0) {
       unsigned Opc = (offsetToStore > 0) ? I8085::INX : I8085::DCX;
       int Steps = (offsetToStore > 0) ? offsetToStore : -offsetToStore;
@@ -1536,6 +1565,10 @@ template <> bool I8085ExpandPseudo32::expand<I8085::STORE_32>(Block &MBB, BlockI
       if (i != 3)
         buildINX(MBB, MBBI, I8085::HL);
     }
+    if (PreservePSW) {
+      HLSaveBias -= 2;
+      buildMI(MBB, MBBI, I8085::POP).addReg(I8085::PSW, RegState::Define);
+    }
     MI.eraseFromParent();
     return true;
   }
@@ -1544,7 +1577,9 @@ template <> bool I8085ExpandPseudo32::expand<I8085::STORE_32>(Block &MBB, BlockI
   // If so, batch-load from scratch into B/C/D/E, then batch-store to dest.
   {
     auto AfterMI = std::next(MBBI);
-    bool CanBatch = true;
+    // Loading the source into BCDE would destroy a BC/DE destination base
+    // before Phase 2 computes its address.
+    bool CanBatch = baseReg != I8085::BC && baseReg != I8085::DE;
     for (MCRegister Reg : {I8085::B, I8085::C, I8085::D, I8085::E}) {
       if (MBB.computeRegisterLiveness(TRI, Reg, AfterMI, 20) !=
           MachineBasicBlock::LQR_Dead) {
@@ -1554,6 +1589,14 @@ template <> bool I8085ExpandPseudo32::expand<I8085::STORE_32>(Block &MBB, BlockI
     }
 
     if (CanBatch) {
+      const bool PreserveFlags =
+          isPhysRegLive(MBB, MBBI, I8085::SREG);
+      if (PreserveFlags) {
+        buildMI(MBB, MBBI, I8085::PUSH).addReg(I8085::PSW);
+        HLSaveBias += 2;
+        if (baseReg == I8085::SP)
+          offsetToStore += 2;
+      }
       // Phase 1: Load 4 bytes from scratch into B/C/D/E
       emitScratchAddr(MBB, MBBI, srcReg, 0);
       buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::B, RegState::Define);
@@ -1574,8 +1617,20 @@ template <> bool I8085ExpandPseudo32::expand<I8085::STORE_32>(Block &MBB, BlockI
       buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::D);
       emitScratchAdvance(MBB, MBBI, 1);
       buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::E);
+      if (PreserveFlags) {
+        HLSaveBias -= 2;
+        buildMI(MBB, MBBI, I8085::POP).addReg(I8085::PSW,
+                                              RegState::Define);
+      }
     } else {
       // Fallback: original per-byte approach with full address recomputation
+      const bool PreservePSW = shouldPreservePSW(MBB, MBBI);
+      if (PreservePSW) {
+        buildMI(MBB, MBBI, I8085::PUSH).addReg(I8085::PSW);
+        HLSaveBias += 2;
+        if (baseReg == I8085::SP)
+          offsetToStore += 2;
+      }
       for (int i = 0; i < 4; ++i) {
         emitScratchLoad(MBB, MBBI, srcReg, i, I8085::A);
         buildMI(MBB, MBBI, I8085::LXI)
@@ -1583,6 +1638,11 @@ template <> bool I8085ExpandPseudo32::expand<I8085::STORE_32>(Block &MBB, BlockI
             .addImm(offsetToStore + i);
         buildMI(MBB, MBBI, I8085::DAD).addReg(baseReg);
         buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::A);
+      }
+      if (PreservePSW) {
+        HLSaveBias -= 2;
+        buildMI(MBB, MBBI, I8085::POP).addReg(I8085::PSW,
+                                              RegState::Define);
       }
     }
   }
@@ -2134,6 +2194,12 @@ template <> bool I8085ExpandPseudo32::expand<I8085::STORE_32_AT_OFFSET_WITH_SP>(
   }
 
   if (CanBatch) {
+    const bool PreserveFlags = isPhysRegLive(MBB, MBBI, I8085::SREG);
+    if (PreserveFlags) {
+      buildMI(MBB, MBBI, I8085::PUSH).addReg(I8085::PSW);
+      HLSaveBias += 2;
+      offsetToStore += 2;
+    }
     // Phase 1: Load 4 bytes from scratch into B/C/D/E
     emitScratchAddr(MBB, MBBI, srcReg, 0);
     buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::B, RegState::Define);
@@ -2154,13 +2220,29 @@ template <> bool I8085ExpandPseudo32::expand<I8085::STORE_32_AT_OFFSET_WITH_SP>(
     buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::D);
     emitScratchAdvance(MBB, MBBI, 1);
     buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::E);
+    if (PreserveFlags) {
+      HLSaveBias -= 2;
+      buildMI(MBB, MBBI, I8085::POP).addReg(I8085::PSW,
+                                            RegState::Define);
+    }
   } else {
     // Fallback: original per-byte approach
+    const bool PreservePSW = shouldPreservePSW(MBB, MBBI);
+    if (PreservePSW) {
+      buildMI(MBB, MBBI, I8085::PUSH).addReg(I8085::PSW);
+      HLSaveBias += 2;
+      offsetToStore += 2;
+    }
     for(int i=0;i<4;i++){
       emitScratchLoad(MBB, MBBI, srcReg, i, I8085::A);
       buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(offsetToStore+i);
       buildMI(MBB, MBBI, I8085::DAD).addReg(I8085::SP);
       buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::A);
+    }
+    if (PreservePSW) {
+      HLSaveBias -= 2;
+      buildMI(MBB, MBBI, I8085::POP).addReg(I8085::PSW,
+                                            RegState::Define);
     }
   }
 

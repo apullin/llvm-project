@@ -42,6 +42,15 @@
 
 namespace llvm {
 
+static MachineBasicBlock *createSplitMBB(MachineFunction &MF,
+                                         const BasicBlock *LLVMBB,
+                                         MachineInstr &SplitMI) {
+  MachineBasicBlock *NewMBB = MF.CreateMachineBasicBlock(LLVMBB);
+  const TargetInstrInfo &TII = *MF.getSubtarget().getInstrInfo();
+  NewMBB->setCallFrameSize(TII.getCallFrameSizeAt(SplitMI));
+  return NewMBB;
+}
+
 static void fail(const SDLoc &DL, SelectionDAG &DAG, const Twine &Msg,
                  SDValue Val = {}) {
   std::string Str;
@@ -505,7 +514,6 @@ const char *I8085TargetLowering::getTargetNodeName(unsigned Opcode) const {
   default:
     return nullptr;
     NODE(RET_FLAG);
-    NODE(RETI_FLAG);
     NODE(CALL);
     NODE(TC_RETURN);
     NODE(WRAPPER);
@@ -3898,9 +3906,9 @@ MachineBasicBlock *I8085TargetLowering::insertShiftSet(MachineInstr &MI,
     BuildMI(MBB, dl, TII.get(I8085::JMP)).addMBB(FallThrough);
   }
 
-  MachineBasicBlock *continuationMBB = MF->CreateMachineBasicBlock(LLVM_BB);
-  MachineBasicBlock *shiftLoopMBB = MF->CreateMachineBasicBlock(LLVM_BB);
-  MachineBasicBlock *checkMBB = MF->CreateMachineBasicBlock(LLVM_BB);
+  MachineBasicBlock *continuationMBB = createSplitMBB(*MF, LLVM_BB, MI);
+  MachineBasicBlock *shiftLoopMBB = createSplitMBB(*MF, LLVM_BB, MI);
+  MachineBasicBlock *checkMBB = createSplitMBB(*MF, LLVM_BB, MI);
 
   MachineFunction::iterator I;
   for (I = MF->begin(); I != MF->end() && &(*I) != MBB; ++I)
@@ -4032,8 +4040,8 @@ static MachineBasicBlock *insertSelectPseudo(MachineInstr &MI,
     BuildMI(MBB, dl, TII.get(I8085::JMP)).addMBB(FallThrough);
   }
 
-  MachineBasicBlock *trueMBB = MF->CreateMachineBasicBlock(LLVM_BB);
-  MachineBasicBlock *falseMBB = MF->CreateMachineBasicBlock(LLVM_BB);
+  MachineBasicBlock *trueMBB = createSplitMBB(*MF, LLVM_BB, MI);
+  MachineBasicBlock *falseMBB = createSplitMBB(*MF, LLVM_BB, MI);
 
   MachineFunction::iterator I;
   for (I = MF->begin(); I != MF->end() && &(*I) != MBB; ++I)

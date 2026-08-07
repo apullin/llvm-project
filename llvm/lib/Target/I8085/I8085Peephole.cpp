@@ -68,10 +68,14 @@ static bool stillReferencesBlock(MachineBasicBlock &MBB,
 }
 
 class I8085Peephole : public MachineFunctionPass {
+  bool EnableConditionalReturns;
+
 public:
   static char ID;
 
-  I8085Peephole() : MachineFunctionPass(ID) {
+  I8085Peephole(bool EnableConditionalReturns = true)
+      : MachineFunctionPass(ID),
+        EnableConditionalReturns(EnableConditionalReturns) {
     initializeI8085PeepholePass(*PassRegistry::getPassRegistry());
   }
 
@@ -86,7 +90,8 @@ public:
         auto Next = std::next(MI);
 
         unsigned CondRetOpc = getConditionalReturnOpcode(MI->getOpcode());
-        if (CondRetOpc && MI->getNumOperands() >= 1 &&
+        if (EnableConditionalReturns && CondRetOpc &&
+            MI->getNumOperands() >= 1 &&
             MI->getOperand(0).isMBB()) {
           MachineBasicBlock *TargetMBB = MI->getOperand(0).getMBB();
           if (beginsWithReturn(*TargetMBB)) {
@@ -283,4 +288,6 @@ char I8085Peephole::ID = 0;
 INITIALIZE_PASS(I8085Peephole, "i8085-peephole",
                 "I8085 peephole optimizations", false, false)
 
-FunctionPass *llvm::createI8085PeepholePass() { return new I8085Peephole(); }
+FunctionPass *llvm::createI8085PeepholePass(bool EnableConditionalReturns) {
+  return new I8085Peephole(EnableConditionalReturns);
+}

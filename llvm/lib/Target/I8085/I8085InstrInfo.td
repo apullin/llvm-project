@@ -38,8 +38,6 @@ def SDT_I8085Trunc32Hi : SDTypeProfile<1, 1, [SDTCisVT<0, i16>, SDTCisVT<1, i32>
 
 def I8085retflag : SDNode<"I8085ISD::RET_FLAG", SDTNone,
                         [SDNPHasChain, SDNPOptInGlue, SDNPVariadic]>;
-def I8085retiflag : SDNode<"I8085ISD::RETI_FLAG", SDTNone,
-                         [SDNPHasChain, SDNPOptInGlue, SDNPVariadic]>;
 
 def I8085callseq_start : SDNode<"ISD::CALLSEQ_START", SDT_I8085CallSeqStart,
                               [SDNPHasChain, SDNPOutGlue]>;
@@ -642,7 +640,6 @@ let isCall = 1, isTerminator = 1, isReturn = 1, isBarrier = 1, Uses = [SP] in {
 let isTerminator = 1, isReturn = 1, isBarrier = 1 in {
   let Uses = [SP], Defs = [SP] in {
     def RET : F1<0b11001001, (outs), (ins), "RET", [(I8085retflag)]>;
-    def RETI : F1<0b11011001, (outs), (ins), "RETI", [(I8085retiflag)]>;
   }
 }
 

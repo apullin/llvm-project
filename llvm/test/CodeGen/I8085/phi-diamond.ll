@@ -120,13 +120,13 @@ define i16 @diamond_nested(i16 %a, i16 %b) {
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    MOV D, M
 ; CHECK-NEXT:    ORA A
-; CHECK-NEXT:    JNZ LBB1_13
+; CHECK-NEXT:    JNZ LBB1_11
 ; CHECK-NEXT:  ; %bb.7: ; %positive
 ; CHECK-NEXT:    LXI H, 101
 ; CHECK-NEXT:    MOV A, B
 ; CHECK-NEXT:    XRA H
 ; CHECK-NEXT:    ANI 128
-; CHECK-NEXT:    JNZ LBB1_14
+; CHECK-NEXT:    JNZ LBB1_12
 ; CHECK-NEXT:  ; %bb.8: ; %positive
 ; CHECK-NEXT:    MOV A, C
 ; CHECK-NEXT:    SUB L
@@ -134,19 +134,19 @@ define i16 @diamond_nested(i16 %a, i16 %b) {
 ; CHECK-NEXT:    MOV A, B
 ; CHECK-NEXT:    SBB H
 ; CHECK-NEXT:    MOV H, A
-; CHECK-NEXT:    JNC LBB1_16
+; CHECK-NEXT:    JNC LBB1_14
 ; CHECK-NEXT:  LBB1_9: ; %positive
 ; CHECK-NEXT:    MVI A, 1
 ; CHECK-NEXT:    ORA A
-; CHECK-NEXT:    JNZ LBB1_17
+; CHECK-NEXT:    JNZ LBB1_15
 ; CHECK-NEXT:  LBB1_10: ; %large
 ; CHECK-NEXT:    MOV A, C
 ; CHECK-NEXT:    ADD E
 ; CHECK-NEXT:    MOV C, A
 ; CHECK-NEXT:    MOV A, B
 ; CHECK-NEXT:    ADC D
-; CHECK-NEXT:    JMP LBB1_11
-; CHECK-NEXT:  LBB1_13: ; %nonpositive
+; CHECK-NEXT:    JMP LBB1_16
+; CHECK-NEXT:  LBB1_11: ; %nonpositive
 ; CHECK-NEXT:    LXI H, 2
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV M, E
@@ -159,24 +159,24 @@ define i16 @diamond_nested(i16 %a, i16 %b) {
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    MOV M, B
 ; CHECK-NEXT:    CALL __mul16
-; CHECK-NEXT:    JMP LBB1_12
-; CHECK-NEXT:  LBB1_14: ; %positive
+; CHECK-NEXT:    JMP LBB1_17
+; CHECK-NEXT:  LBB1_12: ; %positive
 ; CHECK-NEXT:    MOV A, B
 ; CHECK-NEXT:    ANI 128
 ; CHECK-NEXT:    JNZ LBB1_9
-; CHECK-NEXT:  LBB1_16: ; %positive
+; CHECK-NEXT:  LBB1_14: ; %positive
 ; CHECK-NEXT:    MVI A, 0
 ; CHECK-NEXT:    ORA A
 ; CHECK-NEXT:    JZ LBB1_10
-; CHECK-NEXT:  LBB1_17: ; %small
+; CHECK-NEXT:  LBB1_15: ; %small
 ; CHECK-NEXT:    MOV A, C
 ; CHECK-NEXT:    SUB E
 ; CHECK-NEXT:    MOV C, A
 ; CHECK-NEXT:    MOV A, B
 ; CHECK-NEXT:    SBB D
-; CHECK-NEXT:  LBB1_11: ; %large
+; CHECK-NEXT:  LBB1_16: ; %done
 ; CHECK-NEXT:    MOV B, A
-; CHECK-NEXT:  LBB1_12: ; %large
+; CHECK-NEXT:  LBB1_17: ; %done
 ; CHECK-NEXT:    LXI H, 4
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    SPHL

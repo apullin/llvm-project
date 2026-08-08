@@ -1261,6 +1261,62 @@ emitMul32LoHi(SelectionDAG &DAG, const SDLoc &DL, const char *Name,
   return {Lo, Hi};
 }
 
+SDValue I8085TargetLowering::getReturnAddressFrameIndex(
+    SelectionDAG &DAG) const {
+  MachineFunction &MF = DAG.getMachineFunction();
+  I8085MachineFunctionInfo *FuncInfo =
+      MF.getInfo<I8085MachineFunctionInfo>();
+  MVT PtrVT = getFrameIndexTy(MF.getDataLayout());
+
+  if (!FuncInfo->hasReturnAddrFrameIndex()) {
+    uint64_t SlotSize = PtrVT.getStoreSize();
+    int FrameIndex =
+        MF.getFrameInfo().CreateFixedObject(SlotSize, -SlotSize, true);
+    FuncInfo->setReturnAddrFrameIndex(FrameIndex);
+  }
+
+  return DAG.getFrameIndex(FuncInfo->getReturnAddrFrameIndex(), PtrVT);
+}
+
+SDValue I8085TargetLowering::LowerRETURNADDR(SDValue Op,
+                                             SelectionDAG &DAG) const {
+  MachineFrameInfo &MFI = DAG.getMachineFunction().getFrameInfo();
+  MFI.setReturnAddressIsTaken(true);
+
+  if (verifyReturnAddressArgumentIsConstant(Op, DAG))
+    return SDValue();
+
+  SDLoc DL(Op);
+  EVT PtrVT = Op.getValueType();
+  // The I8085 ABI has no frame chain.  A null result is the only safe answer
+  // for callers beyond the current frame.
+  if (Op.getConstantOperandVal(0) != 0)
+    return DAG.getConstant(0, DL, PtrVT);
+
+  SDValue RetAddrFI = getReturnAddressFrameIndex(DAG);
+  return DAG.getLoad(PtrVT, DL, DAG.getEntryNode(), RetAddrFI,
+                     MachinePointerInfo());
+}
+
+SDValue I8085TargetLowering::LowerFRAMEADDR(SDValue Op,
+                                            SelectionDAG &DAG) const {
+  MachineFrameInfo &MFI = DAG.getMachineFunction().getFrameInfo();
+  MFI.setFrameAddressIsTaken(true);
+
+  if (verifyReturnAddressArgumentIsConstant(Op, DAG))
+    return SDValue();
+
+  SDLoc DL(Op);
+  EVT PtrVT = Op.getValueType();
+  // Use the incoming return-address slot as the current frame anchor.  It is a
+  // fixed frame object, so frame lowering keeps the address valid after any
+  // local stack allocation.
+  if (Op.getConstantOperandVal(0) != 0)
+    return DAG.getConstant(0, DL, PtrVT);
+
+  return getReturnAddressFrameIndex(DAG);
+}
+
 SDValue I8085TargetLowering::LowerOperation(SDValue Op, SelectionDAG &DAG) const {
   SDLoc DL(Op);
   EVT VT = Op.getValueType();
@@ -1355,6 +1411,10 @@ SDValue I8085TargetLowering::LowerOperation(SDValue Op, SelectionDAG &DAG) const
   switch (Op.getOpcode()) {
   default:
     llvm_unreachable("Don't know how to custom lower this!");
+  case ISD::RETURNADDR:
+    return LowerRETURNADDR(Op, DAG);
+  case ISD::FRAMEADDR:
+    return LowerFRAMEADDR(Op, DAG);
   case ISD::ATOMIC_FENCE:
   case ISD::ATOMIC_LOAD:
   case ISD::ATOMIC_STORE:

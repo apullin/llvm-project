@@ -175,7 +175,9 @@ def PACK_BCDE_TO_32 : I8085Pseudo<(outs GR32: $dst),
                        (ins),
                        "PACK_BCDE_TO_32 $dst", []>;
 
-// BSWAP32 reverses all 4 bytes of an i32 value
+// BSWAP32 reverses all 4 bytes of an i32 value.  Its expansion holds the
+// source bytes in BC and DE before writing the destination.
+let Defs = [A, HL, BC, DE, B, C, D, E] in
 def BSWAP32 : I8085Pseudo<(outs GR32: $dst),
                           (ins GR32: $src),
                           "BSWAP32 $dst, $src",
@@ -191,20 +193,20 @@ def MVI_32 : I8085Pseudo<(outs GR32: $rd),
 
 def ZEXT16TO32
     : I8085Pseudo<(outs GR32: $dst),
-                      (ins GR16: $src),
+                      (ins GR16BD: $src),
                       "zext16to32 $dst, $src", 
                       [(set i32: $dst, (zext i16: $src))]>;
 
 
 def SEXT16TO32
     : I8085Pseudo<(outs GR32: $dst),
-                      (ins GR16: $src),
+                      (ins GR16BD: $src),
                       "sext16to32 $dst, $src", 
                       [(set i32: $dst, (sext i16: $src))]>;
 
 def AEXT16TO32
     : I8085Pseudo<(outs GR32: $dst),
-                      (ins GR16: $src),
+                      (ins GR16BD: $src),
                       "aext16to32 $dst, $src", 
                       [(set i32: $dst, (anyext i16: $src))]>;                      
 
@@ -212,20 +214,20 @@ def AEXT16TO32
 
 def ZEXT8TO32
     : I8085Pseudo<(outs GR32: $dst),
-                      (ins GR8: $src),
+                      (ins GR8NoAHL: $src),
                       "zext8to32 $dst, $src", 
                       [(set i32: $dst, (zext i8: $src))]>;
 
 
 def SEXT8TO32
     : I8085Pseudo<(outs GR32: $dst),
-                      (ins GR8: $src),
+                      (ins GR8NoAHL: $src),
                       "sext8to32 $dst, $src", 
                       [(set i32: $dst, (sext i8: $src))]>;
 
 def AEXT8TO32
     : I8085Pseudo<(outs GR32: $dst),
-                      (ins GR8: $src),
+                      (ins GR8NoAHL: $src),
                       "aext8to32 $dst, $src", 
                       [(set i32: $dst, (anyext i8: $src))]>; 
 

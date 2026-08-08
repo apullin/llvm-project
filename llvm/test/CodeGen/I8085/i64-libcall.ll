@@ -1516,10 +1516,10 @@ define i64 @shl64(i64 %a, i8 %b) {
 ; CHECK-NEXT:    MOV M, E
 ; CHECK-NEXT:    LXI H, 38
 ; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
+; CHECK-NEXT:    MOV B, M
 ; CHECK-NEXT:    LXI H, 14
 ; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, A
+; CHECK-NEXT:    MOV M, B
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    MVI M, 0
 ; CHECK-NEXT:    INX H
@@ -1760,10 +1760,10 @@ define i64 @lshr64(i64 %a, i8 %b) {
 ; CHECK-NEXT:    MOV M, E
 ; CHECK-NEXT:    LXI H, 38
 ; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
+; CHECK-NEXT:    MOV B, M
 ; CHECK-NEXT:    LXI H, 14
 ; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, A
+; CHECK-NEXT:    MOV M, B
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    MVI M, 0
 ; CHECK-NEXT:    INX H
@@ -2004,10 +2004,10 @@ define i64 @ashr64(i64 %a, i8 %b) {
 ; CHECK-NEXT:    MOV M, E
 ; CHECK-NEXT:    LXI H, 38
 ; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
+; CHECK-NEXT:    MOV B, M
 ; CHECK-NEXT:    LXI H, 14
 ; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, A
+; CHECK-NEXT:    MOV M, B
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    MVI M, 0
 ; CHECK-NEXT:    INX H

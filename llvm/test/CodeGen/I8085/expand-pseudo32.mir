@@ -6,6 +6,7 @@
   define void @mvi32_iax() { ret void }
   define void @add32_iax_ibx() { ret void }
   define void @sub32_iax_ibx() { ret void }
+  define void @preserve_live_l_unit() { ret void }
 ...
 
 ---
@@ -24,7 +25,7 @@ body:             |
     ; CHECK-NEXT: $hl = INX
     ; CHECK-NEXT: MVI_M 1, implicit $h, implicit $l
     ; CHECK-NEXT: RET implicit $sp, implicit-def $sp
-    $iax = MVI_32 16909060, implicit-def $a, implicit-def $hl
+    $iax = MVI_32 16909060, implicit-def $a, implicit-def $h, implicit-def $l
     RET implicit $sp, implicit-def $sp
 ...
 
@@ -88,7 +89,7 @@ body:             |
     ; CHECK-NEXT: $hl = DCX
     ; CHECK-NEXT: MOV_M $a, implicit $h, implicit $l
     ; CHECK-NEXT: RET implicit $sp, implicit-def $sp
-    $iax = ADD_32 $iax, $ibx, implicit-def $sreg, implicit-def $a, implicit-def $hl
+    $iax = ADD_32 $iax, $ibx, implicit-def $sreg, implicit-def $a, implicit-def $h, implicit-def $l
     RET implicit $sp, implicit-def $sp
 ...
 
@@ -152,6 +153,22 @@ body:             |
     ; CHECK-NEXT: $hl = DCX
     ; CHECK-NEXT: MOV_M $a, implicit $h, implicit $l
     ; CHECK-NEXT: RET implicit $sp, implicit-def $sp
-    $iax = SUB_32 $iax, $ibx, implicit-def $sreg, implicit-def $a, implicit-def $hl
+    $iax = SUB_32 $iax, $ibx, implicit-def $sreg, implicit-def $a, implicit-def $h, implicit-def $l
+    RET implicit $sp, implicit-def $sp
+...
+
+---
+name:            preserve_live_l_unit
+body:             |
+  bb.0:
+    liveins: $b, $hl
+    ; CHECK-LABEL: name: preserve_live_l_unit
+    ; CHECK: PUSH $hl
+    ; CHECK: $hl = POP
+    ; CHECK-NEXT: $h = MOV $b
+    ; CHECK-NEXT: $a = MOV $l
+    $iax = MVI_32 1, implicit-def $a, implicit-def dead $h, implicit-def dead $l
+    $h = MOV $b
+    $a = MOV $l
     RET implicit $sp, implicit-def $sp
 ...

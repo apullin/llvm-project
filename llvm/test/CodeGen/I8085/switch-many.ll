@@ -30,12 +30,11 @@ define i8 @switch_many(i8 %x) {
 ; CHECK-NEXT:    MOV A, H
 ; CHECK-NEXT:    ADC B
 ; CHECK-NEXT:    MOV H, A
-; CHECK-NEXT:    MOV C, M
+; CHECK-NEXT:    MOV A, M
 ; CHECK-NEXT:    INX H
-; CHECK-NEXT:    MOV B, M
-; CHECK-NEXT:    DCX H
-; CHECK-NEXT:    MOV H, B
-; CHECK-NEXT:    MOV L, C
+; CHECK-NEXT:    MOV H, M
+; CHECK-NEXT:    MOV L, A
+; CHECK-NEXT:    ; kill: def $hl killed $hl def $h def $l
 ; CHECK-NEXT:    PCHL
 ; CHECK-NEXT:  LBB0_2: ; %c0
 ; CHECK-NEXT:    MVI A, 10

@@ -39,6 +39,10 @@ def SDT_I8085Trunc32Hi : SDTypeProfile<1, 1, [SDTCisVT<0, i16>, SDTCisVT<1, i32>
 def I8085retflag : SDNode<"I8085ISD::RET_FLAG", SDTNone,
                         [SDNPHasChain, SDNPOptInGlue, SDNPVariadic]>;
 
+def I8085savevlabase
+    : SDNode<"I8085ISD::SAVE_VLA_BASE_FOR_RET", SDTNone,
+             [SDNPHasChain, SDNPSideEffect, SDNPMayStore]>;
+
 def I8085callseq_start : SDNode<"ISD::CALLSEQ_START", SDT_I8085CallSeqStart,
                               [SDNPHasChain, SDNPOutGlue]>;
 def I8085callseq_end : SDNode<"ISD::CALLSEQ_END", SDT_I8085CallSeqEnd,
@@ -183,9 +187,7 @@ let Constraints = "$src = $rd", Defs=[SREG, A]  in {
       : I8085Pseudo<(outs GR16: $rd),
               (ins GR16: $src, GR16: $rr),
               "SUB_16\t$rd, $rr",
-              [(set i16: $rd, (sub i16: $src, i16: $rr))]> {
-    let Constraints = "";
-  }
+              [(set i16: $rd, (sub i16: $src, i16: $rr))]>;
 
   def ADD_8
       : I8085Pseudo<(outs GR8: $rd),
@@ -571,16 +573,9 @@ let Defs=[HL, A] in def LOAD_8_ADDR_CONTENT : I8085Pseudo<(outs GR8: $dst),
                        (ins GR16: $src),
                        "LOAD_8_ADDR_CONTENT $dst, $src", [(set i8: $dst, (load i16: $src))]>;
 
-// LOAD_16_ADDR_CONTENT: Load 16-bit value from address in register.
-// Output constrained to GR16BD (BC/DE only) because HL is always clobbered
-// during expansion (used as address pointer). This avoids a Machine Copy
-// Propagation bug where "implicit-def dead $hl" causes incorrect COPY removal.
-//
-// NOTE: Allowing HL as output would require removing HL from Defs (risky for
-// liveness) or custom instruction selection to pick a variant without HL in Defs.
-// The expansion code can handle HL output, but register allocation needs to
-// know HL is clobbered, which prevents it from being allocated as output anyway.
-let Defs=[HL, A] in def LOAD_16_ADDR_CONTENT : I8085Pseudo<(outs GR16BD: $dst),
+// The expansion preserves an unrelated live HL value when it needs HL as an
+// address temporary, so the loaded value can use any 16-bit register pair.
+let Defs=[A] in def LOAD_16_ADDR_CONTENT : I8085Pseudo<(outs GR16: $dst),
                        (ins GR16: $src),
                        "LOAD_16_ADDR_CONTENT $dst, $src", [(set i16: $dst, (load i16: $src))]>;
 
@@ -590,9 +585,15 @@ let Defs=[HL, A] in def STORE_8_ADDR_CONTENT : I8085Pseudo<(outs),
                        [(store i8: $src, i16: $addr)]>;
 
 let Defs=[HL, A] in def STORE_16_ADDR_CONTENT : I8085Pseudo<(outs),
-                       (ins GR16: $addr, GR16BD: $src),
+                       (ins GR16: $addr, GR16: $src),
                        "STORE_16_ADDR_CONTENT $addr, $src",
                        [(store i16: $src, i16: $addr)]>;
+
+// Keep a store's BC/DE requirement local to that use rather than narrowing
+// the source's complete live range during register allocation.
+def COPY_TO_GR16BD : I8085Pseudo<(outs GR16BD: $dst),
+                       (ins GR16: $src),
+                       "COPY_TO_GR16BD $dst, $src", []>;
 
 let Defs=[HL], mayStore = 1 in def STORE_8_WITH_IMM_ADDR : I8085Pseudo<(outs),
                        (ins imm16Addr: $addr, GR8NoHL: $src),
@@ -607,7 +608,7 @@ let mayStore = 1 in def STORE_16_STATIC_ADDR : I8085Pseudo<(outs),
                        "STORE_16_STATIC_ADDR $addr, $src", []>;
 
 let Defs=[HL], mayStore = 1 in def STORE_16_WITH_IMM_ADDR : I8085Pseudo<(outs),
-                       (ins imm16Addr: $addr, GR16BD: $src),
+                       (ins imm16Addr: $addr, GR16: $src),
                        "STORE_16_ADDR $addr, $src", []>;
 }  
 
@@ -642,6 +643,14 @@ let isTerminator = 1, isReturn = 1, isBarrier = 1 in {
     def RET : F1<0b11001001, (outs), (ins), "RET", [(I8085retflag)]>;
   }
 }
+
+// Frame lowering replaces this marker with PUSH DE and pairs it with a POP HL
+// in the VLA epilogue. Keeping it explicit prevents return-value scheduling
+// from overwriting DE before the base is saved.
+let Uses = [SP, DE], Defs = [SP], hasSideEffects = 1, mayStore = 1 in
+def SAVE_VLA_BASE_FOR_RET : I8085Pseudo<(outs), (ins),
+                                       "SAVE_VLA_BASE_FOR_RET",
+                                       [(I8085savevlabase)]>;
 
 def RST : FRST<(outs), (ins I8085Imm8: $k), "RST $k", []>;
 

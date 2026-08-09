@@ -27,7 +27,7 @@ body:             |
     ; CHECK-NEXT: $hl = INX
     ; CHECK-NEXT: MOV_M $b, implicit $h, implicit $l
     ; CHECK-NEXT: RET implicit $sp, implicit-def $sp
-    $iax = PACK_16_TO_32 $hl, $bc, implicit-def dead $a, implicit-def dead $hl, implicit $sp
+    $iax = PACK_16_TO_32 $hl, $bc, implicit-def dead $a, implicit-def dead $h, implicit-def dead $l, implicit $sp
     RET implicit $sp, implicit-def $sp
 ...
 
@@ -52,6 +52,6 @@ body:             |
     ; CHECK-NEXT: $hl = INX
     ; CHECK-NEXT: MOV_M ${{[^,]+}}, implicit $h, implicit $l
     ; CHECK-NEXT: RET implicit $sp, implicit-def $sp
-    $iax = PACK_16_TO_32 $bc, $hl, implicit-def dead $a, implicit-def dead $hl, implicit $sp
+    $iax = PACK_16_TO_32 $bc, $hl, implicit-def dead $a, implicit-def dead $h, implicit-def dead $l, implicit $sp
     RET implicit $sp, implicit-def $sp
 ...

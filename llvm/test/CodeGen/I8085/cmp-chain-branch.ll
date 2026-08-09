@@ -20,12 +20,14 @@ define i8 @cmp_chain_and_i16(i16 %a) {
 ; CHECK-NEXT:    ANI 128
 ; CHECK-NEXT:    JNZ LBB0_3
 ; CHECK-NEXT:  ; %bb.1: ; %entry
-; CHECK-NEXT:    MOV A, C
+; CHECK-NEXT:    MOV H, B
+; CHECK-NEXT:    MOV L, C
+; CHECK-NEXT:    MOV A, L
 ; CHECK-NEXT:    SUB E
-; CHECK-NEXT:    MOV E, A
-; CHECK-NEXT:    MOV A, B
+; CHECK-NEXT:    MOV L, A
+; CHECK-NEXT:    MOV A, H
 ; CHECK-NEXT:    SBB D
-; CHECK-NEXT:    MOV D, A
+; CHECK-NEXT:    MOV H, A
 ; CHECK-NEXT:    JC LBB0_6
 ; CHECK-NEXT:  LBB0_5: ; %entry
 ; CHECK-NEXT:    MVI A, 0

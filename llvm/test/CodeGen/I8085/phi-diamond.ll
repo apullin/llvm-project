@@ -20,12 +20,14 @@ define i16 @diamond_simple(i16 %a, i16 %b) {
 ; CHECK-NEXT:    ANI 128
 ; CHECK-NEXT:    JNZ LBB0_3
 ; CHECK-NEXT:  ; %bb.1: ; %entry
-; CHECK-NEXT:    MOV A, C
+; CHECK-NEXT:    MOV H, B
+; CHECK-NEXT:    MOV L, C
+; CHECK-NEXT:    MOV A, L
 ; CHECK-NEXT:    SUB E
-; CHECK-NEXT:    MOV E, A
-; CHECK-NEXT:    MOV A, B
+; CHECK-NEXT:    MOV L, A
+; CHECK-NEXT:    MOV A, H
 ; CHECK-NEXT:    SBB D
-; CHECK-NEXT:    MOV D, A
+; CHECK-NEXT:    MOV H, A
 ; CHECK-NEXT:    JC LBB0_5
 ; CHECK-NEXT:  LBB0_4: ; %entry
 ; CHECK-NEXT:    MVI A, 0
@@ -55,10 +57,11 @@ define i16 @diamond_simple(i16 %a, i16 %b) {
 ; CHECK-NEXT:  LBB0_8: ; %else
 ; CHECK-NEXT:    MOV A, E
 ; CHECK-NEXT:    SUB C
-; CHECK-NEXT:    MOV C, A
+; CHECK-NEXT:    MOV E, A
 ; CHECK-NEXT:    MOV A, D
 ; CHECK-NEXT:    SBB B
 ; CHECK-NEXT:    MOV B, A
+; CHECK-NEXT:    MOV C, E
 ; CHECK-NEXT:    RET
 entry:
   %cmp = icmp sgt i16 %a, 0
@@ -82,12 +85,12 @@ define i16 @diamond_nested(i16 %a, i16 %b) {
 ; CHECK-LABEL: diamond_nested:
 ; CHECK:         .cfi_startproc
 ; CHECK-NEXT:  ; %bb.0: ; %entry
-; CHECK-NEXT:    LXI H, 65532
+; CHECK-NEXT:    LXI H, 65530
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    SPHL
-; CHECK-NEXT:    .cfi_adjust_cfa_offset 4
+; CHECK-NEXT:    .cfi_adjust_cfa_offset 6
 ; CHECK-NEXT:    LXI D, 1
-; CHECK-NEXT:    LXI H, 6
+; CHECK-NEXT:    LXI H, 8
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV C, M
 ; CHECK-NEXT:    INX H
@@ -97,12 +100,14 @@ define i16 @diamond_nested(i16 %a, i16 %b) {
 ; CHECK-NEXT:    ANI 128
 ; CHECK-NEXT:    JNZ LBB1_3
 ; CHECK-NEXT:  ; %bb.1: ; %entry
-; CHECK-NEXT:    MOV A, C
+; CHECK-NEXT:    MOV H, B
+; CHECK-NEXT:    MOV L, C
+; CHECK-NEXT:    MOV A, L
 ; CHECK-NEXT:    SUB E
-; CHECK-NEXT:    MOV E, A
-; CHECK-NEXT:    MOV A, B
+; CHECK-NEXT:    MOV L, A
+; CHECK-NEXT:    MOV A, H
 ; CHECK-NEXT:    SBB D
-; CHECK-NEXT:    MOV D, A
+; CHECK-NEXT:    MOV H, A
 ; CHECK-NEXT:    JC LBB1_5
 ; CHECK-NEXT:  LBB1_4: ; %entry
 ; CHECK-NEXT:    MVI A, 0
@@ -114,39 +119,38 @@ define i16 @diamond_nested(i16 %a, i16 %b) {
 ; CHECK-NEXT:  LBB1_5: ; %entry
 ; CHECK-NEXT:    MVI A, 1
 ; CHECK-NEXT:  LBB1_6: ; %entry
-; CHECK-NEXT:    LXI H, 8
+; CHECK-NEXT:    LXI H, 10
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV E, M
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    MOV D, M
 ; CHECK-NEXT:    ORA A
-; CHECK-NEXT:    JNZ LBB1_11
+; CHECK-NEXT:    JNZ LBB1_10
 ; CHECK-NEXT:  ; %bb.7: ; %positive
 ; CHECK-NEXT:    LXI H, 101
 ; CHECK-NEXT:    MOV A, B
 ; CHECK-NEXT:    XRA H
 ; CHECK-NEXT:    ANI 128
-; CHECK-NEXT:    JNZ LBB1_12
+; CHECK-NEXT:    JNZ LBB1_11
 ; CHECK-NEXT:  ; %bb.8: ; %positive
+; CHECK-NEXT:    PUSH H
+; CHECK-NEXT:    LXI H, 6
+; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    MOV M, C
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, B
+; CHECK-NEXT:    POP H
 ; CHECK-NEXT:    MOV A, C
 ; CHECK-NEXT:    SUB L
-; CHECK-NEXT:    MOV L, A
-; CHECK-NEXT:    MOV A, B
-; CHECK-NEXT:    SBB H
-; CHECK-NEXT:    MOV H, A
-; CHECK-NEXT:    JNC LBB1_14
-; CHECK-NEXT:  LBB1_9: ; %positive
-; CHECK-NEXT:    MVI A, 1
-; CHECK-NEXT:    ORA A
-; CHECK-NEXT:    JNZ LBB1_15
-; CHECK-NEXT:  LBB1_10: ; %large
-; CHECK-NEXT:    MOV A, C
-; CHECK-NEXT:    ADD E
 ; CHECK-NEXT:    MOV C, A
 ; CHECK-NEXT:    MOV A, B
-; CHECK-NEXT:    ADC D
-; CHECK-NEXT:    JMP LBB1_16
-; CHECK-NEXT:  LBB1_11: ; %nonpositive
+; CHECK-NEXT:    SBB H
+; CHECK-NEXT:    MOV B, A
+; CHECK-NEXT:    JNC LBB1_13
+; CHECK-NEXT:  ; %bb.9: ; %positive
+; CHECK-NEXT:    MVI A, 1
+; CHECK-NEXT:    JMP LBB1_14
+; CHECK-NEXT:  LBB1_10: ; %nonpositive
 ; CHECK-NEXT:    LXI H, 2
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV M, E
@@ -159,28 +163,50 @@ define i16 @diamond_nested(i16 %a, i16 %b) {
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    MOV M, B
 ; CHECK-NEXT:    CALL __mul16
-; CHECK-NEXT:    JMP LBB1_17
-; CHECK-NEXT:  LBB1_12: ; %positive
+; CHECK-NEXT:    JMP LBB1_19
+; CHECK-NEXT:  LBB1_11: ; %positive
 ; CHECK-NEXT:    MOV A, B
 ; CHECK-NEXT:    ANI 128
-; CHECK-NEXT:    JNZ LBB1_9
-; CHECK-NEXT:  LBB1_14: ; %positive
+; CHECK-NEXT:    JNZ LBB1_16
+; CHECK-NEXT:  ; %bb.12: ; %positive
 ; CHECK-NEXT:    MVI A, 0
 ; CHECK-NEXT:    ORA A
-; CHECK-NEXT:    JZ LBB1_10
-; CHECK-NEXT:  LBB1_15: ; %small
+; CHECK-NEXT:    JZ LBB1_15
+; CHECK-NEXT:    JMP LBB1_17
+; CHECK-NEXT:  LBB1_13: ; %positive
+; CHECK-NEXT:    MVI A, 0
+; CHECK-NEXT:  LBB1_14: ; %positive
+; CHECK-NEXT:    LXI H, 4
+; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    MOV C, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV B, M
+; CHECK-NEXT:    ORA A
+; CHECK-NEXT:    JNZ LBB1_17
+; CHECK-NEXT:  LBB1_15: ; %large
+; CHECK-NEXT:    MOV A, C
+; CHECK-NEXT:    ADD E
+; CHECK-NEXT:    MOV C, A
+; CHECK-NEXT:    MOV A, B
+; CHECK-NEXT:    ADC D
+; CHECK-NEXT:    JMP LBB1_18
+; CHECK-NEXT:  LBB1_16: ; %positive
+; CHECK-NEXT:    MVI A, 1
+; CHECK-NEXT:    ORA A
+; CHECK-NEXT:    JZ LBB1_15
+; CHECK-NEXT:  LBB1_17: ; %small
 ; CHECK-NEXT:    MOV A, C
 ; CHECK-NEXT:    SUB E
 ; CHECK-NEXT:    MOV C, A
 ; CHECK-NEXT:    MOV A, B
 ; CHECK-NEXT:    SBB D
-; CHECK-NEXT:  LBB1_16: ; %done
+; CHECK-NEXT:  LBB1_18: ; %done
 ; CHECK-NEXT:    MOV B, A
-; CHECK-NEXT:  LBB1_17: ; %done
-; CHECK-NEXT:    LXI H, 4
+; CHECK-NEXT:  LBB1_19: ; %done
+; CHECK-NEXT:    LXI H, 6
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    SPHL
-; CHECK-NEXT:    .cfi_adjust_cfa_offset 4294967292
+; CHECK-NEXT:    .cfi_adjust_cfa_offset 4294967290
 ; CHECK-NEXT:    RET
 entry:
   %cmp1 = icmp sgt i16 %a, 0

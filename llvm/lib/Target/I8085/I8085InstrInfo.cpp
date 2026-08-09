@@ -15,6 +15,7 @@
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/SmallVector.h"
+#include "llvm/CodeGen/LivePhysRegs.h"
 #include "llvm/CodeGen/MachineConstantPool.h"
 #include "llvm/CodeGen/MachineFrameInfo.h"
 #include "llvm/CodeGen/MachineInstrBuilder.h"
@@ -98,16 +99,42 @@ void I8085InstrInfo::copyPhysReg(MachineBasicBlock &MBB,
   }
 
   if (SrcReg == I8085::SP) {
-    BuildMI(MBB, MI, DL, get(I8085::LXI), I8085::HL).addImm(0);
+    bool PreserveHL = DestReg != I8085::HL;
+    bool PreservePSW = true;
+    if (MI != MBB.end() && MI->getOpcode() == TargetOpcode::COPY &&
+        MBB.getParent()->getRegInfo().tracksLiveness()) {
+      LivePhysRegs LiveRegs(RI);
+      LiveRegs.addLiveOuts(MBB);
+      for (auto I = MBB.rbegin(), E = MI.getReverse(); I != E; ++I)
+        LiveRegs.stepBackward(*I);
+      PreserveHL = DestReg != I8085::HL &&
+                   (LiveRegs.contains(I8085::HL) ||
+                    LiveRegs.contains(I8085::H) || LiveRegs.contains(I8085::L));
+      PreservePSW =
+          LiveRegs.contains(I8085::A) || LiveRegs.contains(I8085::SREG);
+    }
+
+    if (PreserveHL)
+      BuildMI(MBB, MI, DL, get(I8085::PUSH)).addReg(I8085::HL);
+    if (PreservePSW)
+      BuildMI(MBB, MI, DL, get(I8085::PUSH)).addReg(I8085::PSW);
+
+    const unsigned StackAdjustment =
+        2 * (unsigned(PreserveHL) + unsigned(PreservePSW));
+    BuildMI(MBB, MI, DL, get(I8085::LXI), I8085::HL).addImm(StackAdjustment);
     BuildMI(MBB, MI, DL, get(I8085::DAD)).addReg(I8085::SP);
-    if (DestReg == I8085::HL)
-      return;
-    if (!getPairRegs(DestReg, destLow, destHigh))
-      return;
-    BuildMI(MBB, MI, DL, get(I8085::MOV), destHigh)
-        .addReg(I8085::H);
-    BuildMI(MBB, MI, DL, get(I8085::MOV), destLow)
-        .addReg(I8085::L);
+
+    if (DestReg != I8085::HL) {
+      if (!getPairRegs(DestReg, destLow, destHigh))
+        return;
+      BuildMI(MBB, MI, DL, get(I8085::MOV), destHigh).addReg(I8085::H);
+      BuildMI(MBB, MI, DL, get(I8085::MOV), destLow).addReg(I8085::L);
+    }
+
+    if (PreservePSW)
+      BuildMI(MBB, MI, DL, get(I8085::POP), I8085::PSW);
+    if (PreserveHL)
+      BuildMI(MBB, MI, DL, get(I8085::POP), I8085::HL);
     return;
   }
 

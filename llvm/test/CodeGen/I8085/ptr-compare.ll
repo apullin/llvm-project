@@ -57,10 +57,10 @@ define i8 @ptr_ult(ptr %a, ptr %b) {
 ; CHECK-NEXT:    MOV B, M
 ; CHECK-NEXT:    MOV A, E
 ; CHECK-NEXT:    SUB C
-; CHECK-NEXT:    MOV C, A
+; CHECK-NEXT:    MOV E, A
 ; CHECK-NEXT:    MOV A, D
 ; CHECK-NEXT:    SBB B
-; CHECK-NEXT:    MOV B, A
+; CHECK-NEXT:    MOV D, A
 ; CHECK-NEXT:    JNC LBB1_2
 ; CHECK-NEXT:  ; %bb.1: ; %entry
 ; CHECK-NEXT:    MVI A, 1

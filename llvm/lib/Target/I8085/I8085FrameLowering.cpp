@@ -18,6 +18,8 @@
 #include "I8085TargetMachine.h"
 #include "MCTargetDesc/I8085MCTargetDesc.h"
 
+#include "llvm/ADT/SmallPtrSet.h"
+#include "llvm/ADT/SmallVector.h"
 #include "llvm/CodeGen/MachineFrameInfo.h"
 #include "llvm/CodeGen/MachineFunction.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
@@ -285,18 +287,70 @@ void I8085FrameLowering::emitEpilogue(MachineFunction &MF,
   MBBI = FirstCSPop;
   DL = MBBI->getDebugLoc();
 
+  // An i32 return overwrites DE, which is also the fixed-frame base in a VLA
+  // function. Return lowering places this marker before materializing BC:DE.
+  // Save the base on the dynamic stack and recover it after the return value
+  // is ready, avoiding assumptions about the register allocator's copy shape.
+  bool BaseSavedForReturn = false;
+  if (MFI.hasVarSizedObjects()) {
+    MachineBasicBlock::iterator SaveMarker = MBB.end();
+    for (auto I = MBB.begin(); I != MBBI; ++I) {
+      if (I->getOpcode() != I8085::SAVE_VLA_BASE_FOR_RET)
+        continue;
+      assert(SaveMarker == MBB.end() &&
+             "multiple VLA base-save markers in one return block");
+      SaveMarker = I;
+    }
+    if (SaveMarker != MBB.end()) {
+      BuildMI(MBB, SaveMarker, SaveMarker->getDebugLoc(), TII.get(I8085::PUSH))
+          .addReg(I8085::DE);
+      MBB.erase(SaveMarker);
+      BaseSavedForReturn = true;
+    }
+  }
+
   if (AFI->hasStackRealignSaveFI()) {
-    BuildMI(MBB, MBBI, DL, TII.get(I8085::LOAD_16_WITH_ADDR), I8085::HL)
-        .addFrameIndex(AFI->getStackRealignSaveFI())
-        .addImm(0);
+    if (BaseSavedForReturn) {
+      // Recover the fixed-frame base without clobbering either half of the
+      // BC:DE return value, then load the pre-realignment SP directly via HL.
+      BuildMI(MBB, MBBI, DL, TII.get(I8085::POP), I8085::HL);
+
+      int64_t Offset = MFI.getObjectOffset(AFI->getStackRealignSaveFI());
+      Offset += MFI.getStackSize() - getOffsetOfLocalArea();
+      if (!isInt<16>(Offset))
+        report_fatal_error("I8085 stack-realignment save offset out of range");
+      if (Offset != 0) {
+        uint16_t EncodedOffset = static_cast<uint16_t>(Offset);
+        BuildMI(MBB, MBBI, DL, TII.get(I8085::MOV), I8085::A).addReg(I8085::L);
+        BuildMI(MBB, MBBI, DL, TII.get(I8085::ADI))
+            .addImm(EncodedOffset & 0xff);
+        BuildMI(MBB, MBBI, DL, TII.get(I8085::MOV), I8085::L).addReg(I8085::A);
+        BuildMI(MBB, MBBI, DL, TII.get(I8085::MOV), I8085::A).addReg(I8085::H);
+        BuildMI(MBB, MBBI, DL, TII.get(I8085::ACI)).addImm(EncodedOffset >> 8);
+        BuildMI(MBB, MBBI, DL, TII.get(I8085::MOV), I8085::H).addReg(I8085::A);
+      }
+      BuildMI(MBB, MBBI, DL, TII.get(I8085::MOV_FROM_M), I8085::A);
+      BuildMI(MBB, MBBI, DL, TII.get(I8085::INX), I8085::HL)
+          .addReg(I8085::HL, RegState::Implicit);
+      BuildMI(MBB, MBBI, DL, TII.get(I8085::MOV_FROM_M), I8085::H);
+      BuildMI(MBB, MBBI, DL, TII.get(I8085::MOV), I8085::L).addReg(I8085::A);
+    } else {
+      BuildMI(MBB, MBBI, DL, TII.get(I8085::LOAD_16_WITH_ADDR), I8085::HL)
+          .addFrameIndex(AFI->getStackRealignSaveFI())
+          .addImm(0);
+    }
     BuildMI(MBB, MBBI, DL, TII.get(I8085::SPHL));
     restoreStatusRegister(MF, MBB);
     return;
   }
 
   if (MFI.hasVarSizedObjects()) {
-    BuildMI(MBB, MBBI, DL, TII.get(I8085::MOV), I8085::H).addReg(I8085::D);
-    BuildMI(MBB, MBBI, DL, TII.get(I8085::MOV), I8085::L).addReg(I8085::E);
+    if (BaseSavedForReturn) {
+      BuildMI(MBB, MBBI, DL, TII.get(I8085::POP), I8085::HL);
+    } else {
+      BuildMI(MBB, MBBI, DL, TII.get(I8085::MOV), I8085::H).addReg(I8085::D);
+      BuildMI(MBB, MBBI, DL, TII.get(I8085::MOV), I8085::L).addReg(I8085::E);
+    }
     BuildMI(MBB, MBBI, DL, TII.get(I8085::SPHL));
   }
 
@@ -522,6 +576,60 @@ bool I8085FrameLowering::restoreCalleeSavedRegisters(
   return true;
 }
 
+namespace {
+
+struct CallFrameRegion {
+  bool ContainsCall = false;
+  SmallVector<MachineInstr *, 2> Destroys;
+};
+
+// Call lowering may place a call-frame setup before target pseudos that later
+// split the block. Follow the active call-frame region through the CFG rather
+// than assuming its call and teardown remain in the setup block.
+static CallFrameRegion analyzeCallFrameRegion(MachineInstr &Setup,
+                                              const TargetInstrInfo &TII) {
+  using WorkItem = std::pair<MachineBasicBlock *, MachineBasicBlock::iterator>;
+
+  CallFrameRegion Region;
+  MachineBasicBlock *SetupMBB = Setup.getParent();
+  SmallVector<WorkItem, 4> Worklist;
+  SmallPtrSet<MachineBasicBlock *, 8> Visited;
+  Worklist.emplace_back(SetupMBB, std::next(Setup.getIterator()));
+  Visited.insert(SetupMBB);
+
+  while (!Worklist.empty()) {
+    WorkItem Item = Worklist.pop_back_val();
+    MachineBasicBlock *MBB = Item.first;
+    auto I = Item.second;
+    bool FoundDestroy = false;
+
+    for (auto E = MBB->end(); I != E; ++I) {
+      if (I->isCall()) {
+        Region.ContainsCall = true;
+      }
+
+      if (I->getOpcode() != TII.getCallFrameDestroyOpcode())
+        continue;
+
+      Region.Destroys.push_back(&*I);
+      FoundDestroy = true;
+      break;
+    }
+
+    if (FoundDestroy)
+      continue;
+
+    for (MachineBasicBlock *Succ : MBB->successors()) {
+      if (Visited.insert(Succ).second)
+        Worklist.emplace_back(Succ, Succ->begin());
+    }
+  }
+
+  return Region;
+}
+
+} // end anonymous namespace
+
 MachineBasicBlock::iterator I8085FrameLowering::eliminateCallFramePseudoInstr(
     MachineFunction &MF, MachineBasicBlock &MBB,
     MachineBasicBlock::iterator MI) const {
@@ -539,6 +647,66 @@ MachineBasicBlock::iterator I8085FrameLowering::eliminateCallFramePseudoInstr(
   DebugLoc DL = MI->getDebugLoc();
   unsigned int Opcode = MI->getOpcode();
   int Amount = TII.getFrameSize(*MI);
+  CallFrameRegion Region;
+  if (Opcode == TII.getCallFrameSetupOpcode() &&
+      MF.getFrameInfo().hasVarSizedObjects())
+    Region = analyzeCallFrameRegion(*MI, TII);
+
+  const bool PreserveBasePointer =
+      Region.ContainsCall && !Region.Destroys.empty();
+
+  // DE is reserved as the stable base for fixed frame objects when SP moves
+  // for dynamic allocas.  It is otherwise caller-clobbered by the ABI, so save
+  // it outside the outgoing argument area around every call sequence.
+  if (PreserveBasePointer) {
+    BuildMI(MBB, MI, DL, TII.get(I8085::PUSH)).addReg(I8085::DE);
+    for (MachineInstr *CallFrameDestroy : Region.Destroys) {
+      MachineBasicBlock &RestoreMBB = *CallFrameDestroy->getParent();
+      auto DestroyAt = CallFrameDestroy->getIterator();
+      auto RestoreAt = std::next(DestroyAt);
+      auto ResultCapture = RestoreAt;
+      while (ResultCapture != RestoreMBB.end() && ResultCapture->isDebugInstr())
+        ++ResultCapture;
+
+      // Fast register allocation can insert a reload immediately after CALL,
+      // before CALLSEQ_END. Such a reload will use DE as its frame base after
+      // PEI, but DE still contains the callee clobber at that point. The DAG
+      // always places CALLSEQ_END before post-call work, so move these
+      // allocator-inserted instructions back across the teardown. For an i32
+      // result, place them after the atomic BC:DE capture as well.
+      MachineBasicBlock::iterator CallAt = RestoreMBB.end();
+      for (auto I = DestroyAt; I != RestoreMBB.begin();) {
+        --I;
+        if (I->isCall()) {
+          CallAt = I;
+          break;
+        }
+        if (I->getOpcode() == TII.getCallFrameSetupOpcode())
+          break;
+      }
+
+      if (CallAt != RestoreMBB.end() && std::next(CallAt) != DestroyAt) {
+        auto MoveBefore =
+            ResultCapture != RestoreMBB.end() &&
+                    ResultCapture->getOpcode() == I8085::PACK_BCDE_TO_32
+                ? std::next(ResultCapture)
+                : RestoreAt;
+        RestoreMBB.splice(MoveBefore, &RestoreMBB, std::next(CallAt),
+                          DestroyAt);
+      }
+
+      if (ResultCapture != RestoreMBB.end() &&
+          ResultCapture->getOpcode() == I8085::PACK_BCDE_TO_32) {
+        BuildMI(RestoreMBB, std::next(ResultCapture),
+                ResultCapture->getDebugLoc(),
+                TII.get(I8085::RESTORE_VLA_BASE_AFTER_PACK));
+      } else {
+        BuildMI(RestoreMBB, std::next(DestroyAt),
+                CallFrameDestroy->getDebugLoc(), TII.get(I8085::POP),
+                I8085::DE);
+      }
+    }
+  }
 
   // ADJCALLSTACKUP and ADJCALLSTACKDOWN are converted to adiw/subi
   // instructions to read and write the stack pointer in I/O space.

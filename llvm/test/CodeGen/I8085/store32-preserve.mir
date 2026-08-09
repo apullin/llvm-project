@@ -19,7 +19,7 @@ body:             |
     ; CHECK: MOV_M $a
     ; CHECK: $psw = POP
     ; CHECK: $c = MOV $a
-    STORE_32 $sp, 4, $iax, implicit-def dead $hl, implicit $sp
+    STORE_32 $sp, 4, $iax, implicit-def dead $h, implicit-def dead $l, implicit $sp
     $c = MOV $a
     $d = MOV $b
     RET implicit $sp, implicit-def $sp
@@ -36,6 +36,6 @@ body:             |
     ; CHECK-NOT: $b = MOV_FROM_M
     ; CHECK: DAD $bc
     ; CHECK: MOV_M $a
-    STORE_32 $bc, 0, $iax, implicit-def dead $hl, implicit $sp
+    STORE_32 $bc, 0, $iax, implicit-def dead $h, implicit-def dead $l, implicit $sp
     RET implicit $sp, implicit-def $sp
 ...

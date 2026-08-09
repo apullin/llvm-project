@@ -28,14 +28,12 @@ define i8 @br_uadd_ov(i16 %a, i16 %b) {
 ; CHECK-NEXT:    MOV A, H
 ; CHECK-NEXT:    ADC B
 ; CHECK-NEXT:    MOV H, A
-; CHECK-NEXT:    MOV B, H
-; CHECK-NEXT:    MOV C, L
-; CHECK-NEXT:    MOV A, C
+; CHECK-NEXT:    MOV A, L
 ; CHECK-NEXT:    SUB E
-; CHECK-NEXT:    MOV C, A
-; CHECK-NEXT:    MOV A, B
+; CHECK-NEXT:    MOV L, A
+; CHECK-NEXT:    MOV A, H
 ; CHECK-NEXT:    SBB D
-; CHECK-NEXT:    MOV B, A
+; CHECK-NEXT:    MOV H, A
 ; CHECK-NEXT:    JNC LBB0_1
 ; CHECK-NEXT:  ; %bb.2: ; %entry
 ; CHECK-NEXT:    MVI A, 0

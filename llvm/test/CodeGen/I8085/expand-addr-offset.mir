@@ -15,6 +15,9 @@
   define void @store16_sp_offset() { ret void }
   define void @store16_pair_sp_near() { ret void }
   define void @store16_sp_neg_pseudo() { ret void }
+  define void @store16_hl_dead_bc() { ret void }
+  define void @store16_hl_live_bc() { ret void }
+  define void @store16_sp_value_preserve_hl() { ret void }
 ...
 
 ---
@@ -211,5 +214,55 @@ body:             |
     ; CHECK-NEXT: $hl = INX
     ; CHECK-NEXT: MOV_M $d
     STORE_16_AT_OFFSET_WITH_SP $de, -6, implicit-def $hl, implicit $sp
+    RET implicit $sp, implicit-def $sp
+...
+
+---
+name:            store16_hl_dead_bc
+body:             |
+  bb.0:
+    liveins: $de, $hl
+    ; CHECK-LABEL: name:            store16_hl_dead_bc
+    ; CHECK-NOT: PUSH $bc
+    ; CHECK: PUSH $hl
+    ; CHECK: $bc = POP
+    ; CHECK: MOV_M $c
+    ; CHECK: MOV_M $b
+    ; CHECK-NOT: $bc = POP
+    STORE_16 $de, 8, $hl, implicit-def $hl, implicit $sp
+    RET implicit $sp, implicit-def $sp
+...
+
+---
+name:            store16_hl_live_bc
+body:             |
+  bb.0:
+    liveins: $bc, $de, $hl
+    ; CHECK-LABEL: name:            store16_hl_live_bc
+    ; CHECK: PUSH $bc
+    ; CHECK-NEXT: PUSH $hl
+    ; CHECK: $bc = POP
+    ; CHECK: MOV_M $c
+    ; CHECK: MOV_M $b
+    ; CHECK: $bc = POP
+    STORE_16 $de, 8, $hl, implicit-def $hl, implicit $sp
+    RET implicit $bc, implicit $sp, implicit-def $sp
+...
+
+---
+name:            store16_sp_value_preserve_hl
+body:             |
+  bb.0:
+    liveins: $de, $hl, $sp
+    ; CHECK-LABEL: name: store16_sp_value_preserve_hl
+    ; CHECK: PUSH $hl
+    ; CHECK-NEXT: $hl = LXI 2
+    ; CHECK-NEXT: DAD $sp
+    ; CHECK: $hl = LXI 3
+    ; CHECK: MOV_M $a
+    ; CHECK-NEXT: $hl = POP
+    ; CHECK-NEXT: $a = MOV $h
+    STORE_16 $de, 3, $sp, implicit $sp
+    $a = MOV $h
     RET implicit $sp, implicit-def $sp
 ...

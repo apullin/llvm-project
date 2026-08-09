@@ -28,6 +28,8 @@ enum NodeType {
   FIRST_NUMBER = ISD::BUILTIN_OP_END,
   /// Return from subroutine.
   RET_FLAG,
+  /// Save the VLA frame base before an i32 return overwrites DE.
+  SAVE_VLA_BASE_FOR_RET,
   /// Represents an abstract call instruction,
   /// which includes a bunch of information.
   CALL,
@@ -36,20 +38,20 @@ enum NodeType {
   /// A wrapper node for TargetConstantPool,
   /// TargetExternalSymbol, and TargetGlobalAddress.
   WRAPPER,
-  LSL,     ///< Logical shift left.
-  LSLBN,   ///< Byte logical shift left N bits.
-  LSLWN,   ///< Word logical shift left N bits.
-  LSLHI,   ///< Higher 8-bit of word logical shift left.
-  LSR,     ///< Logical shift right.
-  LSRBN,   ///< Byte logical shift right N bits.
-  LSRWN,   ///< Word logical shift right N bits.
-  LSRLO,   ///< Lower 8-bit of word logical shift right.
-  ASR,     ///< Arithmetic shift right.
-  ASRBN,   ///< Byte arithmetic shift right N bits.
-  ASRWN,   ///< Word arithmetic shift right N bits.
-  ASRLO,   ///< Lower 8-bit of word arithmetic shift right.
-  ROR,     ///< Bit rotate right.
-  ROL,     ///< Bit rotate left.
+  LSL,   ///< Logical shift left.
+  LSLBN, ///< Byte logical shift left N bits.
+  LSLWN, ///< Word logical shift left N bits.
+  LSLHI, ///< Higher 8-bit of word logical shift left.
+  LSR,   ///< Logical shift right.
+  LSRBN, ///< Byte logical shift right N bits.
+  LSRWN, ///< Word logical shift right N bits.
+  LSRLO, ///< Lower 8-bit of word logical shift right.
+  ASR,   ///< Arithmetic shift right.
+  ASRBN, ///< Byte arithmetic shift right N bits.
+  ASRWN, ///< Word arithmetic shift right N bits.
+  ASRLO, ///< Lower 8-bit of word arithmetic shift right.
+  ROR,   ///< Bit rotate right.
+  ROL,   ///< Bit rotate left.
   /// I8085 conditional branches. Operand 0 is the chain operand, operand 1
   /// is the block to branch if condition is true, operand 2 is the
   /// condition code, and operand 3 is the flag operand produced by a CMP

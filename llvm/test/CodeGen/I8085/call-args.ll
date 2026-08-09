@@ -29,14 +29,6 @@ define i8 @caller(i8 %x, i16 %y) {
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    SPHL
 ; CHECK-NEXT:    .cfi_adjust_cfa_offset 3
-; CHECK-NEXT:    LXI H, 5
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
-; CHECK-NEXT:    LXI H, 0
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV B, H
-; CHECK-NEXT:    MOV C, L
-; CHECK-NEXT:    STAX B
 ; CHECK-NEXT:    LXI H, 6
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV C, M
@@ -47,6 +39,13 @@ define i8 @caller(i8 %x, i16 %y) {
 ; CHECK-NEXT:    MOV M, C
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    MOV M, B
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV A, M
+; CHECK-NEXT:    LXI H, 0
+; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    MOV M, A
 ; CHECK-NEXT:    CALL callee
 ; CHECK-NEXT:    LXI H, 3
 ; CHECK-NEXT:    DAD SP

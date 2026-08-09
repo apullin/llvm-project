@@ -11,6 +11,8 @@
   define void @ori8_d() { ret void }
   define void @xori8_e() { ret void }
   define void @add16_bc_de() { ret void }
+  define void @add16_bc_sp() { ret void }
+  define void @add16_bc_sp_preserve_hl() { ret void }
   define void @sub16_de_bc() { ret void }
   define void @and16_bc_de() { ret void }
   define void @or16_de_bc() { ret void }
@@ -140,6 +142,40 @@ body:             |
     ; CHECK-NEXT: ADC $d
     ; CHECK-NEXT: $b = MOV $a
     $bc = ADD_16 $bc, $de, implicit-def $sreg, implicit-def $a
+    RET implicit $sp, implicit-def $sp
+...
+
+---
+name:            add16_bc_sp
+body:             |
+  bb.0:
+    liveins: $bc, $sp
+    ; CHECK-LABEL: name:            add16_bc_sp
+    ; CHECK: $hl = LXI 0
+    ; CHECK-NEXT: DAD $sp
+    ; CHECK-NEXT: DAD $bc
+    ; CHECK-NEXT: $b = MOV $h
+    ; CHECK-NEXT: $c = MOV $l
+    $bc = ADD_16 killed $bc, $sp, implicit-def $sreg, implicit-def $a
+    RET implicit $sp, implicit-def $sp
+...
+
+---
+name:            add16_bc_sp_preserve_hl
+body:             |
+  bb.0:
+    liveins: $bc, $hl, $sp
+    ; CHECK-LABEL: name:            add16_bc_sp_preserve_hl
+    ; CHECK: PUSH $hl
+    ; CHECK-NEXT: $hl = LXI 2
+    ; CHECK-NEXT: DAD $sp
+    ; CHECK-NEXT: DAD $bc
+    ; CHECK-NEXT: $b = MOV $h
+    ; CHECK-NEXT: $c = MOV $l
+    ; CHECK-NEXT: $hl = POP
+    ; CHECK-NEXT: $a = MOV $h
+    $bc = ADD_16 killed $bc, $sp, implicit-def $sreg, implicit-def $a
+    $a = MOV $h
     RET implicit $sp, implicit-def $sp
 ...
 

@@ -3,7 +3,7 @@
 // RUN:   %i8085_sdk/sysroot/crt/crt0.S -o %t.crt0.o
 // RUN: %i8085_clang -target i8085-unknown-elf -O2 -ffreestanding -fno-builtin -nostdlib -emit-llvm -c \
 // RUN:   %s -o %t.bc
-// RUN: %i8085_llc -O2 -mtriple=i8085-unknown-elf -filetype=obj %t.bc -o %t.o
+// RUN: %i8085_llc -O2 -verify-machineinstrs -mtriple=i8085-unknown-elf -filetype=obj %t.bc -o %t.o
 // RUN: %i8085_lld -m i8085elf -T %i8085_sdk/sysroot/ldscripts/i8085-sim-flat.ld \
 // RUN:   -o %t.elf %t.crt0.o %t.o
 // RUN: %i8085_objcopy -O binary %t.elf %t.bin
@@ -11,7 +11,7 @@
 // RUN:   FileCheck %s --check-prefix=EXT
 // RUN: %i8085_clang -target i8085-unknown-elf -Os -ffreestanding -fno-builtin -nostdlib -emit-llvm -c \
 // RUN:   %s -o %t.os.bc
-// RUN: %i8085_llc -O2 -mtriple=i8085-unknown-elf -filetype=obj %t.os.bc -o %t.os.o
+// RUN: %i8085_llc -O2 -verify-machineinstrs -mtriple=i8085-unknown-elf -filetype=obj %t.os.bc -o %t.os.o
 // RUN: %i8085_lld -m i8085elf -T %i8085_sdk/sysroot/ldscripts/i8085-sim-flat.ld \
 // RUN:   -o %t.os.elf %t.crt0.o %t.os.o
 // RUN: %i8085_objcopy -O binary %t.os.elf %t.os.bin

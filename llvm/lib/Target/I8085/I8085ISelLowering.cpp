@@ -340,6 +340,8 @@ I8085TargetLowering::I8085TargetLowering(const I8085TargetMachine &TM,
   setOperationAction(ISD::VAARG, MVT::Other, Expand);
   setOperationAction(ISD::DYNAMIC_STACKALLOC, MVT::i8, Expand);
   setOperationAction(ISD::DYNAMIC_STACKALLOC, MVT::i16, Expand);
+  setOperationAction(ISD::STACKSAVE, MVT::Other, Expand);
+  setOperationAction(ISD::STACKRESTORE, MVT::Other, Expand);
 
   for (MVT VT : {MVT::i8, MVT::i16}) {
     setOperationAction(ISD::CTLZ, VT, Expand);
@@ -514,6 +516,7 @@ const char *I8085TargetLowering::getTargetNodeName(unsigned Opcode) const {
   default:
     return nullptr;
     NODE(RET_FLAG);
+    NODE(SAVE_VLA_BASE_FOR_RET);
     NODE(CALL);
     NODE(TC_RETURN);
     NODE(WRAPPER);
@@ -3866,6 +3869,13 @@ I8085TargetLowering::LowerReturn(SDValue Chain, CallingConv::ID CallConv,
     // Use custom TRUNC32_HI node to extract high word directly without
     // a costly SRL by 16 that gets expanded to a 16-iteration loop.
     SDValue Hi = DAG.getNode(I8085ISD::TRUNC32_HI, dl, MVT::i16, Val);
+
+    // DE is the fixed-frame base in functions with dynamic allocas, but the
+    // i32 ABI also returns the high word in DE. Save the base before either
+    // return register is materialized; frame lowering consumes the marker.
+    if (MF.getFrameInfo().hasVarSizedObjects())
+      Chain =
+          DAG.getNode(I8085ISD::SAVE_VLA_BASE_FOR_RET, dl, MVT::Other, Chain);
 
     SDValue Flag;
     Chain = DAG.getCopyToReg(Chain, dl, I8085::BC, Lo, Flag);

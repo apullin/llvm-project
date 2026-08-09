@@ -132,63 +132,44 @@ private:
         isPhysRegLive(MBB, MBBI, I8085::L)) {
       return true;
     }
-    if (MBB.isLiveIn(I8085::HL) || MBB.isLiveIn(I8085::H) ||
-        MBB.isLiveIn(I8085::L))
-      return true;
 
-    if (!hasAvailableHLValue(MBB, MBBI))
+    bool HReaches = hasAvailablePhysRegValue(MBB, MBBI, I8085::H);
+    bool LReaches = hasAvailablePhysRegValue(MBB, MBBI, I8085::L);
+    if (!HReaches && !LReaches)
       return false;
 
-    // Do a forward scan from MBBI to detect if $h or $l is read before
-    // being redefined.  This catches cases where the backwards walk might
-    // miss liveness due to intervening definitions.  Skip over unexpanded
-    // pseudo instructions that will preserve HL via PUSH/POP when expanded
-    // (they also call isHLOrSubRegLive and will protect HL if it turns out
-    // to be live).  Note: these pseudos no longer declare HL in Defs, so
-    // the skip is mostly a safety net.
+    // Follow the two register units independently. This is a fallback for
+    // stale kill/dead flags: scratch-using pseudos have no H/L defs and are
+    // crossed, while an explicit H, L, or HL destination terminates only the
+    // value units it actually replaces.
     for (auto I = std::next(MBBI), E = MBB.end(); I != E; ++I) {
       const MachineInstr &Inst = *I;
-      // Check uses first: if H or L is used, HL is live.
       for (const MachineOperand &MO : Inst.operands()) {
         if (!MO.isReg() || !MO.isUse())
           continue;
         Register Reg = MO.getReg();
-        if (Reg == I8085::H || Reg == I8085::L || Reg == I8085::HL)
+        if ((HReaches && TRI->regsOverlap(Reg, I8085::H)) ||
+            (LReaches && TRI->regsOverlap(Reg, I8085::L)))
           return true;
       }
-      // Check defs: if H, L, or HL is defined, the current value in HL
-      // may be dead -- but only if this is a real instruction or a pseudo
-      // that unconditionally clobbers HL.  Pseudos that use the
-      // PreserveHL pattern (PUSH/POP HL when live) will protect the value,
-      // so we skip them and keep scanning.
-      bool defsHL = false;
+
       for (const MachineOperand &MO : Inst.operands()) {
         if (!MO.isReg() || !MO.isDef())
           continue;
         Register Reg = MO.getReg();
-        if (Reg == I8085::H || Reg == I8085::L || Reg == I8085::HL) {
-          defsHL = true;
-          break;
-        }
+        if (TRI->regsOverlap(Reg, I8085::H))
+          HReaches = false;
+        if (TRI->regsOverlap(Reg, I8085::L))
+          LReaches = false;
       }
-      if (defsHL) {
-        // These pseudos all use isHLOrSubRegLive + PUSH/POP HL in their
-        // expansion.  When they are expanded (later in this pass), they
-        // will preserve HL if it is live.  So their implicit-def $hl
-        // does not genuinely kill the HL value -- skip them.
-        unsigned Opc = Inst.getOpcode();
-        if (Opc == I8085::LOAD_8_WITH_ADDR ||
-            Opc == I8085::LOAD_16_WITH_ADDR ||
-            Opc == I8085::STORE_8 ||
-            Opc == I8085::STORE_16 ||
-            Opc == I8085::STORE_8_AT_OFFSET_WITH_SP ||
-            Opc == I8085::STORE_16_AT_OFFSET_WITH_SP)
-          continue;  // skip this pseudo, keep scanning
-        // Otherwise, HL is genuinely redefined; stop scanning.
+      if (!HReaches && !LReaches)
         return false;
-      }
     }
-    return false;
+
+    LivePhysRegs LiveOuts(*TRI);
+    LiveOuts.addLiveOuts(MBB);
+    return (HReaches && LiveOuts.contains(I8085::H)) ||
+           (LReaches && LiveOuts.contains(I8085::L));
   }
 
   bool shouldPreservePSW(Block &MBB, BlockIt MBBI) const {
@@ -476,18 +457,29 @@ bool I8085ExpandPseudo::expand<I8085::LOAD_16_ADDR_CONTENT>(Block &MBB, BlockIt 
   }
 
   bool HaveSrc = getPairRegs(srcReg, srcLowReg, srcHighReg);
-  if (!HaveSrc && srcReg == I8085::SP) {
+  if (!HaveSrc && srcReg != I8085::SP)
+    return false;
+
+  const bool SrcIsSP = srcReg == I8085::SP;
+  const bool PreserveHL = destReg != I8085::HL && destReg != I8085::SP &&
+                          srcReg != I8085::HL && isHLOrSubRegLive(MBB, MBBI);
+  const bool PreserveSPPSW = SrcIsSP && shouldPreservePSW(MBB, MBBI);
+  if (PreserveHL)
+    buildMI(MBB, MBBI, I8085::PUSH).addReg(I8085::HL);
+  if (PreserveSPPSW) {
+    const bool CanClobberFlags = !isPhysRegLive(MBB, MBBI, I8085::SREG);
+    pushPSW(MBB, MBBI, CanClobberFlags);
+  }
+
+  if (!HaveSrc && SrcIsSP) {
     buildMI(MBB, MBBI, I8085::LXI)
         .addReg(I8085::HL, RegState::Define)
-        .addImm(0);
+        .addImm(2 * (unsigned(PreserveHL) + unsigned(PreserveSPPSW)));
     buildMI(MBB, MBBI, I8085::DAD).addReg(I8085::SP);
     srcLowReg = I8085::L;
     srcHighReg = I8085::H;
     HaveSrc = true;
   }
-
-  if (!HaveSrc)
-    return false;
 
   // Load via HL pointer.
   if (srcReg != I8085::HL && srcReg != I8085::SP) {
@@ -500,10 +492,10 @@ bool I8085ExpandPseudo::expand<I8085::LOAD_16_ADDR_CONTENT>(Block &MBB, BlockIt 
   }
 
   if (destReg == I8085::HL || destReg == I8085::SP) {
-    const bool PreservePSW = shouldPreservePSW(MBB, MBBI);
+    const bool PreservePSW = PreserveSPPSW || shouldPreservePSW(MBB, MBBI);
     const bool CanClobberFlags =
         !isPhysRegLive(MBB, MBBI, I8085::SREG);
-    if (PreservePSW)
+    if (PreservePSW && !PreserveSPPSW)
       pushPSW(MBB, MBBI, CanClobberFlags);
     buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::A, RegState::Define);
     buildINX(MBB, MBBI, I8085::HL);
@@ -515,6 +507,8 @@ bool I8085ExpandPseudo::expand<I8085::LOAD_16_ADDR_CONTENT>(Block &MBB, BlockIt 
       buildMI(MBB, MBBI, I8085::POP).addReg(I8085::PSW, RegState::Define);
     if (destReg == I8085::SP)
       buildMI(MBB, MBBI, I8085::SPHL);
+    if (PreserveHL)
+      buildMI(MBB, MBBI, I8085::POP).addReg(I8085::HL, RegState::Define);
     MI.eraseFromParent();
     return true;
   }
@@ -527,6 +521,10 @@ bool I8085ExpandPseudo::expand<I8085::LOAD_16_ADDR_CONTENT>(Block &MBB, BlockIt 
   buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(destHighReg, RegState::Define);
   if (srcReg == I8085::HL)
     buildDCX(MBB, MBBI, I8085::HL);
+  if (PreserveSPPSW)
+    buildMI(MBB, MBBI, I8085::POP).addReg(I8085::PSW, RegState::Define);
+  if (PreserveHL)
+    buildMI(MBB, MBBI, I8085::POP).addReg(I8085::HL, RegState::Define);
 
   MI.eraseFromParent();
   return true;
@@ -649,14 +647,138 @@ bool I8085ExpandPseudo::expand<I8085::STORE_16_ADDR_CONTENT>(Block &MBB, BlockIt
   unsigned addrReg = MI.getOperand(0).getReg();
   unsigned srcReg = MI.getOperand(1).getReg();
 
+  // Computing an SP address uses HL. Save an HL source in BC first, leaving
+  // the original BC value on the stack. Account for that remaining push when
+  // reconstructing the pre-save SP value.
+  if (addrReg == I8085::SP && srcReg == I8085::HL) {
+    const bool PreserveBC = isPhysRegLive(MBB, MBBI, I8085::BC) ||
+                            isPhysRegLive(MBB, MBBI, I8085::B) ||
+                            isPhysRegLive(MBB, MBBI, I8085::C);
+    const bool PreserveSREG = isPhysRegLive(MBB, MBBI, I8085::SREG);
+    if (PreserveBC)
+      buildMI(MBB, MBBI, I8085::PUSH).addReg(I8085::BC);
+    buildMI(MBB, MBBI, I8085::PUSH).addReg(I8085::HL);
+    buildMI(MBB, MBBI, I8085::POP).addReg(I8085::BC, RegState::Define);
+    if (PreserveSREG)
+      buildMI(MBB, MBBI, I8085::PUSH).addReg(I8085::PSW);
+    buildMI(MBB, MBBI, I8085::LXI)
+        .addReg(I8085::HL, RegState::Define)
+        .addImm(2 * (unsigned(PreserveBC) + unsigned(PreserveSREG)));
+    buildMI(MBB, MBBI, I8085::DAD).addReg(I8085::SP);
+    if (PreserveSREG)
+      buildMI(MBB, MBBI, I8085::POP).addReg(I8085::PSW, RegState::Define);
+    buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::C);
+    buildINX(MBB, MBBI, I8085::HL);
+    buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::B);
+    if (PreserveBC)
+      buildMI(MBB, MBBI, I8085::POP).addReg(I8085::BC, RegState::Define);
+    MI.eraseFromParent();
+    return true;
+  }
+
+  // SP can be an explicit i16 value (for example, from stacksave). Capture
+  // its value before any temporary pushes, then store it through the selected
+  // address while preserving the scratch pair and live PSW state.
+  if (srcReg == I8085::SP) {
+    const bool PreservePSW = shouldPreservePSW(MBB, MBBI);
+    const bool PreserveBC = isPhysRegLive(MBB, MBBI, I8085::BC) ||
+                            isPhysRegLive(MBB, MBBI, I8085::B) ||
+                            isPhysRegLive(MBB, MBBI, I8085::C);
+    const bool CanClobberFlags = !isPhysRegLive(MBB, MBBI, I8085::SREG);
+
+    if (addrReg == I8085::BC || addrReg == I8085::DE) {
+      if (PreservePSW)
+        pushPSW(MBB, MBBI, CanClobberFlags);
+      buildMI(MBB, MBBI, I8085::LXI)
+          .addReg(I8085::HL, RegState::Define)
+          .addImm(PreservePSW ? 2 : 0);
+      buildMI(MBB, MBBI, I8085::DAD).addReg(I8085::SP);
+      buildMI(MBB, MBBI, I8085::MOV)
+          .addReg(I8085::A, RegState::Define)
+          .addReg(I8085::L);
+      buildMI(MBB, MBBI, I8085::STAX).addReg(addrReg);
+      buildINX(MBB, MBBI, addrReg);
+      buildMI(MBB, MBBI, I8085::MOV)
+          .addReg(I8085::A, RegState::Define)
+          .addReg(I8085::H);
+      buildMI(MBB, MBBI, I8085::STAX).addReg(addrReg);
+      buildDCX(MBB, MBBI, addrReg);
+      if (PreservePSW)
+        buildMI(MBB, MBBI, I8085::POP).addReg(I8085::PSW, RegState::Define);
+      MI.eraseFromParent();
+      return true;
+    }
+
+    if (addrReg == I8085::HL) {
+      if (PreserveBC)
+        buildMI(MBB, MBBI, I8085::PUSH).addReg(I8085::BC);
+      buildMI(MBB, MBBI, I8085::PUSH).addReg(I8085::HL);
+      if (PreservePSW)
+        pushPSW(MBB, MBBI, CanClobberFlags);
+      buildMI(MBB, MBBI, I8085::LXI)
+          .addReg(I8085::HL, RegState::Define)
+          .addImm(2 * (1 + unsigned(PreserveBC) + unsigned(PreservePSW)));
+      buildMI(MBB, MBBI, I8085::DAD).addReg(I8085::SP);
+      if (PreservePSW)
+        buildMI(MBB, MBBI, I8085::POP).addReg(I8085::PSW, RegState::Define);
+      buildMI(MBB, MBBI, I8085::MOV)
+          .addReg(I8085::B, RegState::Define)
+          .addReg(I8085::H);
+      buildMI(MBB, MBBI, I8085::MOV)
+          .addReg(I8085::C, RegState::Define)
+          .addReg(I8085::L);
+      buildMI(MBB, MBBI, I8085::POP).addReg(I8085::HL, RegState::Define);
+      buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::C);
+      buildINX(MBB, MBBI, I8085::HL);
+      buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::B);
+      if (PreserveBC)
+        buildMI(MBB, MBBI, I8085::POP).addReg(I8085::BC, RegState::Define);
+      MI.eraseFromParent();
+      return true;
+    }
+
+    if (addrReg == I8085::SP) {
+      if (PreserveBC)
+        buildMI(MBB, MBBI, I8085::PUSH).addReg(I8085::BC);
+      if (PreservePSW)
+        pushPSW(MBB, MBBI, CanClobberFlags);
+      buildMI(MBB, MBBI, I8085::LXI)
+          .addReg(I8085::HL, RegState::Define)
+          .addImm(2 * (unsigned(PreserveBC) + unsigned(PreservePSW)));
+      buildMI(MBB, MBBI, I8085::DAD).addReg(I8085::SP);
+      if (PreservePSW)
+        buildMI(MBB, MBBI, I8085::POP).addReg(I8085::PSW, RegState::Define);
+      buildMI(MBB, MBBI, I8085::MOV)
+          .addReg(I8085::B, RegState::Define)
+          .addReg(I8085::H);
+      buildMI(MBB, MBBI, I8085::MOV)
+          .addReg(I8085::C, RegState::Define)
+          .addReg(I8085::L);
+      buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::C);
+      buildINX(MBB, MBBI, I8085::HL);
+      buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::B);
+      if (PreserveBC)
+        buildMI(MBB, MBBI, I8085::POP).addReg(I8085::BC, RegState::Define);
+      MI.eraseFromParent();
+      return true;
+    }
+
+    return false;
+  }
+
   if (addrReg == I8085::HL && srcReg == I8085::HL) {
-    buildMI(MBB, MBBI, I8085::PUSH).addReg(I8085::BC);
+    const bool PreserveBC = isPhysRegLive(MBB, MBBI, I8085::BC) ||
+                            isPhysRegLive(MBB, MBBI, I8085::B) ||
+                            isPhysRegLive(MBB, MBBI, I8085::C);
+    if (PreserveBC)
+      buildMI(MBB, MBBI, I8085::PUSH).addReg(I8085::BC);
     buildMI(MBB, MBBI, I8085::PUSH).addReg(I8085::HL);
     buildMI(MBB, MBBI, I8085::POP).addReg(I8085::BC, RegState::Define);
     buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::C);
     buildINX(MBB, MBBI, I8085::HL);
     buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::B);
-    buildMI(MBB, MBBI, I8085::POP).addReg(I8085::BC, RegState::Define);
+    if (PreserveBC)
+      buildMI(MBB, MBBI, I8085::POP).addReg(I8085::BC, RegState::Define);
     MI.eraseFromParent();
     return true;
   }
@@ -691,10 +813,15 @@ bool I8085ExpandPseudo::expand<I8085::STORE_16_ADDR_CONTENT>(Block &MBB, BlockIt
   unsigned addrLow, addrHigh;
   bool HaveAddr = getPairRegs(addrReg, addrLow, addrHigh);
   if (!HaveAddr && addrReg == I8085::SP) {
+    const bool PreserveSREG = isPhysRegLive(MBB, MBBI, I8085::SREG);
+    if (PreserveSREG)
+      buildMI(MBB, MBBI, I8085::PUSH).addReg(I8085::PSW);
     buildMI(MBB, MBBI, I8085::LXI)
         .addReg(I8085::HL, RegState::Define)
-        .addImm(0);
+        .addImm(PreserveSREG ? 2 : 0);
     buildMI(MBB, MBBI, I8085::DAD).addReg(I8085::SP);
+    if (PreserveSREG)
+      buildMI(MBB, MBBI, I8085::POP).addReg(I8085::PSW, RegState::Define);
     addrLow = I8085::L;
     addrHigh = I8085::H;
     HaveAddr = true;
@@ -1146,6 +1273,21 @@ bool I8085ExpandPseudo::expand<I8085::STORE_16_WITH_IMM_ADDR>(Block &MBB, BlockI
   return true;
 }
 
+template <>
+bool I8085ExpandPseudo::expand<I8085::COPY_TO_GR16BD>(Block &MBB,
+                                                      BlockIt MBBI) {
+  MachineInstr &MI = *MBBI;
+  Register Dst = MI.getOperand(0).getReg();
+  Register Src = MI.getOperand(1).getReg();
+
+  if (Dst != Src) {
+    buildMI(MBB, MBBI, TargetOpcode::COPY, Dst)
+        .addReg(Src, getKillRegState(MI.getOperand(1).isKill()));
+  }
+
+  MI.eraseFromParent();
+  return true;
+}
 
 template <>
 bool I8085ExpandPseudo::expand<I8085::STORE_16>(Block &MBB, BlockIt MBBI) {
@@ -1173,14 +1315,19 @@ bool I8085ExpandPseudo::expand<I8085::STORE_16>(Block &MBB, BlockIt MBBI) {
 
   if (destReg == I8085::HL) {
     const bool SrcIsKill = MI.getOperand(2).isKill();
+    const bool PreserveSourceHL = !SrcIsKill || isHLOrSubRegLive(MBB, MBBI);
+    const bool PreserveBC = isPhysRegLive(MBB, MBBI, I8085::BC) ||
+                            isPhysRegLive(MBB, MBBI, I8085::B) ||
+                            isPhysRegLive(MBB, MBBI, I8085::C);
     // DAD clobbers carry.  Preserve PSW when flags are live.
     const bool UseDAD = (baseReg != I8085::HL);
     const bool PreservePSW16HL = UseDAD && isPhysRegLive(MBB, MBBI, I8085::SREG);
     int64_t addrOffset = offsetToStore;
     if (baseReg == I8085::SP)
-      addrOffset += 4;
+      addrOffset += PreserveBC ? 4 : 2;
 
-    buildMI(MBB, MBBI, I8085::PUSH).addReg(I8085::BC);
+    if (PreserveBC)
+      buildMI(MBB, MBBI, I8085::PUSH).addReg(I8085::BC);
     buildMI(MBB, MBBI, I8085::PUSH).addReg(I8085::HL);
 
     if (PreservePSW16HL) {
@@ -1206,7 +1353,7 @@ bool I8085ExpandPseudo::expand<I8085::STORE_16>(Block &MBB, BlockIt MBBI) {
     buildINX(MBB, MBBI, I8085::HL);
     buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::B);
 
-    if (!SrcIsKill) {
+    if (PreserveSourceHL) {
       buildMI(MBB, MBBI, I8085::MOV)
           .addReg(I8085::H, RegState::Define)
           .addReg(I8085::B);
@@ -1215,7 +1362,8 @@ bool I8085ExpandPseudo::expand<I8085::STORE_16>(Block &MBB, BlockIt MBBI) {
           .addReg(I8085::C);
     }
 
-    buildMI(MBB, MBBI, I8085::POP).addReg(I8085::BC, RegState::Define);
+    if (PreserveBC)
+      buildMI(MBB, MBBI, I8085::POP).addReg(I8085::BC, RegState::Define);
     MI.eraseFromParent();
     return true;
   }
@@ -1240,7 +1388,7 @@ bool I8085ExpandPseudo::expand<I8085::STORE_16>(Block &MBB, BlockIt MBBI) {
     // If we pushed PSW, SP is 2 lower, so add 2 to compensate.
     buildMI(MBB, MBBI, I8085::LXI)
         .addReg(I8085::HL, RegState::Define)
-        .addImm(PreservePSW16SP ? 2 : 0);
+        .addImm((PreserveHL ? 2 : 0) + (PreservePSW16SP ? 2 : 0));
     buildMI(MBB, MBBI, I8085::DAD).addReg(I8085::SP);
     if (PreservePSW16SP)
       buildMI(MBB, MBBI, I8085::POP).addReg(I8085::PSW, RegState::Define);
@@ -2086,6 +2234,80 @@ bool I8085ExpandPseudo::expand<I8085::ADD_16>(Block &MBB, BlockIt MBBI) {
   bool DstIsDead = MI.getOperand(0).isDead();
   unsigned workReg = destReg;
   bool copyBack = false;
+
+  // Dynamic stack allocation can form `dst = pair + SP`.  SP has no byte
+  // subregisters, but DAD can add it directly to HL.  Preserve an unrelated
+  // live HL value on the stack and compensate for PUSH changing SP.
+  if ((operandOne == I8085::SP || operandTwo == I8085::SP) &&
+      destReg != I8085::SP) {
+    const bool BothAreSP = operandOne == I8085::SP && operandTwo == I8085::SP;
+    const unsigned OtherReg = operandOne == I8085::SP ? operandTwo : operandOne;
+    unsigned destLow = 0, destHigh = 0;
+    if (!getPairRegs(destReg, destLow, destHigh))
+      return false;
+
+    if (!BothAreSP && OtherReg == I8085::HL) {
+      if (destReg == I8085::HL) {
+        buildMI(MBB, MBBI, I8085::DAD).addReg(I8085::SP);
+      } else {
+        const bool PreserveHL = isHLOrSubRegLive(MBB, MBBI);
+        if (PreserveHL)
+          buildMI(MBB, MBBI, I8085::PUSH).addReg(I8085::HL);
+
+        buildMI(MBB, MBBI, I8085::DAD).addReg(I8085::SP);
+        if (PreserveHL) {
+          // DAD observed SP after PUSH, so restore the missing two bytes.
+          buildINX(MBB, MBBI, I8085::HL);
+          buildINX(MBB, MBBI, I8085::HL);
+        }
+        buildMI(MBB, MBBI, I8085::MOV)
+            .addReg(destHigh, RegState::Define | getDeadRegState(DstIsDead))
+            .addReg(I8085::H);
+        buildMI(MBB, MBBI, I8085::MOV)
+            .addReg(destLow, RegState::Define | getDeadRegState(DstIsDead))
+            .addReg(I8085::L);
+
+        if (PreserveHL)
+          buildMI(MBB, MBBI, I8085::POP).addReg(I8085::HL, RegState::Define);
+      }
+
+      MI.eraseFromParent();
+      return true;
+    }
+
+    const bool PreserveHL = destReg != I8085::HL && isHLOrSubRegLive(MBB, MBBI);
+    if (PreserveHL)
+      buildMI(MBB, MBBI, I8085::PUSH).addReg(I8085::HL);
+
+    // With two SP operands, PUSH affects both additions.
+    buildMI(MBB, MBBI, I8085::LXI)
+        .addReg(I8085::HL, RegState::Define)
+        .addImm(PreserveHL ? (BothAreSP ? 4 : 2) : 0);
+    buildMI(MBB, MBBI, I8085::DAD).addReg(I8085::SP);
+    if (BothAreSP) {
+      buildMI(MBB, MBBI, I8085::DAD).addReg(I8085::SP);
+    } else {
+      unsigned otherLow = 0, otherHigh = 0;
+      if (!getPairRegs(OtherReg, otherLow, otherHigh))
+        return false;
+      buildMI(MBB, MBBI, I8085::DAD).addReg(OtherReg);
+    }
+
+    if (destReg != I8085::HL) {
+      buildMI(MBB, MBBI, I8085::MOV)
+          .addReg(destHigh, RegState::Define | getDeadRegState(DstIsDead))
+          .addReg(I8085::H);
+      buildMI(MBB, MBBI, I8085::MOV)
+          .addReg(destLow, RegState::Define | getDeadRegState(DstIsDead))
+          .addReg(I8085::L);
+    }
+
+    if (PreserveHL)
+      buildMI(MBB, MBBI, I8085::POP).addReg(I8085::HL, RegState::Define);
+
+    MI.eraseFromParent();
+    return true;
+  }
 
   if (destReg == operandTwo && destReg != operandOne) {
     std::swap(operandOne, operandTwo);
@@ -3439,6 +3661,7 @@ bool I8085ExpandPseudo::expandMI(Block &MBB, BlockIt MBBI) {
     EXPAND(I8085::RR_8);
     EXPAND(I8085::ASR_8);
     EXPAND(I8085::STORE_16_ADDR_CONTENT);
+    EXPAND(I8085::COPY_TO_GR16BD);
     EXPAND(I8085::STORE_8_ADDR_CONTENT);
     EXPAND(I8085::CALL_INDIRECT);
     // EXPAND(I8085::SET_NE_16);

@@ -17,9 +17,10 @@ define void @increment_global() {
 ; CHECK: MOV E, M
 ; CHECK: ADD C
 ; CHECK: ADC B
-; CHECK: MOV M, E
+; CHECK: MOV C, E
+; CHECK: MOV M, C
 ; CHECK: INX H
-; CHECK: MOV M, D
+; CHECK: MOV M, B
 ; CHECK: RET
 entry:
   %val = load i16, i16* @counter

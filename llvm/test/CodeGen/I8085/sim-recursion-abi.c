@@ -3,7 +3,8 @@
 // RUN:   %i8085_sdk/sysroot/crt/crt0.S -o %t.crt0.o
 // RUN: %i8085_clang -target i8085-unknown-elf -O0 -ffreestanding -fno-builtin -nostdlib -emit-llvm -c \
 // RUN:   %s -o %t.bc
-// RUN: %i8085_llc -mtriple=i8085-unknown-elf -filetype=obj %t.bc -o %t.o
+// RUN: %i8085_llc -mtriple=i8085-unknown-elf -verify-machineinstrs \
+// RUN:   -filetype=obj %t.bc -o %t.o
 // RUN: %i8085_lld -m i8085elf \
 // RUN:   -T %i8085_sdk/sysroot/ldscripts/i8085-32kram-32krom.ld -Map %t.map \
 // RUN:   -o %t.elf %t.crt0.o %t.o %i8085_sdk/sysroot/lib/libgcc.a
@@ -11,7 +12,8 @@
 // RUN: %i8085_sim -S -q -n 2000000 -d 0x0202:0x4 %t.bin 2>&1 | FileCheck %s --check-prefix=RECURSE
 // RUN: %i8085_clang -target i8085-unknown-elf -O1 -ffreestanding -fno-builtin -nostdlib -emit-llvm -c \
 // RUN:   %s -o %t.o1.bc
-// RUN: %i8085_llc -O1 -mtriple=i8085-unknown-elf -filetype=obj %t.o1.bc -o %t.o1.o
+// RUN: %i8085_llc -O1 -mtriple=i8085-unknown-elf -verify-machineinstrs \
+// RUN:   -filetype=obj %t.o1.bc -o %t.o1.o
 // RUN: %i8085_lld -m i8085elf \
 // RUN:   -T %i8085_sdk/sysroot/ldscripts/i8085-32kram-32krom.ld -Map %t.o1.map \
 // RUN:   -o %t.o1.elf %t.crt0.o %t.o1.o %i8085_sdk/sysroot/lib/libgcc.a
@@ -19,7 +21,8 @@
 // RUN: %i8085_sim -S -q -n 2000000 -d 0x0202:0x4 %t.o1.bin 2>&1 | FileCheck %s --check-prefix=RECURSE
 // RUN: %i8085_clang -target i8085-unknown-elf -Os -ffreestanding -fno-builtin -nostdlib -emit-llvm -c \
 // RUN:   %s -o %t.os.bc
-// RUN: %i8085_llc -O2 -mtriple=i8085-unknown-elf -filetype=obj %t.os.bc -o %t.os.o
+// RUN: %i8085_llc -O2 -mtriple=i8085-unknown-elf -verify-machineinstrs \
+// RUN:   -filetype=obj %t.os.bc -o %t.os.o
 // RUN: %i8085_lld -m i8085elf \
 // RUN:   -T %i8085_sdk/sysroot/ldscripts/i8085-32kram-32krom.ld -Map %t.os.map \
 // RUN:   -o %t.os.elf %t.crt0.o %t.os.o %i8085_sdk/sysroot/lib/libgcc.a

@@ -24,10 +24,10 @@ define i1 @cmp_sext_i8(i8 %a, i8 %b) {
 ; CHECK-NEXT:  ; %bb.1: ; %entry
 ; CHECK-NEXT:    MOV A, E
 ; CHECK-NEXT:    SUB C
-; CHECK-NEXT:    MOV C, A
+; CHECK-NEXT:    MOV E, A
 ; CHECK-NEXT:    MOV A, D
 ; CHECK-NEXT:    SBB B
-; CHECK-NEXT:    MOV B, A
+; CHECK-NEXT:    MOV D, A
 ; CHECK-NEXT:    JNC LBB0_4
 ; CHECK-NEXT:  LBB0_2: ; %entry
 ; CHECK-NEXT:    MVI A, 1
@@ -61,10 +61,10 @@ define i1 @cmp_zext_i8(i8 %a, i8 %b) {
 ; CHECK-NEXT:    MVI D, 0
 ; CHECK-NEXT:    MOV A, E
 ; CHECK-NEXT:    SUB C
-; CHECK-NEXT:    MOV C, A
+; CHECK-NEXT:    MOV E, A
 ; CHECK-NEXT:    MOV A, D
 ; CHECK-NEXT:    SBB B
-; CHECK-NEXT:    MOV B, A
+; CHECK-NEXT:    MOV D, A
 ; CHECK-NEXT:    JNC LBB1_2
 ; CHECK-NEXT:  ; %bb.1: ; %entry
 ; CHECK-NEXT:    MVI A, 1

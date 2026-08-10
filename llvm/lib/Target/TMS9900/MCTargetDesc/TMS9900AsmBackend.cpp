@@ -157,7 +157,7 @@ uint64_t TMS9900AsmBackend::adjustFixupValue(const MCFixup &Fixup,
       Ctx.reportError(Fixup.getLoc(), "fixup value must be 2-byte aligned");
 
     // Convert byte offset to word offset
-    int16_t Offset = Value;
+    int64_t Offset = static_cast<int64_t>(Value);
     Offset >>= 1;
     // PC points to next instruction, so subtract 1
     --Offset;
@@ -187,12 +187,18 @@ void TMS9900AsmBackend::applyFixup(const MCAssembler &Asm, const MCFixup &Fixup,
   unsigned Kind = Fixup.getKind();
 
   // Handle TMS9900-specific fixups
-  if (Kind == TMS9900::fixup_tms9900_pcrel_8 ||
-      Kind == TMS9900::fixup_tms9900_8) {
+  if (Kind == TMS9900::fixup_tms9900_pcrel_8) {
     // 8-bit displacement in the LOW byte of a 16-bit instruction word
     // For big-endian, low byte is at offset+1
     assert(Offset + 2 <= Data.size() && "Invalid fixup offset!");
     Data[Offset + 1] = Value & 0xFF;
+    return;
+  }
+
+  if (Kind == TMS9900::fixup_tms9900_8) {
+    // CRU fixups identify the exact low-byte location in the instruction.
+    assert(Offset < Data.size() && "Invalid fixup offset!");
+    Data[Offset] = Value & 0xFF;
     return;
   }
 

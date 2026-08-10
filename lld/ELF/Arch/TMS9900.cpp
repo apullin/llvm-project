@@ -63,6 +63,10 @@ void TMS9900::relocate(uint8_t *loc, const Relocation &rel, uint64_t val) const 
     checkIntUInt(ctx, loc, val, 8, rel);
     *loc = val;
     break;
+  case R_TMS9900_CRU_8:
+    checkInt(ctx, loc, static_cast<int64_t>(val), 8, rel);
+    *loc = val;
+    break;
   case R_TMS9900_16:
     checkIntUInt(ctx, loc, val, 16, rel);
     write16be(loc, val);
@@ -74,8 +78,9 @@ void TMS9900::relocate(uint8_t *loc, const Relocation &rel, uint64_t val) const 
   case R_TMS9900_PCREL_8: {
     // PC-relative 8-bit offset (used for JMP instructions)
     // The offset is in words, not bytes, and is relative to PC+2
-    int64_t offset = (int64_t)val - 2;  // PC points to next instruction
-    offset >>= 1;  // Convert byte offset to word offset
+    checkAlignment(ctx, loc, val, 2, rel);
+    int64_t offset = static_cast<int64_t>(val) - 2;
+    offset /= 2;
     checkInt(ctx, loc, offset, 8, rel);
     // The displacement is in the low byte of the instruction
     loc[1] = (uint8_t)offset;

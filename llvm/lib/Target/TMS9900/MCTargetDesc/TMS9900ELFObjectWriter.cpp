@@ -34,7 +34,7 @@ protected:
     // Translate fixup kind to ELF relocation type.
     switch (Fixup.getTargetKind()) {
     case FK_Data_1:
-      return ELF::R_TMS9900_NONE;  // 8-bit data, no relocation needed typically
+      return ELF::R_TMS9900_8;
     case FK_Data_2:
       return ELF::R_TMS9900_16;
     case FK_Data_4:
@@ -42,7 +42,7 @@ protected:
     case TMS9900::fixup_tms9900_16:
       return ELF::R_TMS9900_16;
     case TMS9900::fixup_tms9900_8:
-      return ELF::R_TMS9900_8;
+      return ELF::R_TMS9900_CRU_8;
     case TMS9900::fixup_tms9900_pcrel_8:
       return ELF::R_TMS9900_PCREL_8;
     case TMS9900::fixup_tms9900_pcrel_16:

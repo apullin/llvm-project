@@ -167,7 +167,10 @@ unsigned TMS9900MCCodeEmitter::getCRUDispEncoding(const MCInst &MI, unsigned Op,
     return MO.getImm() & 0xFF;
 
   assert(MO.isExpr() && "Expr operand expected");
-  Fixups.push_back(MCFixup::create(0, MO.getExpr(),
+  // The signed CRU displacement occupies the low byte of the instruction.
+  // Record its exact byte address so ELF relocation processing does not
+  // overwrite the high-byte opcode.
+  Fixups.push_back(MCFixup::create(1, MO.getExpr(),
       static_cast<MCFixupKind>(TMS9900::fixup_tms9900_8), MI.getLoc()));
   return 0;
 }

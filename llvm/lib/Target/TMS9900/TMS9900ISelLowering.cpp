@@ -1284,11 +1284,12 @@ TMS9900TargetLowering::EmitInstrWithCustomInserter(MachineInstr &MI,
     BuildMI(StartBB, DL, TII.get(TMS9900::MOVrr), TMS9900::R3)
         .addReg(DivisorReg);
 
-    // Test R1 (dividend) - JLT if negative (signed compare with 0)
-    BuildMI(StartBB, DL, TII.get(TMS9900::CI))
+    // Keep each compare and branch in one terminator pseudo. Otherwise the
+    // scheduler may place another status-defining instruction between them.
+    BuildMI(StartBB, DL, TII.get(TMS9900::CMPBRri))
         .addReg(TMS9900::R1)
-        .addImm(0);
-    BuildMI(StartBB, DL, TII.get(TMS9900::JLT))
+        .addImm(0)
+        .addImm(ISD::SETLT)
         .addMBB(DividendNegBB);
     BuildMI(StartBB, DL, TII.get(TMS9900::JMP))
         .addMBB(CheckDivisorBB);
@@ -1305,11 +1306,11 @@ TMS9900TargetLowering::EmitInstrWithCustomInserter(MachineInstr &MI,
         .addMBB(CheckDivisorBB);
     DividendNegBB->addSuccessor(CheckDivisorBB);
 
-    // CheckDivisorBB: Check divisor sign
-    BuildMI(CheckDivisorBB, DL, TII.get(TMS9900::CI))
+    // CheckDivisorBB: Check divisor sign.
+    BuildMI(CheckDivisorBB, DL, TII.get(TMS9900::CMPBRri))
         .addReg(TMS9900::R3)
-        .addImm(0);
-    BuildMI(CheckDivisorBB, DL, TII.get(TMS9900::JLT))
+        .addImm(0)
+        .addImm(ISD::SETLT)
         .addMBB(DivisorNegBB);
     BuildMI(CheckDivisorBB, DL, TII.get(TMS9900::JMP))
         .addMBB(DoDivideBB);
@@ -1332,11 +1333,11 @@ TMS9900TargetLowering::EmitInstrWithCustomInserter(MachineInstr &MI,
     BuildMI(DoDivideBB, DL, TII.get(TMS9900::DIVrr))
         .addReg(TMS9900::R3)
         .addReg(TMS9900::R0);
-    // Check if we need to negate result (R2 != 0)
-    BuildMI(DoDivideBB, DL, TII.get(TMS9900::CI))
+    // Check if we need to negate result (R2 != 0).
+    BuildMI(DoDivideBB, DL, TII.get(TMS9900::CMPBRri))
         .addReg(TMS9900::R2)
-        .addImm(0);
-    BuildMI(DoDivideBB, DL, TII.get(TMS9900::JNE))
+        .addImm(0)
+        .addImm(ISD::SETNE)
         .addMBB(NegateResultBB);
     BuildMI(DoDivideBB, DL, TII.get(TMS9900::JMP))
         .addMBB(DoneBB);
@@ -1419,11 +1420,12 @@ TMS9900TargetLowering::EmitInstrWithCustomInserter(MachineInstr &MI,
     BuildMI(StartBB, DL, TII.get(TMS9900::MOVrr), TMS9900::R3)
         .addReg(DivisorReg);
 
-    // Test R1 (dividend) - JLT if negative
-    BuildMI(StartBB, DL, TII.get(TMS9900::CI))
+    // Keep each compare and branch in one terminator pseudo. Otherwise the
+    // scheduler may place another status-defining instruction between them.
+    BuildMI(StartBB, DL, TII.get(TMS9900::CMPBRri))
         .addReg(TMS9900::R1)
-        .addImm(0);
-    BuildMI(StartBB, DL, TII.get(TMS9900::JLT))
+        .addImm(0)
+        .addImm(ISD::SETLT)
         .addMBB(DividendNegBB);
     BuildMI(StartBB, DL, TII.get(TMS9900::JMP))
         .addMBB(CheckDivisorBB);
@@ -1439,11 +1441,11 @@ TMS9900TargetLowering::EmitInstrWithCustomInserter(MachineInstr &MI,
         .addMBB(CheckDivisorBB);
     DividendNegBB->addSuccessor(CheckDivisorBB);
 
-    // CheckDivisorBB: Check divisor sign (only need abs value, not tracking)
-    BuildMI(CheckDivisorBB, DL, TII.get(TMS9900::CI))
+    // CheckDivisorBB: Check divisor sign (only need abs value, not tracking).
+    BuildMI(CheckDivisorBB, DL, TII.get(TMS9900::CMPBRri))
         .addReg(TMS9900::R3)
-        .addImm(0);
-    BuildMI(CheckDivisorBB, DL, TII.get(TMS9900::JLT))
+        .addImm(0)
+        .addImm(ISD::SETLT)
         .addMBB(DivisorNegBB);
     BuildMI(CheckDivisorBB, DL, TII.get(TMS9900::JMP))
         .addMBB(DoDivideBB);
@@ -1464,11 +1466,11 @@ TMS9900TargetLowering::EmitInstrWithCustomInserter(MachineInstr &MI,
     BuildMI(DoDivideBB, DL, TII.get(TMS9900::DIVrr))
         .addReg(TMS9900::R3)
         .addReg(TMS9900::R0);
-    // Check if we need to negate remainder (dividend was negative)
-    BuildMI(DoDivideBB, DL, TII.get(TMS9900::CI))
+    // Check if we need to negate remainder (dividend was negative).
+    BuildMI(DoDivideBB, DL, TII.get(TMS9900::CMPBRri))
         .addReg(TMS9900::R2)
-        .addImm(0);
-    BuildMI(DoDivideBB, DL, TII.get(TMS9900::JNE))
+        .addImm(0)
+        .addImm(ISD::SETNE)
         .addMBB(NegateResultBB);
     BuildMI(DoDivideBB, DL, TII.get(TMS9900::JMP))
         .addMBB(DoneBB);

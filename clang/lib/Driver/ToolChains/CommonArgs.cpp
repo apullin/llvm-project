@@ -88,8 +88,11 @@ static bool useFramePointerForTargetByDefault(const llvm::opt::ArgList &Args,
   case llvm::Triple::wasm32:
   case llvm::Triple::wasm64:
   case llvm::Triple::msp430:
+  case llvm::Triple::tms9900:
     // XCore never wants frame pointers, regardless of OS.
     // WebAssembly never wants frame pointers.
+    // Small embedded targets reserve scarce registers only when requested or
+    // when a function actually needs a stable frame base.
     return false;
   case llvm::Triple::ppc:
   case llvm::Triple::ppcle:

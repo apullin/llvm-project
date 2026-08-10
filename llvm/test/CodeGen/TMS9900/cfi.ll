@@ -42,12 +42,43 @@ define void @with_frame() uwtable #0 {
   ret void
 }
 
+; CHECK-LABEL: realigned_frame:
+; CHECK:      MOV R11,*R10
+; CHECK:      .cfi_offset 11, -2
+; CHECK:      MOV R13,*R10
+; CHECK:      .cfi_offset 13, -4
+; CHECK:      MOV R14,*R10
+; CHECK:      .cfi_offset 14, -6
+; CHECK:      MOV R10,R13
+; CHECK:      .cfi_def_cfa 13, 6
+; CHECK:      ANDI R10,-16
+; CHECK:      MOV R13,R10
+; CHECK:      .cfi_def_cfa 10, 6
+; CHECK:      MOV *R10+,R14
+; CHECK:      .cfi_restore 14
+; CHECK:      MOV *R10+,R13
+; CHECK:      .cfi_restore 13
+; CHECK:      MOV *R10+,R11
+; CHECK:      .cfi_restore 11
+; CHECK:      .cfi_def_cfa_offset 0
+define void @realigned_frame() uwtable {
+  %slot = alloca i16, align 16
+  store volatile i16 1, ptr %slot, align 16
+  call void @callee()
+  ret void
+}
+
 ; The encoded FDE rows must carry the same return-address transitions. The
 ; exact instruction addresses are deliberately left unconstrained.
 ; FRAME: .eh_frame contents:
 ; FRAME: DW_CFA_offset: reg11 -2
 ; FRAME: DW_CFA_restore: reg11
 ; FRAME: DW_CFA_offset: reg13 -4
+; FRAME: DW_CFA_restore: reg13
+; FRAME: DW_CFA_restore: reg11
+; FRAME: DW_CFA_offset: reg13 -4
+; FRAME: DW_CFA_offset: reg14 -6
+; FRAME: DW_CFA_restore: reg14
 ; FRAME: DW_CFA_restore: reg13
 ; FRAME: DW_CFA_restore: reg11
 

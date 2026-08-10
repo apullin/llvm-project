@@ -64,7 +64,8 @@ bool TMS9900FrameLowering::hasFPImpl(const MachineFunction &MF) const {
     return MFI.hasVarSizedObjects() || MFI.isFrameAddressTaken();
 
   return MF.getTarget().Options.DisableFramePointerElim(MF) ||
-         MFI.hasVarSizedObjects() || MFI.isFrameAddressTaken();
+         MFI.hasVarSizedObjects() || MFI.isFrameAddressTaken() ||
+         MFI.shouldRealignStack();
 }
 
 static int64_t getFramePointerSaveOffset(const MachineFunction &MF) {
@@ -95,6 +96,7 @@ void TMS9900FrameLowering::emitPrologue(MachineFunction &MF,
   const bool HasFP = hasFP(MF);
   const TMS9900Subtarget &STI = MF.getSubtarget<TMS9900Subtarget>();
   const TMS9900InstrInfo &TII = *STI.getInstrInfo();
+  const bool RealignsStack = STI.getRegisterInfo()->hasStackRealignment(MF);
   DebugLoc DL;
 
   if (MBBI != MBB.end())
@@ -141,6 +143,54 @@ void TMS9900FrameLowering::emitPrologue(MachineFunction &MF,
         MCCFIInstruction::createOffset(nullptr, 11, -2));
     BuildMI(MBB, MBBI, DL, TII.get(TargetOpcode::CFI_INSTRUCTION))
         .addCFIIndex(CFIIndex);
+  }
+
+  if (RealignsStack) {
+    uint64_t CFAOffset = SavesLR ? 2 : 0;
+
+    // Preserve the caller's frame anchor and aligned base outside the
+    // variably positioned frame. R13 then records the exact pre-alignment SP,
+    // while R14 will address local objects from the aligned frame base.
+    for (Register Reg : {TMS9900::R13, TMS9900::R14}) {
+      BuildMI(MBB, MBBI, DL, TII.get(TMS9900::DECTr), TMS9900::R10)
+          .addReg(TMS9900::R10);
+      BuildMI(MBB, MBBI, DL, TII.get(TMS9900::MOVmi))
+          .addReg(TMS9900::R10)
+          .addReg(Reg);
+
+      CFAOffset += 2;
+      unsigned CFIIndex = MF.addFrameInst(
+          MCCFIInstruction::cfiDefCfaOffset(nullptr, CFAOffset));
+      BuildMI(MBB, MBBI, DL, TII.get(TargetOpcode::CFI_INSTRUCTION))
+          .addCFIIndex(CFIIndex);
+      CFIIndex = MF.addFrameInst(MCCFIInstruction::createOffset(
+          nullptr, Reg == TMS9900::R13 ? 13 : 14,
+          -static_cast<int64_t>(CFAOffset)));
+      BuildMI(MBB, MBBI, DL, TII.get(TargetOpcode::CFI_INSTRUCTION))
+          .addCFIIndex(CFIIndex);
+    }
+
+    BuildMI(MBB, MBBI, DL, TII.get(TMS9900::MOVrr), TMS9900::R13)
+        .addReg(TMS9900::R10);
+    unsigned CFIIndex = MF.addFrameInst(
+        MCCFIInstruction::cfiDefCfa(nullptr, 13, CFAOffset));
+    BuildMI(MBB, MBBI, DL, TII.get(TargetOpcode::CFI_INSTRUCTION))
+        .addCFIIndex(CFIIndex);
+
+    // Subtract the nominal frame size, then round down. The rounding itself
+    // supplies up to MaxAlign-2 bytes of alignment slop because R10 is always
+    // at least word-aligned.
+    uint64_t MaxAlign = MFI.getMaxAlign().value();
+    if (StackSize > 0)
+      BuildMI(MBB, MBBI, DL, TII.get(TMS9900::AI), TMS9900::R10)
+          .addReg(TMS9900::R10)
+          .addImm(-static_cast<int64_t>(StackSize));
+    BuildMI(MBB, MBBI, DL, TII.get(TMS9900::ANDI), TMS9900::R10)
+        .addReg(TMS9900::R10)
+        .addImm(-static_cast<int64_t>(MaxAlign));
+    BuildMI(MBB, MBBI, DL, TII.get(TMS9900::MOVrr), TMS9900::R14)
+        .addReg(TMS9900::R10);
+    return;
   }
 
   // Allocate stack space.
@@ -211,6 +261,7 @@ void TMS9900FrameLowering::emitEpilogue(MachineFunction &MF,
   const bool HasFP = hasFP(MF);
   const TMS9900Subtarget &STI = MF.getSubtarget<TMS9900Subtarget>();
   const TMS9900InstrInfo &TII = *STI.getInstrInfo();
+  const bool RealignsStack = STI.getRegisterInfo()->hasStackRealignment(MF);
   DebugLoc DL;
 
   if (MBBI != MBB.end())
@@ -221,6 +272,63 @@ void TMS9900FrameLowering::emitEpilogue(MachineFunction &MF,
 
   if (!RestoresLR && StackSize == 0 && !HasFP) {
     // Leaf function with no locals - no epilogue needed
+    return;
+  }
+
+  if (RealignsStack) {
+    uint64_t CFAOffset = (RestoresLR ? 2 : 0) + 4;
+
+    // Discard dynamic allocations and alignment slop in one step.
+    BuildMI(MBB, MBBI, DL, TII.get(TMS9900::MOVrr), TMS9900::R10)
+        .addReg(TMS9900::R13);
+    unsigned CFIIndex = MF.addFrameInst(
+        MCCFIInstruction::cfiDefCfa(nullptr, 10, CFAOffset));
+    BuildMI(MBB, MBBI, DL, TII.get(TargetOpcode::CFI_INSTRUCTION))
+        .addCFIIndex(CFIIndex);
+
+    BuildMI(MBB, MBBI, DL, TII.get(TMS9900::MOVpim))
+        .addDef(TMS9900::R14)
+        .addDef(TMS9900::R10)
+        .addUse(TMS9900::R10);
+    CFIIndex = MF.addFrameInst(
+        MCCFIInstruction::createRestore(nullptr, 14));
+    BuildMI(MBB, MBBI, DL, TII.get(TargetOpcode::CFI_INSTRUCTION))
+        .addCFIIndex(CFIIndex);
+    CFAOffset -= 2;
+    CFIIndex = MF.addFrameInst(
+        MCCFIInstruction::cfiDefCfaOffset(nullptr, CFAOffset));
+    BuildMI(MBB, MBBI, DL, TII.get(TargetOpcode::CFI_INSTRUCTION))
+        .addCFIIndex(CFIIndex);
+
+    BuildMI(MBB, MBBI, DL, TII.get(TMS9900::MOVpim))
+        .addDef(TMS9900::R13)
+        .addDef(TMS9900::R10)
+        .addUse(TMS9900::R10);
+    CFIIndex = MF.addFrameInst(
+        MCCFIInstruction::createRestore(nullptr, 13));
+    BuildMI(MBB, MBBI, DL, TII.get(TargetOpcode::CFI_INSTRUCTION))
+        .addCFIIndex(CFIIndex);
+    CFAOffset -= 2;
+    CFIIndex = MF.addFrameInst(
+        MCCFIInstruction::cfiDefCfaOffset(nullptr, CFAOffset));
+    BuildMI(MBB, MBBI, DL, TII.get(TargetOpcode::CFI_INSTRUCTION))
+        .addCFIIndex(CFIIndex);
+
+    if (RestoresLR) {
+      BuildMI(MBB, MBBI, DL, TII.get(TMS9900::MOVpim))
+          .addDef(TMS9900::R11)
+          .addDef(TMS9900::R10)
+          .addUse(TMS9900::R10);
+      CFIIndex = MF.addFrameInst(
+          MCCFIInstruction::createRestore(nullptr, 11));
+      BuildMI(MBB, MBBI, DL, TII.get(TargetOpcode::CFI_INSTRUCTION))
+          .addCFIIndex(CFIIndex);
+    }
+
+    CFIIndex = MF.addFrameInst(
+        MCCFIInstruction::cfiDefCfaOffset(nullptr, 0));
+    BuildMI(MBB, MBBI, DL, TII.get(TargetOpcode::CFI_INSTRUCTION))
+        .addCFIIndex(CFIIndex);
     return;
   }
 
@@ -354,14 +462,23 @@ void TMS9900FrameLowering::processFunctionBeforeFrameFinalized(
   const Function &F = MF.getFunction();
   const bool NeedsStableFrame =
       MFI.hasVarSizedObjects() || MFI.isFrameAddressTaken();
+  const bool NeedsRealignment = MFI.shouldRealignStack();
 
-  if (NeedsStableFrame &&
-      (F.hasFnAttribute(Attribute::Naked) ||
-       F.hasFnAttribute("interrupt")))
+  const bool HasRestrictedPrologue =
+      F.hasFnAttribute(Attribute::Naked) || F.hasFnAttribute("interrupt");
+  if (NeedsStableFrame && HasRestrictedPrologue)
     report_fatal_error("TMS9900: variable stack objects and frame addresses "
                        "are unsupported in naked and interrupt functions");
+  if (NeedsRealignment && HasRestrictedPrologue)
+    report_fatal_error("TMS9900: stack realignment is unsupported in naked "
+                       "and interrupt functions");
 
   if (!hasFP(MF))
+    return;
+
+  // Realigned frames preserve R13 and R14 with explicit pushes because their
+  // final stack offsets depend on the runtime alignment adjustment.
+  if (NeedsRealignment)
     return;
 
   auto *FuncInfo = MF.getInfo<TMS9900MachineFunctionInfo>();

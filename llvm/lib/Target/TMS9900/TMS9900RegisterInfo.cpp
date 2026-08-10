@@ -65,6 +65,11 @@ BitVector TMS9900RegisterInfo::getReservedRegs(const MachineFunction &MF) const 
   if (Subtarget.getFrameLowering()->hasFP(MF))
     Reserved.set(TMS9900::R13);
 
+  // A realigned frame uses R13 to recover the incoming stack pointer and R14
+  // as the stable, aligned base for local frame objects.
+  if (hasStackRealignment(MF))
+    Reserved.set(TMS9900::R14);
+
   // R12 is the CRU base address register.  Reserve it only when the
   // program uses CRU instructions (-mattr=+reserve-cru).
   if (Subtarget.reserveCRU())
@@ -87,6 +92,19 @@ BitVector TMS9900RegisterInfo::getReservedRegs(const MachineFunction &MF) const 
   return Reserved;
 }
 
+bool TMS9900RegisterInfo::canRealignStack(const MachineFunction &MF) const {
+  if (!TargetRegisterInfo::canRealignStack(MF))
+    return false;
+
+  const Function &F = MF.getFunction();
+  if (F.hasFnAttribute(Attribute::Naked) || F.hasFnAttribute("interrupt"))
+    return false;
+
+  const MachineRegisterInfo &MRI = MF.getRegInfo();
+  return MRI.canReserveReg(TMS9900::R13) &&
+         MRI.canReserveReg(TMS9900::R14);
+}
+
 bool TMS9900RegisterInfo::requiresRegisterScavenging(
     const MachineFunction &MF) const {
   return true;
@@ -104,38 +122,45 @@ bool TMS9900RegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator MI,
   const TargetRegisterInfo &TRI = *Subtarget.getRegisterInfo();
   const MachineFrameInfo &MFI = MF.getFrameInfo();
   const bool HasFP = Subtarget.getFrameLowering()->hasFP(MF);
-  const Register FrameReg = HasFP ? TMS9900::R13 : TMS9900::R10;
+  const bool RealignsStack = hasStackRealignment(MF);
+  Register FrameReg = HasFP ? TMS9900::R13 : TMS9900::R10;
   DebugLoc DL = MI_ref.getDebugLoc();
 
   int FrameIndex = MI_ref.getOperand(FIOperandNum).getIndex();
-  int64_t Offset = MFI.getObjectOffset(FrameIndex) + (HasFP ? 0 : SPAdj);
+  int64_t Offset;
 
-  // Add the offset from the fixed frame base (R10 normally, R13 with an FP).
-  // Stack objects are at negative offsets from the original SP,
-  // but we need to compute from the current SP (after prologue allocation)
-  //
-  // Stack layout for non-leaf functions:
-  //   SP_entry            (4-byte aligned)
-  //     [R11, 2 bytes]    -- DECT R10
-  //   SP_entry - 2
-  //     [locals, StackSize bytes]
-  //     [2 bytes padding] -- for 4-byte alignment after DECT
-  //   frame base = SP_entry - StackSize - 4
-  //
-  // LLVM's ObjectOffset is relative to (SP_entry - 2), the frame pointer.
-  // For non-fixed objects: address = (SP + StackSize + 2) + ObjectOffset
-  // For fixed objects:     address = (SP + StackSize + 4) + ObjectOffset
-  int64_t StackAdj = MFI.getStackSize();
-  const Function &F = MF.getFunction();
-  bool IsNonLeaf = MFI.hasCalls() &&
-      !F.hasFnAttribute(Attribute::Naked) && !F.hasFnAttribute("interrupt");
-  if (IsNonLeaf) {
-    StackAdj += 2; // alignment padding (prologue allocates StackSize+2)
+  if (RealignsStack) {
+    const Function &F = MF.getFunction();
+    const bool SavesLR = MFI.hasCalls() && !F.hasFnAttribute("interrupt");
+
+    if (MFI.isFixedObjectIndex(FrameIndex)) {
+      // R13 points below the manually saved R13/R14 pair.  Incoming fixed
+      // objects are relative to the entry stack pointer above that pair and,
+      // for non-leaf functions, the saved link register.
+      FrameReg = TMS9900::R13;
+      Offset = MFI.getObjectOffset(FrameIndex) + 4 + (SavesLR ? 2 : 0);
+    } else {
+      // R14 is established after aligning R10 and remains stable while R10 is
+      // adjusted for dynamic allocas and outgoing call frames.
+      FrameReg = TMS9900::R14;
+      Offset = MFI.getObjectOffset(FrameIndex) + MFI.getStackSize();
+    }
+  } else {
+    Offset = MFI.getObjectOffset(FrameIndex) + (HasFP ? 0 : SPAdj);
+
+    // Add the offset from the ordinary fixed frame base (R10 normally, R13
+    // with an FP). LLVM's object offsets are relative to the incoming SP.
+    int64_t StackAdj = MFI.getStackSize();
+    const Function &F = MF.getFunction();
+    bool IsNonLeaf = MFI.hasCalls() &&
+                     !F.hasFnAttribute(Attribute::Naked) &&
+                     !F.hasFnAttribute("interrupt");
+    if (IsNonLeaf)
+      StackAdj += 2; // alignment padding after the saved link register
+    if (MFI.isFixedObjectIndex(FrameIndex) && IsNonLeaf)
+      StackAdj += 2; // saved return address
+    Offset += StackAdj;
   }
-  if (MFI.isFixedObjectIndex(FrameIndex) && IsNonLeaf) {
-    StackAdj += 2; // Account for the saved return address (R11).
-  }
-  Offset += StackAdj;
 
   unsigned Opc = MI_ref.getOpcode();
 

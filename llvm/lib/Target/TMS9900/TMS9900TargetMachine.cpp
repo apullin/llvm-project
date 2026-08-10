@@ -46,6 +46,7 @@ static std::string computeDataLayout(const Triple &TT) {
   // - 16-bit integers as native (i16:16:16)
   // - 8-bit aligned bytes (i8:8:8)
   // - 32-bit integers: 16-bit ABI / 32-bit preferred alignment (i32:16:32)
+  // - 64-bit integers and scalar floats: 16-bit ABI/preferred alignment
   // - Stack alignment: 32-bit (S32)
   //   NOTE: Stack MUST be 4-byte aligned (S32, matching FrameLowering Align(4))
   //   because LLVM's type legalizer uses OR-instead-of-ADD to compute the
@@ -54,7 +55,8 @@ static std::string computeDataLayout(const Triple &TT) {
   //   requires 4-byte alignment. With S16/Align(2), addresses like 0xFAFE
   //   cause ORI to be a no-op, reading the high word twice.
   // - Native integer width: 16-bit (n16)
-  return "E-p:16:16-i8:8:8-i16:16:16-i32:16:32-n16-S32";
+  return "E-p:16:16-i8:8:8-i16:16:16-i32:16:32-i64:16:16-"
+         "f32:16:16-f64:16:16-n16-S32";
 }
 
 static Reloc::Model getEffectiveRelocModel(std::optional<Reloc::Model> RM) {

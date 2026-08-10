@@ -90,12 +90,12 @@ TMS9900TargetLowering::TMS9900TargetLowering(const TargetMachine &TM,
   setOperationAction(ISD::ANY_EXTEND, MVT::i16, Legal);
   setOperationAction(ISD::TRUNCATE, MVT::i8, Legal);
 
-  // Post-increment addressing modes for i16 and i8
-  // TMS9900 supports *R+ for auto-increment (post-inc by 2 for words, 1 for bytes)
+  // TMS9900 supports *R+ auto-increment directly for words.  Byte memory
+  // operations require lane conversion between LLVM's low-byte values and
+  // MOVB's high-byte register operands, so they must pass through the custom
+  // unindexed lowering below.  A later peephole can still form safe MOVB *R+.
   setIndexedLoadAction(ISD::POST_INC, MVT::i16, Legal);
   setIndexedStoreAction(ISD::POST_INC, MVT::i16, Legal);
-  setIndexedLoadAction(ISD::POST_INC, MVT::i8, Legal);
-  setIndexedStoreAction(ISD::POST_INC, MVT::i8, Legal);
 
   // Set scheduling preference
   setSchedulingPreference(Sched::Source);
@@ -558,8 +558,9 @@ bool TMS9900TargetLowering::getPostIndexedAddressParts(
     return false;
   }
 
-  // Only support i16 and i8
-  if (VT != MVT::i16 && VT != MVT::i8)
+  // Byte operations must remain unindexed until their high-byte lane
+  // conversion has been lowered.
+  if (VT != MVT::i16)
     return false;
 
   // Check if Op is an add that can be folded into post-increment
@@ -577,15 +578,13 @@ bool TMS9900TargetLowering::getPostIndexedAddressParts(
     return false;
 
   // Check if the offset is the right increment value
-  // Word operations increment by 2, byte operations increment by 1
+  // Word operations increment by 2.
   ConstantSDNode *COffset = dyn_cast<ConstantSDNode>(AddOp1);
   if (!COffset)
     return false;
 
   int64_t OffsetVal = COffset->getSExtValue();
-  int64_t ExpectedOffset = (VT == MVT::i16) ? 2 : 1;
-
-  if (OffsetVal != ExpectedOffset)
+  if (OffsetVal != 2)
     return false;
 
   // This can be a post-increment operation

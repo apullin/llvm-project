@@ -218,19 +218,13 @@ void TMS9900DAGToDAGISel::Select(SDNode *N) {
       SDValue Base = LD->getBasePtr();
       EVT VT = LD->getMemoryVT();
 
-      unsigned Opcode;
-      if (VT == MVT::i16) {
-        Opcode = TMS9900::MOVpim;
-      } else if (VT == MVT::i8) {
-        Opcode = TMS9900::MOVBpim;
-      } else {
+      if (VT != MVT::i16)
         break; // Fall through to default selection
-      }
 
       // MOVpim outputs: $rd (loaded value), $rs_wb (updated pointer)
       // It takes chain and base pointer as inputs
       SDValue Ops[] = {Base, Chain};
-      SDNode *ResNode = CurDAG->getMachineNode(Opcode, DL,
+      SDNode *ResNode = CurDAG->getMachineNode(TMS9900::MOVpim, DL,
                                                 MVT::i16,  // loaded value
                                                 MVT::i16,  // writeback pointer
                                                 MVT::Other, // chain
@@ -255,19 +249,13 @@ void TMS9900DAGToDAGISel::Select(SDNode *N) {
       SDValue Base = ST->getBasePtr();
       EVT VT = ST->getMemoryVT();
 
-      unsigned Opcode;
-      if (VT == MVT::i16) {
-        Opcode = TMS9900::MOVmpi;
-      } else if (VT == MVT::i8) {
-        Opcode = TMS9900::MOVBmpi;
-      } else {
+      if (VT != MVT::i16)
         break; // Fall through to default selection
-      }
 
       // MOVmpi outputs: $rd_wb (updated pointer)
       // It takes chain, base pointer, and value as inputs
       SDValue Ops[] = {Base, Value, Chain};
-      SDNode *ResNode = CurDAG->getMachineNode(Opcode, DL,
+      SDNode *ResNode = CurDAG->getMachineNode(TMS9900::MOVmpi, DL,
                                                 MVT::i16,  // writeback pointer
                                                 MVT::Other, // chain
                                                 Ops);

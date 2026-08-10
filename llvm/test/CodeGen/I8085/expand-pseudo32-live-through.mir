@@ -1,0 +1,46 @@
+# RUN: llc -O0 -run-pass=i8085-expand-pseudo32 -verify-machineinstrs %s -o - | FileCheck %s
+
+--- |
+  target triple = "i8085-unknown-elf"
+  define void @load32_preserves_cross_block_hl() { ret void }
+...
+
+---
+name:            load32_preserves_cross_block_hl
+tracksRegLiveness: true
+body:             |
+  bb.0:
+    successors: %bb.1
+    liveins: $a, $bc, $hl, $sp
+
+    JMP %bb.1
+
+  bb.1:
+    successors: %bb.2, %bb.3
+    liveins: $a, $bc, $sp
+
+    ; A spill reload can hide an incoming HL value by defining H/L dead even
+    ; though a successor still consumes HL. Preserve the physical value while
+    ; the reload expansion uses HL for its SP-relative addresses.
+    ; CHECK-LABEL: name: load32_preserves_cross_block_hl
+    ; CHECK: bb.1:
+    ; CHECK-NEXT: successors:
+    ; CHECK-NEXT: liveins: $a, $bc, $sp, $hl
+    ; CHECK: PUSH $hl
+    ; CHECK: $hl = POP
+    ; CHECK: JMP_8_IF
+    $ibx = LOAD_32_WITH_ADDR $sp, 6, implicit-def dead $h, implicit-def dead $l, implicit $sp
+    JMP_8_IF killed $a, %bb.3, implicit-def dead $sreg, implicit-def dead $a
+    JMP %bb.2
+
+  bb.2:
+    liveins: $bc, $hl, $ibx
+
+    $a = MOV $h
+    RET implicit $sp, implicit-def $sp
+
+  bb.3:
+    liveins: $ibx
+
+    RET implicit $sp, implicit-def $sp
+...

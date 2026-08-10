@@ -2673,15 +2673,15 @@ bool I8085ExpandPseudo32::expandMI(Block &MBB, BlockIt MBBI) {
   // NOT dead. If so, we wrap the expansion in
   // PUSH H / POP H and adjust all SP-relative offsets via HLSaveBias.
   //
-  // Additionally, we perform a defensive liveness check: the Machine LICM
-  // pass can hoist instructions to loop preheaders, preserving a stale
-  // "dead" flag on implicit-def $hl even though HL becomes live-out in the
-  // new position.  To catch this, we recompute HL liveness from block
-  // live-outs when the dead flag is set but HL appears live.
+  // Additionally, perform a defensive liveness check. Late motion and spill
+  // insertion can leave a stale "dead" flag on implicit-def $hl even though
+  // HL is live through the pseudo. To catch this, look past nominal clobbers
+  // from other GR32 pseudos for a real downstream H/L use.
   //
   // Skip branch/terminator pseudos — they may split blocks and HL is
   // unlikely to be live across them.
   bool NeedHLSave = false;
+  bool HasDownstreamHLUse = false;
   if (!MI.isBranch() && !MI.isTerminator()) {
     bool HasHLImplicitDef = false;
     bool HLImplicitDefIsDead = true;
@@ -2701,14 +2701,25 @@ bool I8085ExpandPseudo32::expandMI(Block &MBB, BlockIt MBBI) {
     if (HasHLImplicitDef && HLImplicitDefIsDead && !NeedHLSave) {
       if (isHLLiveAcrossGR32Pseudos(MBB, MBBI)) {
         NeedHLSave = true;
+        HasDownstreamHLUse = true;
         LLVM_DEBUG(dbgs() << "HL-save: stale dead flag on implicit-def $hl, "
                           << "HL is actually live — wrapping with PUSH/POP\n");
       }
     }
   }
 
-  if (NeedHLSave && !hasAvailableHLValue(MBB, MBBI))
-    NeedHLSave = false;
+  if (NeedHLSave && !hasAvailableHLValue(MBB, MBBI)) {
+    if (HasDownstreamHLUse) {
+      // Spill reloads are inserted after register allocation and mark their
+      // scratch H/L defs dead.  That def can hide a genuinely live-through
+      // HL value from block liveness, including through predecessor-only
+      // blocks.  The downstream use proves that the incoming value must be
+      // preserved; restore the missing live-in before adding PUSH H.
+      MBB.addLiveIn(I8085::HL);
+    } else {
+      NeedHLSave = false;
+    }
+  }
 
   BlockIt AfterPseudo = std::next(MBBI);
   DebugLoc DL = MI.getDebugLoc();

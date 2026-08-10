@@ -1,4 +1,5 @@
-# RUN: llc -mtriple=tms9900 -run-pass tms9900-long-branch %s -o - | FileCheck %s
+# RUN: llc -mtriple=tms9900 -run-pass tms9900-long-branch \
+# RUN:   -verify-machineinstrs %s -o - | FileCheck %s
 
 ---
 name: long_signed_expand_gt
@@ -55,3 +56,40 @@ body: |
 # CHECK-NEXT: B_sym %bb.3
 # CHECK-NOT: JLT
 # CHECK-NOT: JMP %bb.1
+
+---
+name: long_signed_update_phi
+tracksRegLiveness: true
+registers:
+  - { id: 0, class: gr16 }
+  - { id: 1, class: gr16 }
+  - { id: 2, class: gr16 }
+body: |
+  bb.0:
+    successors: %bb.1, %bb.2
+    %0:gr16 = IMPLICIT_DEF
+    JGT %bb.2, implicit $st
+    JMP %bb.1
+
+  bb.1:
+    successors: %bb.3
+    %1:gr16 = IMPLICIT_DEF
+    JMP %bb.3
+
+  bb.2:
+    successors: %bb.3
+    B_sym %bb.3
+
+  bb.3:
+    %2:gr16 = PHI %0, %bb.2, %1, %bb.1
+    $r0 = COPY %2
+    RET implicit $r0
+
+# CHECK-LABEL: name: long_signed_update_phi
+# CHECK: bb.0:
+# CHECK: JEQ %bb.1
+# CHECK-NEXT: JLT %bb.1
+# CHECK-NEXT: B_sym %bb.3
+# CHECK: bb.3:
+# CHECK: %2:gr16 = PHI %0, %bb.0, %1, %bb.1
+# CHECK-NOT: %bb.2

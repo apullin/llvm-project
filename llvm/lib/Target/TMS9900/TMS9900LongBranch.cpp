@@ -82,6 +82,13 @@ public:
       if (!TargetBB)
         continue;
 
+      // The trampoline must represent exactly the edge being redirected.  If
+      // MBB already reaches TargetBB, merging the two edges could require a
+      // value-selecting PHI rewrite rather than a predecessor substitution.
+      if (!MBB.isSuccessor(LongBB) || !LongBB->isSuccessor(TargetBB) ||
+          MBB.isSuccessor(TargetBB))
+        continue;
+
       MachineBasicBlock *FalseBB = nullptr;
       if (JmpMI) {
         if (!JmpMI->getOperand(0).isMBB())
@@ -104,12 +111,11 @@ public:
       if (JmpMI)
         JmpMI->eraseFromParent();
 
-      if (MBB.isSuccessor(LongBB))
-        MBB.removeSuccessor(LongBB);
+      TargetBB->replacePhiUsesWith(LongBB, &MBB);
+      MBB.replaceSuccessor(LongBB, TargetBB);
+      LongBB->removeSuccessor(TargetBB);
       if (!MBB.isSuccessor(FalseBB))
         MBB.addSuccessor(FalseBB);
-      if (!MBB.isSuccessor(TargetBB))
-        MBB.addSuccessor(TargetBB);
 
       if (LongBB->pred_empty())
         DeadBlocks.push_back(LongBB);

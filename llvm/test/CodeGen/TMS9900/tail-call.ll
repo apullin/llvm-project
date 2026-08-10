@@ -2,6 +2,8 @@
 
 declare i16 @foo(i16)
 declare i16 @bar(i16)
+declare i16 @inspect_frame(ptr)
+declare ptr @llvm.frameaddress(i32 immarg)
 
 ;; Simple tail call: should use B instead of BL, no prologue/epilogue
 ; CHECK-LABEL: tail_call_simple:
@@ -59,4 +61,18 @@ then:
 else:
   %r2 = tail call i16 @bar(i16 %x)
   ret i16 %r2
+}
+
+;; A frame address remains valid until this function returns. Do not tear down
+;; the frame and branch directly to a callee that can inspect that address.
+; CHECK-LABEL: tail_call_with_frame_address:
+; CHECK: MOV{{[ \t]+}}R10,R13
+; CHECK: BL{{[ \t]+}}@inspect_frame
+; CHECK-NOT: B{{[ \t]+}}@inspect_frame
+; CHECK: MOV{{[ \t]+}}R13,R10
+; CHECK: B{{[ \t]+}}*R11
+define i16 @tail_call_with_frame_address() {
+  %frame = call ptr @llvm.frameaddress(i32 0)
+  %r = tail call i16 @inspect_frame(ptr %frame)
+  ret i16 %r
 }

@@ -24,6 +24,7 @@
 #include "llvm/CodeGen/SelectionDAG.h"
 #include "llvm/CodeGen/TargetLoweringObjectFileImpl.h"
 #include "llvm/IR/Function.h"
+#include "llvm/IR/IntrinsicInst.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/KnownBits.h"
@@ -1834,6 +1835,7 @@ bool TMS9900TargetLowering::mayBeEmittedAsTailCall(const CallInst *CI) const {
 /// - No struct return (sret)
 /// - Caller is not an interrupt handler
 /// - Caller is not a varargs function
+/// - The caller's frame address is not observable by the callee
 /// - Calling conventions must be compatible
 bool TMS9900TargetLowering::isEligibleForTailCallOptimization(
     CCState &CCInfo, CallLoweringInfo &CLI, MachineFunction &MF,
@@ -1848,6 +1850,17 @@ bool TMS9900TargetLowering::isEligibleForTailCallOptimization(
   // Naked functions cannot use tail calls (no prologue/epilogue)
   if (Caller.hasFnAttribute(Attribute::Naked))
     return false;
+
+  // A tail call tears down the caller's frame before entering the callee.  If
+  // llvm.frameaddress has made that frame observable, the callee may still
+  // inspect it through an argument or another escaped pointer. LowerFRAMEADDR
+  // sets MachineFrameInfo later during DAG legalization, so inspect the IR here
+  // while call eligibility is being decided.
+  for (const BasicBlock &MBB : Caller)
+    for (const Instruction &I : MBB)
+      if (const auto *II = dyn_cast<IntrinsicInst>(&I);
+          II && II->getIntrinsicID() == Intrinsic::frameaddress)
+        return false;
 
   // Do not tail call if the callee requires stack arguments.
   // TMS9900 passes first 4 args in R0-R3; if we need more, stack is required.

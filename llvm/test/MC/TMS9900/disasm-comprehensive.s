@@ -501,7 +501,7 @@ fwd:
 ; CHECK: SB{{[ \t]+}}R5,*R6{{[ \t]+}}; encoding: [0x75,0x85]
 
 ; --- C ---
-; CHECK: C{{[ \t]+}}R5,R6{{[ \t]+}}; encoding: [0x81,0x46]
+; CHECK: C{{[ \t]+}}R5,R6{{[ \t]+}}; encoding: [0x81,0x85]
 ; CHECK: C{{[ \t]+}}*R1,R2{{[ \t]+}}; encoding: [0x80,0x91]
 ; CHECK: C{{[ \t]+}}@0x1234,R3{{[ \t]+}}; encoding: [0x80,0xe0,0x12,0x34]
 ; CHECK: C{{[ \t]+}}@4(R5),R6{{[ \t]+}}; encoding: [0x81,0xa5,0x00,0x04]
@@ -513,7 +513,7 @@ fwd:
 ; CHECK: C{{[ \t]+}}@0x1111,@0x2222{{[ \t]+}}; encoding: [0x88,0x20,0x11,0x11,0x22,0x22]
 
 ; --- CB ---
-; CHECK: CB{{[ \t]+}}R1,R2{{[ \t]+}}; encoding: [0x90,0x42]
+; CHECK: CB{{[ \t]+}}R1,R2{{[ \t]+}}; encoding: [0x90,0x81]
 ; CHECK: CB{{[ \t]+}}*R3,R4{{[ \t]+}}; encoding: [0x91,0x13]
 ; CHECK: CB{{[ \t]+}}@0x1234,R5{{[ \t]+}}; encoding: [0x91,0x60,0x12,0x34]
 ; CHECK: CB{{[ \t]+}}R6,*R7{{[ \t]+}}; encoding: [0x95,0xc6]
@@ -854,7 +854,7 @@ fwd:
 ; DISASM: 75 85{{[ \t]+}}SB{{[ \t]+}}R5,*R6
 
 ; --- C ---
-; DISASM: 81 46{{[ \t]+}}C{{[ \t]+}}R5,R6
+; DISASM: 81 85{{[ \t]+}}C{{[ \t]+}}R5,R6
 ; DISASM: 80 91{{[ \t]+}}C{{[ \t]+}}*R1,R2
 ; DISASM: 80 e0 12 34{{[ \t]+}}C{{[ \t]+}}@0x1234,R3
 ; DISASM: 81 a5 00 04{{[ \t]+}}C{{[ \t]+}}@4(R5),R6
@@ -866,7 +866,7 @@ fwd:
 ; DISASM: 88 20 11 11 22 22{{[ \t]+}}C{{[ \t]+}}@0x1111,@0x2222
 
 ; --- CB ---
-; DISASM: 90 42{{[ \t]+}}CB{{[ \t]+}}R1,R2
+; DISASM: 90 81{{[ \t]+}}CB{{[ \t]+}}R1,R2
 ; DISASM: 91 13{{[ \t]+}}CB{{[ \t]+}}*R3,R4
 ; DISASM: 91 60 12 34{{[ \t]+}}CB{{[ \t]+}}@0x1234,R5
 ; DISASM: 95 c6{{[ \t]+}}CB{{[ \t]+}}R6,*R7

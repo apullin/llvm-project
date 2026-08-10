@@ -3,12 +3,12 @@
 # Tests for Crr (register-register compare) elimination when one operand
 # is provably zero and the preceding instruction already set flags.
 #
-# Case A: zero in rs1 (D field) -- all flags match, safe for any branch.
-# Case B: zero in rs2 (S field) -- only EQ matches, safe for JEQ/JNE only.
+# Case A: zero is the destination -- all flags match, safe for any branch.
+# Case B: zero is the source -- only EQ matches, safe for JEQ/JNE only.
 #
 # Test cases:
-#   - CLR Ry; Crr Rx,Ry; JNE -> Crr deleted (Case A, zero in D)
-#   - CLR Rx; Crr Rx,Ry; JEQ -> Crr deleted (Case B, zero in S, JEQ safe)
+#   - CLR Ry; Crr Rx,Ry; JNE -> Crr deleted (Case A)
+#   - CLR Rx; Crr Rx,Ry; JEQ -> Crr deleted (Case B, JEQ safe)
 #   - CLR Rx; Crr Rx,Ry; JGT -> Crr NOT deleted (Case B, JGT unsafe)
 #   - No zero register; Crr kept
 
@@ -20,7 +20,7 @@
 ...
 
 # Case A: CLR R2 proves R2 is zero. ANDI R5,1 sets flags on R5.
-# Crr R2,R5 has zero in rs1 (D field) -> safe for JNE.
+# Crr R5,R2 has zero as the destination -> safe for JNE.
 ---
 name: crr_case_a_clr_zero
 tracksRegLiveness: true
@@ -30,7 +30,7 @@ body: |
     renamable $r2 = CLRr implicit-def dead $st
     renamable $r5 = IMPLICIT_DEF
     renamable $r5 = ANDI killed $r5, 1, implicit-def dead $st
-    Crr killed $r2, killed $r5, implicit-def $st
+    Crr killed $r5, killed $r2, implicit-def $st
     JNE %bb.1, implicit $st
 
   bb.2:
@@ -47,7 +47,7 @@ body: |
 # CHECK: JNE
 
 # Case B: CLR R1 proves R1 is zero. SRL R4,8 sets flags on R4.
-# Crr R4,R1 has zero in rs2 (S field) -> safe for JEQ.
+# Crr R1,R4 has zero as the source -> safe for JEQ.
 ---
 name: crr_case_b_jeq
 tracksRegLiveness: true
@@ -57,7 +57,7 @@ body: |
     renamable $r1 = CLRr implicit-def dead $st
     renamable $r4 = IMPLICIT_DEF
     renamable $r4 = SRLri killed $r4, 8, implicit-def dead $st
-    Crr killed $r4, killed $r1, implicit-def $st
+    Crr killed $r1, killed $r4, implicit-def $st
     JEQ %bb.1, implicit $st
 
   bb.2:
@@ -74,7 +74,7 @@ body: |
 # CHECK: JEQ
 
 # Case B: CLR R1 proves R1 is zero. SRL R4,8 sets flags on R4.
-# Crr R4,R1 has zero in rs2 (S field) -> NOT safe for JGT.
+# Crr R1,R4 has zero as the source -> NOT safe for JGT.
 ---
 name: crr_case_b_jgt_unsafe
 tracksRegLiveness: true
@@ -84,7 +84,7 @@ body: |
     renamable $r1 = CLRr implicit-def dead $st
     renamable $r4 = IMPLICIT_DEF
     renamable $r4 = SRLri killed $r4, 8, implicit-def dead $st
-    Crr killed $r4, killed $r1, implicit-def $st
+    Crr killed $r1, killed $r4, implicit-def $st
     JGT %bb.1, implicit $st
 
   bb.2:

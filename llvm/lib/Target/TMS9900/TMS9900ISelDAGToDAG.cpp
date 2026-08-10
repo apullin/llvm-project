@@ -59,7 +59,7 @@ char TMS9900DAGToDAGISelLegacy::ID;
 INITIALIZE_PASS(TMS9900DAGToDAGISelLegacy, DEBUG_TYPE, PASS_NAME, false, false)
 
 /// Map ISD::CondCode to TMS9900 jump instruction opcode.
-/// LowerBR_CC orders the compare so flags reflect (LHS - RHS).
+/// Compare lowering preserves LHS,RHS assembly operand order.
 static unsigned getJumpOpcodeForCC(ISD::CondCode CC) {
   switch (CC) {
   default:

@@ -9,8 +9,8 @@ target datalayout = "e-m:e-p:16:16-i16:16-a:0:16-n16"
 ; --- 32-bit equality: compare both halves ---
 ; Both high and low words must match for equality.
 ; CHECK-LABEL: eq32:
-; CHECK: C{{[ \t]+}}R3,R1
-; CHECK: C{{[ \t]+}}R2,R0
+; CHECK: C{{[ \t]+}}R1,R3
+; CHECK: C{{[ \t]+}}R0,R2
 ; CHECK: B{{[ \t]+}}*R11
 
 define i1 @eq32(i32 %a, i32 %b) {
@@ -21,8 +21,8 @@ define i1 @eq32(i32 %a, i32 %b) {
 ; --- 32-bit inequality: compare both halves ---
 ; Either high or low word mismatch means not-equal.
 ; CHECK-LABEL: ne32:
-; CHECK: C{{[ \t]+}}R3,R1
-; CHECK: C{{[ \t]+}}R2,R0
+; CHECK: C{{[ \t]+}}R1,R3
+; CHECK: C{{[ \t]+}}R0,R2
 ; CHECK: B{{[ \t]+}}*R11
 
 define i1 @ne32(i32 %a, i32 %b) {
@@ -35,7 +35,7 @@ define i1 @ne32(i32 %a, i32 %b) {
 ; Uses JGT for signed comparison of high words.
 ; CHECK-LABEL: slt32:
 ; CHECK: C{{[ \t]+}}R{{[0-9]+}},R{{[0-9]+}}
-; CHECK: C{{[ \t]+}}R2,R0
+; CHECK: C{{[ \t]+}}R0,R2
 ; CHECK: B{{[ \t]+}}*R11
 
 define i1 @slt32(i32 %a, i32 %b) {
@@ -49,7 +49,7 @@ define i1 @slt32(i32 %a, i32 %b) {
 ; CHECK-LABEL: ult32:
 ; CHECK: C{{[ \t]+}}R{{[0-9]+}},R{{[0-9]+}}
 ; CHECK: JHE
-; CHECK: C{{[ \t]+}}R2,R0
+; CHECK: C{{[ \t]+}}R0,R2
 ; CHECK: B{{[ \t]+}}*R11
 
 define i1 @ult32(i32 %a, i32 %b) {

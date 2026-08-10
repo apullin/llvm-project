@@ -16,7 +16,7 @@ target datalayout = "e-m:e-p:16:16-i16:16-a:0:16-n16"
 ; Low word add followed by carry detection and high word add.
 ; CHECK-LABEL: add32:
 ; CHECK: A{{[ \t]+}}R{{[0-9]+}},R1
-; CHECK: C{{[ \t]+}}R{{[0-9]+}},R1
+; CHECK: C{{[ \t]+}}R1,R{{[0-9]+}}
 ; CHECK: JHE
 ; CHECK: A{{[ \t]+}}R2,R0
 ; CHECK: B{{[ \t]+}}*R11
@@ -29,7 +29,7 @@ define i32 @add32(i32 %a, i32 %b) {
 ; --- 32-bit sub with borrow propagation ---
 ; Compare low words to detect borrow, then subtract high words + borrow.
 ; CHECK-LABEL: sub32:
-; CHECK: C{{[ \t]+}}R3,R1
+; CHECK: C{{[ \t]+}}R1,R3
 ; CHECK: JHE
 ; CHECK: S{{[ \t]+}}R2,R0
 ; CHECK: S{{[ \t]+}}R3,R1

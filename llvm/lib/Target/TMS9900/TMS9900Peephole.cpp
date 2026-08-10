@@ -541,8 +541,8 @@ public:
         //   Delete both SRLs, since CBrr compares HIGH bytes directly
         //   and the pre-SRL values have the bytes in the HIGH position.
         if (Opc == TMS9900::Crr) {
-          Register Rs1 = MI.getOperand(0).getReg(); // D field
-          Register Rs2 = MI.getOperand(1).getReg(); // S field
+          Register Source = MI.getOperand(0).getReg();
+          Register Destination = MI.getOperand(1).getReg();
 
           // --- Opt 1: Zero-register elimination ---
           //
@@ -550,18 +550,12 @@ public:
           //            Crr ZeroReg, TestReg  ; (or Crr TestReg, ZeroReg)
           //            Jcc label
           //
-          // TMS9900 C instruction encoding: Crr rs1(D), rs2(S).
-          // Hardware sets: EQ if S==D, LGT if S>D, AGT if S>D.
+          // TMS9900 assembly syntax is C source,destination. Hardware sets
+          // EQ if source==destination and LGT/AGT if source>destination.
           //
-          // Case A -- zero in rs1 (D field):
-          //   EQ if rs2==0, LGT if rs2>0, AGT if rs2>0 (signed).
-          //   These match what any ALU instruction sets for rs2.
-          //   Safe for all branch types.
-          //
-          // Case B -- zero in rs2 (S field):
-          //   EQ if rs1==0 (matches), LGT if 0>rs1 (never, doesn't match),
-          //   AGT if 0>rs1 (signed, doesn't match).
-          //   Only EQ flag matches -> safe for JEQ/JNE only.
+          // With zero as the destination, all flags match the preceding
+          // result-producing instruction's comparison of TestReg with zero.
+          // With zero as the source, only EQ matches.
           bool ZeroEliminated = false;
           do {
             // Get the immediately preceding non-debug instruction.
@@ -572,7 +566,7 @@ public:
               break;
 
             // Prev must not be a call, branch, or return, must set ST,
-            // and must define one of {Rs1, Rs2} as its primary result
+            // and must define one compare operand as its primary result
             // (operand 0 isDef).
             if (Prev->isCall() || Prev->isBranch() || Prev->isReturn())
               break;
@@ -586,16 +580,16 @@ public:
             Register PrevDefReg = Prev->getOperand(0).getReg();
             Register TestReg;   // The register whose flags Prev set.
             Register ZeroReg;   // The register that must be zero.
-            bool ZeroInRs1;     // True when ZeroReg is rs1 (D field).
+            bool ZeroIsSource;
 
-            if (PrevDefReg == Rs2 && PrevDefReg != Rs1) {
-              TestReg = Rs2;
-              ZeroReg = Rs1;
-              ZeroInRs1 = true;  // Case A: all flags safe.
-            } else if (PrevDefReg == Rs1 && PrevDefReg != Rs2) {
-              TestReg = Rs1;
-              ZeroReg = Rs2;
-              ZeroInRs1 = false; // Case B: only EQ safe.
+            if (PrevDefReg == Destination && PrevDefReg != Source) {
+              TestReg = Destination;
+              ZeroReg = Source;
+              ZeroIsSource = true; // Only EQ is equivalent.
+            } else if (PrevDefReg == Source && PrevDefReg != Destination) {
+              TestReg = Source;
+              ZeroReg = Destination;
+              ZeroIsSource = false; // All comparison flags are equivalent.
             } else {
               break; // Prev doesn't define either Crr operand,
                      // or both operands are the same register.
@@ -641,15 +635,15 @@ public:
               break;
             unsigned NextOpc = Next->getOpcode();
 
-            if (ZeroInRs1) {
-              // Case A: all flags match. Any conditional branch is safe.
+            if (!ZeroIsSource) {
+              // TestReg is the source and zero is the destination.
               if (NextOpc != TMS9900::JEQ && NextOpc != TMS9900::JNE &&
                   NextOpc != TMS9900::JGT && NextOpc != TMS9900::JLT &&
                   NextOpc != TMS9900::JH && NextOpc != TMS9900::JHE &&
                   NextOpc != TMS9900::JL && NextOpc != TMS9900::JLE)
                 break;
             } else {
-              // Case B: only EQ flag matches. Only JEQ/JNE are safe.
+              // Zero is the source; only equality is unchanged.
               if (NextOpc != TMS9900::JEQ && NextOpc != TMS9900::JNE)
                 break;
             }
@@ -705,16 +699,16 @@ public:
             if (!MI.getOperand(0).isKill() || !MI.getOperand(1).isKill())
               break;
 
-            // Rs1 and Rs2 must be different registers.
-            if (Rs1 == Rs2)
+            // Source and destination must be different registers.
+            if (Source == Destination)
               break;
 
             // Walk backward to find the SRLri instructions that define
-            // Rs1 and Rs2.  They must be adjacent or only separated by
-            // each other / debug instructions, and between them and
-            // the Crr there must be no reads/writes of Rs1 or Rs2.
-            MachineInstr *Srl1 = nullptr; // SRLri for Rs1
-            MachineInstr *Srl2 = nullptr; // SRLri for Rs2
+            // source and destination. They must be adjacent or only separated
+            // by each other / debug instructions, and between them and
+            // the Crr there must be no reads/writes of either register.
+            MachineInstr *Srl1 = nullptr; // SRLri for Source
+            MachineInstr *Srl2 = nullptr; // SRLri for Destination
             bool Unsafe = false;
 
             for (MachineInstr *Scan = MI.getPrevNode(); Scan;
@@ -722,14 +716,15 @@ public:
               if (Scan->isDebugInstr())
                 continue;
 
-              // Check if this instruction defines Rs1 or Rs2.
-              bool DefsRs1 = !Srl1 && Scan->modifiesRegister(Rs1, TRI);
-              bool DefsRs2 = !Srl2 && Scan->modifiesRegister(Rs2, TRI);
+              // Check if this instruction defines source or destination.
+              bool DefsRs1 = !Srl1 && Scan->modifiesRegister(Source, TRI);
+              bool DefsRs2 =
+                  !Srl2 && Scan->modifiesRegister(Destination, TRI);
 
               if (DefsRs1) {
-                // Must be SRLri Rs1, 8.
+                // Must be SRLri Source, 8.
                 if (Scan->getOpcode() != TMS9900::SRLri ||
-                    Scan->getOperand(0).getReg() != Rs1 ||
+                    Scan->getOperand(0).getReg() != Source ||
                     !Scan->getOperand(2).isImm() ||
                     Scan->getOperand(2).getImm() != 8) {
                   Unsafe = true;
@@ -739,9 +734,9 @@ public:
               }
 
               if (DefsRs2) {
-                // Must be SRLri Rs2, 8.
+                // Must be SRLri Destination, 8.
                 if (Scan->getOpcode() != TMS9900::SRLri ||
-                    Scan->getOperand(0).getReg() != Rs2 ||
+                    Scan->getOperand(0).getReg() != Destination ||
                     !Scan->getOperand(2).isImm() ||
                     Scan->getOperand(2).getImm() != 8) {
                   Unsafe = true;
@@ -757,11 +752,12 @@ public:
               // If this instruction reads a register we haven't found
               // the SRL for yet (other than a def we just matched),
               // the pattern is broken: there's a use between SRL and Crr.
-              if (!Srl1 && !DefsRs1 && Scan->readsRegister(Rs1, TRI)) {
+              if (!Srl1 && !DefsRs1 && Scan->readsRegister(Source, TRI)) {
                 Unsafe = true;
                 break;
               }
-              if (!Srl2 && !DefsRs2 && Scan->readsRegister(Rs2, TRI)) {
+              if (!Srl2 && !DefsRs2 &&
+                  Scan->readsRegister(Destination, TRI)) {
                 Unsafe = true;
                 break;
               }
@@ -788,8 +784,8 @@ public:
             DebugLoc DL = MI.getDebugLoc();
             MachineInstrBuilder MIB =
                 BuildMI(MBB, MI, DL, TII->get(TMS9900::CBrr));
-            MIB.addReg(Rs1, RegState::Kill);
-            MIB.addReg(Rs2, RegState::Kill);
+            MIB.addReg(Source, RegState::Kill);
+            MIB.addReg(Destination, RegState::Kill);
 
             // CBrr implicitly defs ST (live, consumed by the branch).
             // The implicit def is added automatically by BuildMI from

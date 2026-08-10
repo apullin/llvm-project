@@ -1431,11 +1431,11 @@ def SRL_VAR : Pseudo<(outs GR16:$rd), (ins GR16:$rs, GR16:$cnt),
 
 // C - Compare
 let Defs = [ST] in {
-def Crr : Format1_Reg_Cmp<0b1000, 0, (outs), (ins GR16:$rs1, GR16:$rs2),
-                          "C\t$rs1,$rs2",
-                          [(TMS9900cmp GR16:$rs1, GR16:$rs2)]>;
-def CBrr : Format1_Reg_Cmp<0b1000, 1, (outs), (ins GR16:$rs1, GR16:$rs2),
-                           "CB\t$rs1,$rs2",
+def Crr : Format1_Reg_Cmp<0b1000, 0, (outs), (ins GR16:$src, GR16:$dst),
+                          "C\t$src,$dst",
+                          [(TMS9900cmp GR16:$src, GR16:$dst)]>;
+def CBrr : Format1_Reg_Cmp<0b1000, 1, (outs), (ins GR16:$src, GR16:$dst),
+                           "CB\t$src,$dst",
                            []>;
 
 def Cim : Format1_IndLoad<0b1000, 0, (outs), (ins GR16:$rd, GR16:$rs),

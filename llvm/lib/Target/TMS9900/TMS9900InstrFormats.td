@@ -170,22 +170,21 @@ class Format1_Reg_TwoAddr<bits<4> opcode, bit byteflag, dag outs, dag ins,
 }
 
 // Format1_Reg variant for compare operations (C)
-// Operands: (outs), (ins $rs1, $rs2) - no output, just sets flags
-// Encodes both rs1 (as destination field) and rs2 (as source field)
+// Operands: (outs), (ins $src, $dst) - no output, just sets flags
 class Format1_Reg_Cmp<bits<4> opcode, bit byteflag, dag outs, dag ins,
                       string asmstr, list<dag> pattern>
     : TMS9900Inst<outs, ins, asmstr, pattern> {
-  bits<4> rs1;  // First operand (in destination field position)
-  bits<4> rs2;  // Second operand (source)
+  bits<4> src;
+  bits<4> dst;
 
   bits<16> Inst;
 
   let Inst{15-13} = opcode{3-1};
   let Inst{12} = byteflag;
   let Inst{11-10} = 0b00;     // Td = register direct
-  let Inst{9-6} = rs1;        // D = first operand
+  let Inst{9-6} = dst;        // D = destination register
   let Inst{5-4} = 0b00;       // Ts = register direct
-  let Inst{3-0} = rs2;        // S = second operand
+  let Inst{3-0} = src;        // S = source register
 }
 
 //===----------------------------------------------------------------------===//

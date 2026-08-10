@@ -947,11 +947,9 @@ SDValue TMS9900TargetLowering::LowerBR_CC(SDValue Op, SelectionDAG &DAG) const {
     return DAG.getNode(ISD::BRCOND, DL, MVT::Other, Chain, Cond, Dest);
   }
 
-  // Normalize operand order so the compare computes (LHS - RHS).
-  // TMS9900 C/CI set flags based on (dest - src). For register compares,
-  // that means dest is the second operand (C src,dst). For immediate compares,
-  // dest is the register operand (CI reg,imm). We order operands to keep the
-  // comparison semantics consistent across reg/reg and reg/imm cases.
+  // Keep the compared value first for both C (C lhs,rhs) and CI (CI lhs,imm).
+  // The TMS9900 sets comparison flags by comparing the first assembly operand
+  // with the second.
   auto isImm = [](SDValue V) {
     return isa<ConstantSDNode>(V);
   };
@@ -962,20 +960,8 @@ SDValue TMS9900TargetLowering::LowerBR_CC(SDValue Op, SelectionDAG &DAG) const {
     CC = ISD::getSetCCSwappedOperands(CC);
   }
 
-  SDValue CmpLHS;
-  SDValue CmpRHS;
-  if (isImm(RHS)) {
-    // CI: dest is the register operand (LHS).
-    CmpLHS = LHS;
-    CmpRHS = RHS;
-  } else {
-    // C: dest is the second operand, so swap to compare (LHS - RHS).
-    CmpLHS = RHS;
-    CmpRHS = LHS;
-  }
-
   // Create comparison
-  SDValue Cmp = DAG.getNode(TMS9900ISD::CMP, DL, MVT::Glue, CmpLHS, CmpRHS);
+  SDValue Cmp = DAG.getNode(TMS9900ISD::CMP, DL, MVT::Glue, LHS, RHS);
 
   // Create branch with condition
   return DAG.getNode(TMS9900ISD::BR_CC, DL, MVT::Other, Chain, Dest,
@@ -1028,17 +1014,7 @@ SDValue TMS9900TargetLowering::LowerBRCOND(SDValue Op,
     CC = ISD::getSetCCSwappedOperands(CC);
   }
 
-  SDValue CmpLHS;
-  SDValue CmpRHS;
-  if (isImm(RHS)) {
-    CmpLHS = LHS;
-    CmpRHS = RHS;
-  } else {
-    CmpLHS = RHS;
-    CmpRHS = LHS;
-  }
-
-  SDValue Cmp = DAG.getNode(TMS9900ISD::CMP, DL, MVT::Glue, CmpLHS, CmpRHS);
+  SDValue Cmp = DAG.getNode(TMS9900ISD::CMP, DL, MVT::Glue, LHS, RHS);
 
   return DAG.getNode(TMS9900ISD::BR_CC, DL, MVT::Other, Chain, Dest,
                      DAG.getConstant(CC, DL, MVT::i16), Cmp);
@@ -1561,10 +1537,10 @@ TMS9900TargetLowering::EmitInstrWithCustomInserter(MachineInstr &MI,
     // Emit a CMPBR pseudo so the compare/branch stay adjacent (flags are
     // otherwise clobbered by intervening instructions).
     auto emitCmpBr = [&](MachineBasicBlock *TargetBB, ISD::CondCode Cond) {
-      // CMPBR expands to: C RHS, LHS (flags reflect LHS - RHS), then Jcc.
+      // CMPBR expands to C LHS,RHS followed by the requested jump.
       BuildMI(StartBB, DL, TII.get(TMS9900::CMPBRrr))
-          .addReg(RHSReg)
           .addReg(LHSReg)
+          .addReg(RHSReg)
           .addImm(static_cast<int64_t>(Cond))
           .addMBB(TargetBB);
     };

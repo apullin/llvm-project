@@ -1,7 +1,7 @@
 ; RUN: llc -march=tms9900 -O0 < %s | FileCheck %s
 
 ; CHECK-LABEL: test_eq
-; CHECK: C{{[ \t]+}}R1,R0
+; CHECK: C{{[ \t]+}}R0,R1
 ; CHECK: JNE{{[ \t]+}}[[EQ_NO:LBB[0-9_]+]]
 
 define i16 @test_eq(i16 %a, i16 %b) {
@@ -17,7 +17,7 @@ no:
 }
 
 ; CHECK-LABEL: test_ne
-; CHECK: C{{[ \t]+}}R1,R0
+; CHECK: C{{[ \t]+}}R0,R1
 ; CHECK: JEQ{{[ \t]+}}[[NE_NO:LBB[0-9_]+]]
 
 define i16 @test_ne(i16 %a, i16 %b) {
@@ -33,7 +33,7 @@ no:
 }
 
 ; CHECK-LABEL: test_ult
-; CHECK: C{{[ \t]+}}R1,R0
+; CHECK: C{{[ \t]+}}R0,R1
 ; CHECK: JHE{{[ \t]+}}[[ULT_NO:LBB[0-9_]+]]
 
 define i16 @test_ult(i16 %a, i16 %b) {
@@ -49,7 +49,7 @@ no:
 }
 
 ; CHECK-LABEL: test_ugt
-; CHECK: C{{[ \t]+}}R1,R0
+; CHECK: C{{[ \t]+}}R0,R1
 ; CHECK: JLE{{[ \t]+}}[[UGT_NO:LBB[0-9_]+]]
 
 define i16 @test_ugt(i16 %a, i16 %b) {
@@ -65,7 +65,7 @@ no:
 }
 
 ; CHECK-LABEL: test_slt
-; CHECK: C{{[ \t]+}}R1,R0
+; CHECK: C{{[ \t]+}}R0,R1
 ; CHECK: JEQ{{[ \t]+}}[[SLT_NO:LBB[0-9_]+]]
 ; CHECK: JGT{{[ \t]+}}[[SLT_NO]]
 
@@ -82,7 +82,7 @@ no:
 }
 
 ; CHECK-LABEL: test_sgt
-; CHECK: C{{[ \t]+}}R1,R0
+; CHECK: C{{[ \t]+}}R0,R1
 ; CHECK: JEQ{{[ \t]+}}[[SGT_NO:LBB[0-9_]+]]
 ; CHECK: JLT{{[ \t]+}}[[SGT_NO]]
 
@@ -99,7 +99,7 @@ no:
 }
 
 ; CHECK-LABEL: test_sle
-; CHECK: C{{[ \t]+}}R1,R0
+; CHECK: C{{[ \t]+}}R0,R1
 ; CHECK: JGT{{[ \t]+}}[[SLE_NO:LBB[0-9_]+]]
 
 define i16 @test_sle(i16 %a, i16 %b) {
@@ -115,7 +115,7 @@ no:
 }
 
 ; CHECK-LABEL: test_sge
-; CHECK: C{{[ \t]+}}R1,R0
+; CHECK: C{{[ \t]+}}R0,R1
 ; CHECK: JLT{{[ \t]+}}[[SGE_NO:LBB[0-9_]+]]
 
 define i16 @test_sge(i16 %a, i16 %b) {

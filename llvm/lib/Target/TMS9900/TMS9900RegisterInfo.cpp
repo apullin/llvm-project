@@ -65,6 +65,15 @@ BitVector TMS9900RegisterInfo::getReservedRegs(const MachineFunction &MF) const 
   if (Subtarget.reserveCRU())
     Reserved.set(TMS9900::R12);
 
+  // Interrupt entry stores the interrupted WP, PC, and ST in the interrupt
+  // workspace's R13, R14, and R15.  RTWP consumes those values directly, so
+  // an interrupt handler must preserve them for its entire lifetime.
+  if (MF.getFunction().hasFnAttribute("interrupt")) {
+    markSuperRegs(Reserved, TMS9900::R13);
+    markSuperRegs(Reserved, TMS9900::R14);
+    markSuperRegs(Reserved, TMS9900::R15);
+  }
+
   // Internal registers are not allocatable
   Reserved.set(TMS9900::PC);
   Reserved.set(TMS9900::WP);

@@ -60,14 +60,10 @@ bool TMS9900FrameLowering::hasFPImpl(const MachineFunction &MF) const {
 void TMS9900FrameLowering::emitPrologue(MachineFunction &MF,
                                          MachineBasicBlock &MBB) const {
   const Function &F = MF.getFunction();
+  const bool IsInterrupt = F.hasFnAttribute("interrupt");
 
   // Naked functions have no prologue
   if (F.hasFnAttribute(Attribute::Naked))
-    return;
-
-  // Interrupt handlers have no prologue - the CPU has already set up the
-  // workspace and saved context to R13-R15
-  if (F.hasFnAttribute("interrupt"))
     return;
 
   MachineBasicBlock::iterator MBBI = MBB.begin();
@@ -95,7 +91,12 @@ void TMS9900FrameLowering::emitPrologue(MachineFunction &MF,
   }
 
   // Push return address for non-leaf functions
-  if (MFI.hasCalls()) {
+  // An interrupt returns through R13-R15 with RTWP, so its R11 need not be
+  // preserved.  Its interrupt workspace must nevertheless provide a valid,
+  // 4-byte-aligned stack pointer in R10 whenever the handler can spill, use
+  // local stack storage, or make a call.
+  const bool SavesLR = MFI.hasCalls() && !IsInterrupt;
+  if (SavesLR) {
     // DECT R10 - decrement stack pointer
     BuildMI(MBB, MBBI, DL, TII.get(TMS9900::DECTr), TMS9900::R10)
         .addReg(TMS9900::R10);
@@ -125,7 +126,7 @@ void TMS9900FrameLowering::emitPrologue(MachineFunction &MF,
   // which is 4-byte aligned (since StackSize is always 4-aligned).
   // The extra 2 bytes are accounted for in eliminateFrameIndex.
   uint64_t AllocSize = StackSize;
-  if (MFI.hasCalls() && StackSize > 0)
+  if (SavesLR && StackSize > 0)
     AllocSize += 2;  // alignment padding after DECT
 
   if (AllocSize > 0) {
@@ -136,7 +137,8 @@ void TMS9900FrameLowering::emitPrologue(MachineFunction &MF,
 
     // CFI: CFA offset grows by AllocSize
     unsigned CFIIndex = MF.addFrameInst(
-        MCCFIInstruction::cfiDefCfaOffset(nullptr, AllocSize + (MFI.hasCalls() ? 2 : 0)));
+        MCCFIInstruction::cfiDefCfaOffset(nullptr,
+                                          AllocSize + (SavesLR ? 2 : 0)));
     BuildMI(MBB, MBBI, DL, TII.get(TargetOpcode::CFI_INSTRUCTION))
         .addCFIIndex(CFIIndex);
   }
@@ -145,13 +147,10 @@ void TMS9900FrameLowering::emitPrologue(MachineFunction &MF,
 void TMS9900FrameLowering::emitEpilogue(MachineFunction &MF,
                                          MachineBasicBlock &MBB) const {
   const Function &F = MF.getFunction();
+  const bool IsInterrupt = F.hasFnAttribute("interrupt");
 
   // Naked functions have no epilogue
   if (F.hasFnAttribute(Attribute::Naked))
-    return;
-
-  // Interrupt handlers have no epilogue - RTWP restores everything
-  if (F.hasFnAttribute("interrupt"))
     return;
 
   MachineBasicBlock::iterator MBBI = MBB.getLastNonDebugInstr();
@@ -164,15 +163,16 @@ void TMS9900FrameLowering::emitEpilogue(MachineFunction &MF,
     DL = MBBI->getDebugLoc();
 
   uint64_t StackSize = MFI.getStackSize();
+  const bool RestoresLR = MFI.hasCalls() && !IsInterrupt;
 
-  if (!MFI.hasCalls() && StackSize == 0) {
+  if (!RestoresLR && StackSize == 0) {
     // Leaf function with no locals - no epilogue needed
     return;
   }
 
   // Deallocate stack space (must match the allocation in emitPrologue)
   uint64_t DeallocSize = StackSize;
-  if (MFI.hasCalls() && StackSize > 0)
+  if (RestoresLR && StackSize > 0)
     DeallocSize += 2;  // alignment padding (matches prologue)
 
   if (DeallocSize > 0) {
@@ -183,7 +183,7 @@ void TMS9900FrameLowering::emitEpilogue(MachineFunction &MF,
   }
 
   // Restore return address for non-leaf functions
-  if (MFI.hasCalls()) {
+  if (RestoresLR) {
     // MOV *R10+,R11 - load R11 from address in R10, then R10 += 2
     BuildMI(MBB, MBBI, DL, TII.get(TMS9900::MOVpim))
         .addDef(TMS9900::R11)   // $rd - loaded value
@@ -243,8 +243,9 @@ void TMS9900FrameLowering::determineCalleeSaves(MachineFunction &MF,
   if (F.hasFnAttribute(Attribute::Naked))
     return;
 
-  // Interrupt handlers don't need to save callee-saved registers in the
-  // traditional sense - they have their own workspace
+  // Interrupt handlers use a separate workspace.  R13-R15 are reserved as
+  // the hardware return context, and no other workspace register is
+  // callee-saved across RTWP.
   if (F.hasFnAttribute("interrupt"))
     return;
 

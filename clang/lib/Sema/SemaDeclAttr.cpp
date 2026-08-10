@@ -5783,6 +5783,33 @@ BTFDeclTagAttr *Sema::mergeBTFDeclTagAttr(Decl *D, const BTFDeclTagAttr &AL) {
   return ::new (Context) BTFDeclTagAttr(Context, AL, AL.getBTFDeclTag());
 }
 
+static void handleTMS9900InterruptAttr(Sema &S, Decl *D,
+                                       const ParsedAttr &AL) {
+  if (!isFuncOrMethodForAttrSubject(D)) {
+    S.Diag(D->getLocation(), diag::warn_attribute_wrong_decl_type)
+        << AL << AL.isRegularKeywordAttribute() << ExpectedFunction;
+    return;
+  }
+
+  if (!AL.checkExactlyNumArgs(S, 0))
+    return;
+
+  if (hasFunctionProto(D) && getFunctionOrMethodNumParams(D) != 0) {
+    S.Diag(D->getLocation(), diag::warn_interrupt_attribute_invalid)
+        << /*TMS9900=*/3 << /*no parameters=*/0;
+    return;
+  }
+
+  if (!getFunctionOrMethodResultType(D)->isVoidType()) {
+    S.Diag(D->getLocation(), diag::warn_interrupt_attribute_invalid)
+        << /*TMS9900=*/3 << /*void return type=*/1;
+    return;
+  }
+
+  D->addAttr(::new (S.Context) TMS9900InterruptAttr(S.Context, AL));
+  D->addAttr(UsedAttr::CreateImplicit(S.Context));
+}
+
 static void handleInterruptAttr(Sema &S, Decl *D, const ParsedAttr &AL) {
   // Dispatch the interrupt attribute based on the current target.
   switch (S.Context.getTargetInfo().getTriple().getArch()) {
@@ -5806,6 +5833,9 @@ static void handleInterruptAttr(Sema &S, Decl *D, const ParsedAttr &AL) {
   case llvm::Triple::riscv32:
   case llvm::Triple::riscv64:
     S.RISCV().handleInterruptAttr(D, AL);
+    break;
+  case llvm::Triple::tms9900:
+    handleTMS9900InterruptAttr(S, D, AL);
     break;
   default:
     S.ARM().handleInterruptAttr(D, AL);

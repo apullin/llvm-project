@@ -351,9 +351,11 @@ def warn_arm_interrupt_vfp_clobber : Warning<
 def err_arm_interrupt_called : Error<
   "interrupt service routine cannot be called directly">;
 def warn_interrupt_attribute_invalid : Warning<
-   "%select{MIPS|MSP430|RISC-V}0 'interrupt' attribute only applies to "
+   "%select{MIPS|MSP430|RISC-V|TMS9900}0 'interrupt' attribute only applies to "
    "functions that have %select{no parameters|a 'void' return type}1">,
    InGroup<IgnoredAttributes>;
+def err_tms9900_interrupt_called : Error<
+  "TMS9900 interrupt service routine cannot be called directly">;
 def warn_riscv_repeated_interrupt_attribute : Warning<
   "repeated RISC-V 'interrupt' attribute">, InGroup<IgnoredAttributes>;
 def note_riscv_repeated_interrupt_attribute : Note<

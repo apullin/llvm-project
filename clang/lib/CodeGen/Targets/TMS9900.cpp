@@ -71,7 +71,16 @@ public:
 
 void TMS9900TargetCodeGenInfo::setTargetAttributes(
     const Decl *D, llvm::GlobalValue *GV, CodeGen::CodeGenModule &M) const {
-  // No target-specific attributes to set for now
+  if (GV->isDeclaration())
+    return;
+
+  const auto *FD = dyn_cast_or_null<FunctionDecl>(D);
+  if (!FD || !FD->hasAttr<TMS9900InterruptAttr>())
+    return;
+
+  auto *F = cast<llvm::Function>(GV);
+  F->addFnAttr(llvm::Attribute::NoInline);
+  F->addFnAttr("interrupt");
 }
 
 std::unique_ptr<TargetCodeGenInfo>

@@ -282,7 +282,8 @@ private:
       Base.Kind = HLBaseKind::JumpTableIndex;
       Base.Index = MO.getIndex();
       Base.TargetFlags = MO.getTargetFlags();
-      Offset = MO.getOffset();
+      // Jump-table operands do not carry an addend in MachineOperand.
+      Offset = 0;
       break;
     case MachineOperand::MO_BlockAddress:
       Base.Kind = HLBaseKind::BlockAddress;

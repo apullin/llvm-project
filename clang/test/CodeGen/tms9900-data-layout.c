@@ -21,6 +21,10 @@ struct double_record {
   unsigned char last;
 };
 
+struct default_aligned_record {
+  unsigned char value __attribute__((aligned));
+};
+
 // Natural LLVM structs must now represent Clang's two-byte scalar ABI without
 // packed-struct workarounds.
 // CHECK: %struct.float_record = type { i8, float, i8 }
@@ -48,3 +52,8 @@ _Static_assert(__builtin_offsetof(struct double_record, value) == 2,
                "double field offset");
 _Static_assert(__builtin_offsetof(struct double_record, last) == 10,
                "double tail offset");
+
+// A bare aligned attribute must agree with the scalar C ABI, not Clang's
+// generic 16-byte default for otherwise-unconfigured targets.
+_Static_assert(_Alignof(struct default_aligned_record) == 2,
+               "default aligned attribute");

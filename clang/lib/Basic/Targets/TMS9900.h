@@ -47,6 +47,11 @@ public:
     PointerWidth = 16;
     PointerAlign = 16;
     SuitableAlign = 16;
+    // Match bare __attribute__((aligned)) to the strongest alignment required
+    // by any C scalar type instead of inheriting Clang's generic 16-byte
+    // default. The backend's four-byte stack boundary is a separate internal
+    // legalization invariant, not a stronger C object-alignment guarantee.
+    DefaultAlignForAttributeAligned = 16;
 
     // Type definitions
     SizeType = UnsignedInt;

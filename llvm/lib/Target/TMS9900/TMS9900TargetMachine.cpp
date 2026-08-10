@@ -108,8 +108,7 @@ MachineFunctionInfo *TMS9900TargetMachine::createMachineFunctionInfo(
 }
 
 void TMS9900PassConfig::addIRPasses() {
-  // Expand atomic operations to regular load/store/RMW.
-  // TMS9900 is single-core with no caches, so atomics are trivially correct.
+  // Lower unsupported atomic operations to the standard runtime ABI.
   addPass(createAtomicExpandLegacyPass());
 
   TargetPassConfig::addIRPasses();

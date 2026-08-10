@@ -103,27 +103,6 @@ public:
                                   SelectionDAG &DAG) const override;
 
   //===--------------------------------------------------------------------===//
-  // Atomics - TMS9900 is single-core with no caches, so all atomics
-  // can be safely converted to regular memory operations.
-  //===--------------------------------------------------------------------===//
-
-  AtomicExpansionKind shouldExpandAtomicLoadInIR(LoadInst *LI) const override {
-    return AtomicExpansionKind::NotAtomic;
-  }
-
-  AtomicExpansionKind shouldExpandAtomicStoreInIR(StoreInst *SI) const override {
-    return AtomicExpansionKind::NotAtomic;
-  }
-
-  AtomicExpansionKind shouldExpandAtomicRMWInIR(AtomicRMWInst *AI) const override {
-    return AtomicExpansionKind::NotAtomic;
-  }
-
-  AtomicExpansionKind shouldExpandAtomicCmpXchgInIR(AtomicCmpXchgInst *AI) const override {
-    return AtomicExpansionKind::NotAtomic;
-  }
-
-  //===--------------------------------------------------------------------===//
   // Inline Assembly Support
   //===--------------------------------------------------------------------===//
 

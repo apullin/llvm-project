@@ -109,13 +109,12 @@ TMS9900TargetLowering::TMS9900TargetLowering(const TargetMachine &TM,
   setBooleanContents(ZeroOrNegativeOneBooleanContent);
   setBooleanVectorContents(ZeroOrNegativeOneBooleanContent);
 
-  // TMS9900 has no atomic instructions - it's a simple single-core CPU
-  // with no caches or memory barriers. All memory operations are inherently
-  // ordered and visible. The shouldExpandAtomic*InIR() methods in the header
-  // tell LLVM to convert all atomics to regular memory operations.
-  // We set max atomic size to 16 bits (our word size) so LLVM knows we
-  // can handle word-sized operations (after conversion to non-atomic).
-  setMaxAtomicSizeInBitsSupported(16);
+  // Interrupt handlers can observe and modify memory between instructions, so
+  // load/modify/store sequences are not atomic despite the single-core design.
+  // Report no native atomic width; AtomicExpand lowers every operation to the
+  // standard __atomic runtime ABI, where interrupt masking can be implemented
+  // with platform knowledge.
+  setMaxAtomicSizeInBitsSupported(0);
 
   // Division and remainder
   // All use native DIV instruction via pseudo instructions

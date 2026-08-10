@@ -53,7 +53,9 @@ public:
     IntMaxType = SignedLongLong;
     IntPtrType = SignedInt;
     PtrDiffType = SignedInt;
-    SigAtomicType = SignedLong;
+    // A single 16-bit access is indivisible with respect to interrupt entry.
+    // This also matches picolibc's sig_atomic_t typedef.
+    SigAtomicType = SignedInt;
 
     // TMS9900 is big-endian
     // Data layout must match the LLVM backend (TMS9900TargetMachine.cpp)

@@ -260,6 +260,14 @@ void TMS9900FrameLowering::emitEpilogue(MachineFunction &MF,
     BuildMI(MBB, MBBI, DL, TII.get(TMS9900::AI), TMS9900::R10)
         .addReg(TMS9900::R10)
         .addImm(DeallocSize);
+
+    // R10 now points at the saved link register, or back at the entry stack
+    // pointer for a leaf frame. Keep the unwind row synchronized with that
+    // physical adjustment before any following instruction can be sampled.
+    unsigned CFIIndex = MF.addFrameInst(MCCFIInstruction::cfiDefCfaOffset(
+        nullptr, RestoresLR ? 2 : 0));
+    BuildMI(MBB, MBBI, DL, TII.get(TargetOpcode::CFI_INSTRUCTION))
+        .addCFIIndex(CFIIndex);
   }
 
   // Restore return address for non-leaf functions
@@ -269,6 +277,11 @@ void TMS9900FrameLowering::emitEpilogue(MachineFunction &MF,
         .addDef(TMS9900::R11)   // $rd - loaded value
         .addDef(TMS9900::R10)   // $rs_wb - incremented pointer (tied to $rs)
         .addUse(TMS9900::R10);  // $rs - original pointer
+
+    unsigned CFIIndex = MF.addFrameInst(
+        MCCFIInstruction::createRestore(nullptr, 11));
+    BuildMI(MBB, MBBI, DL, TII.get(TargetOpcode::CFI_INSTRUCTION))
+        .addCFIIndex(CFIIndex);
   }
 
   // CFI: Restore CFA to entry state

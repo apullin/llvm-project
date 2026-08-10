@@ -1921,10 +1921,9 @@ SDValue TMS9900TargetLowering::LowerCall(
   if (IsTailCall)
     IsTailCall = isEligibleForTailCallOptimization(CCInfo, CLI, MF, ArgLocs);
 
-  if (IsTailCall && CLI.CB && CLI.CB->isMustTailCall())
-    if (!IsTailCall)
-      report_fatal_error("failed to perform tail call elimination on a call "
-                         "site marked musttail");
+  if (!IsTailCall && CLI.CB && CLI.CB->isMustTailCall())
+    report_fatal_error("failed to perform tail call elimination on a call "
+                       "site marked musttail");
 
   // Get the size of the outgoing arguments area
   unsigned NumBytes = CCInfo.getStackSize();

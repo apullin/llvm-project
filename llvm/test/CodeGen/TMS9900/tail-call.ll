@@ -13,6 +13,16 @@ define i16 @tail_call_simple(i16 %x) {
   ret i16 %r
 }
 
+;; An eligible musttail call has the same lowering as an ordinary tail call.
+; CHECK-LABEL: musttail_call_simple:
+; CHECK-NOT: DECT
+; CHECK-NOT: BL
+; CHECK: B{{[ \t]+}}@foo
+define i16 @musttail_call_simple(i16 %x) {
+  %r = musttail call i16 @foo(i16 %x)
+  ret i16 %r
+}
+
 ;; Non-tail call: result is modified, must use BL
 ; CHECK-LABEL: not_tail_call:
 ; CHECK: DECT

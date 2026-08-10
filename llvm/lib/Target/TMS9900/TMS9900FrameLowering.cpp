@@ -145,13 +145,13 @@ void TMS9900FrameLowering::emitPrologue(MachineFunction &MF,
 
   // Allocate stack space.
   // For non-leaf functions, the DECT above subtracted 2 from SP, breaking
-  // 4-byte alignment (SP is now 4k+2). To restore 4-byte alignment, we
-  // add 2 extra bytes of padding to the AI allocation. This makes the total
+  // 4-byte alignment (SP is now 4k+2). Always add 2 bytes of padding before
+  // a call, even when the function has no fixed frame. This makes the total
   // prologue displacement = 2 (DECT) + StackSize + 2 (pad) = StackSize + 4,
   // which is 4-byte aligned (since StackSize is always 4-aligned).
   // The extra 2 bytes are accounted for in eliminateFrameIndex.
   uint64_t AllocSize = StackSize;
-  if (SavesLR && StackSize > 0)
+  if (SavesLR)
     AllocSize += 2;  // alignment padding after DECT
 
   if (AllocSize > 0) {
@@ -226,7 +226,7 @@ void TMS9900FrameLowering::emitEpilogue(MachineFunction &MF,
 
   // Deallocate stack space (must match the allocation in emitPrologue)
   uint64_t DeallocSize = StackSize;
-  if (RestoresLR && StackSize > 0)
+  if (RestoresLR)
     DeallocSize += 2;  // alignment padding (matches prologue)
 
   if (HasFP) {

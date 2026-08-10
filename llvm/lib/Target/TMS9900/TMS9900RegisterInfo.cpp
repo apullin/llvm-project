@@ -114,7 +114,7 @@ bool TMS9900RegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator MI,
   // Stack objects are at negative offsets from the original SP,
   // but we need to compute from the current SP (after prologue allocation)
   //
-  // Stack layout for non-leaf functions with locals:
+  // Stack layout for non-leaf functions:
   //   SP_entry            (4-byte aligned)
   //     [R11, 2 bytes]    -- DECT R10
   //   SP_entry - 2
@@ -129,7 +129,7 @@ bool TMS9900RegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator MI,
   const Function &F = MF.getFunction();
   bool IsNonLeaf = MFI.hasCalls() &&
       !F.hasFnAttribute(Attribute::Naked) && !F.hasFnAttribute("interrupt");
-  if (IsNonLeaf && StackAdj > 0) {
+  if (IsNonLeaf) {
     StackAdj += 2; // alignment padding (prologue allocates StackSize+2)
   }
   if (MFI.isFixedObjectIndex(FrameIndex) && IsNonLeaf) {

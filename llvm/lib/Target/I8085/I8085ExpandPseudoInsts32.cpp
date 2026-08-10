@@ -2058,6 +2058,25 @@ template <> bool I8085ExpandPseudo32::expand<I8085::MVI_32>(Block &MBB, BlockIt 
 }
 
 
+// Return true when both the taken and not-taken paths reach TargetMBB.
+static bool hasOnlyTargetSuccessor(MachineBasicBlock &MBB,
+                                   MachineBasicBlock::iterator MBBI,
+                                   MachineBasicBlock *TargetMBB) {
+  auto Next = std::next(MBBI);
+  while (Next != MBB.end() && Next->isDebugInstr())
+    ++Next;
+  if (Next != MBB.end())
+    return Next->getOpcode() == I8085::JMP &&
+           Next->getNumExplicitOperands() == 1 &&
+           Next->getOperand(0).isMBB() &&
+           Next->getOperand(0).getMBB() == TargetMBB;
+
+  // Branch folding can omit the explicit JMP when the target is also the
+  // sole layout successor.
+  return MBB.succ_size() == 1 && *MBB.succ_begin() == TargetMBB &&
+         MBB.getNextNode() == TargetMBB;
+}
+
 template <> bool I8085ExpandPseudo32::expand<I8085::JMP_32_IF_NOT_EQUAL>(Block &MBB, BlockIt MBBI) {
   MachineInstr &MI = *MBBI;
   MachineFunction *MF = MBB.getParent();
@@ -2066,6 +2085,11 @@ template <> bool I8085ExpandPseudo32::expand<I8085::JMP_32_IF_NOT_EQUAL>(Block &
   unsigned operandOne = MI.getOperand(0).getReg();
   unsigned operandTwo = MI.getOperand(1).getReg();
   MachineBasicBlock *TargetMBB = MI.getOperand(2).getMBB();
+
+  if (hasOnlyTargetSuccessor(MBB, MBBI, TargetMBB)) {
+    MI.eraseFromParent();
+    return true;
+  }
 
   // Determine which bytes can be skipped (zero in both operands).
   // First try a backward walk from the JMP for any surviving definition
@@ -2200,6 +2224,11 @@ template <> bool I8085ExpandPseudo32::expand<I8085::JMP_32_IF_ULT>(Block &MBB, B
   unsigned operandOne = MI.getOperand(0).getReg();
   unsigned operandTwo = MI.getOperand(1).getReg();
   MachineBasicBlock *TargetMBB = MI.getOperand(2).getMBB();
+
+  if (hasOnlyTargetSuccessor(MBB, MBBI, TargetMBB)) {
+    MI.eraseFromParent();
+    return true;
+  }
 
   LivePhysRegs LiveRegs(*TRI);
   LiveRegs.addLiveOuts(MBB);

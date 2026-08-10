@@ -39,6 +39,67 @@
 using namespace llvm;
 
 namespace {
+/// Return true when Opcode defines operand 0 with a word result and sets the
+/// comparison flags from that full 16-bit result.  Byte instructions cannot
+/// satisfy a following word zero-test: their flags describe only the high
+/// byte, and they additionally update odd parity.
+static bool setsWordResultComparisonFlags(unsigned Opcode) {
+  switch (Opcode) {
+  default:
+    return false;
+  case TMS9900::MOVrr:
+  case TMS9900::MOVam:
+  case TMS9900::MOVim:
+  case TMS9900::MOVxm:
+  case TMS9900::MOVpim:
+  case TMS9900::MOV_FI_Load:
+  case TMS9900::LI:
+  case TMS9900::Arr:
+  case TMS9900::Aim:
+  case TMS9900::Aam:
+  case TMS9900::Axm:
+  case TMS9900::Apim:
+  case TMS9900::AI:
+  case TMS9900::Srr:
+  case TMS9900::Sim:
+  case TMS9900::Sam:
+  case TMS9900::Sxm:
+  case TMS9900::Spim:
+  case TMS9900::INCr:
+  case TMS9900::INCTr:
+  case TMS9900::DECr:
+  case TMS9900::DECTr:
+  case TMS9900::NEGr:
+  case TMS9900::ABSr:
+  case TMS9900::INVr:
+  case TMS9900::SOCrr:
+  case TMS9900::SOCim:
+  case TMS9900::SOCam:
+  case TMS9900::SOCxm:
+  case TMS9900::SOCpim:
+  case TMS9900::ORI:
+  case TMS9900::SZCrr:
+  case TMS9900::SZCim:
+  case TMS9900::SZCam:
+  case TMS9900::SZCxm:
+  case TMS9900::SZCpim:
+  case TMS9900::ANDI:
+  case TMS9900::XORrr:
+  case TMS9900::XORim:
+  case TMS9900::XORam:
+  case TMS9900::XORxm:
+  case TMS9900::XORpim:
+  case TMS9900::SLAri:
+  case TMS9900::SRAri:
+  case TMS9900::SRLri:
+  case TMS9900::SRCri:
+  case TMS9900::SLAr0:
+  case TMS9900::SRAr0:
+  case TMS9900::SRLr0:
+    return true;
+  }
+}
+
 static bool tryFoldPostInc(MachineInstr &IncMI,
                            const TargetInstrInfo *TII,
                            const TargetRegisterInfo *TRI) {
@@ -120,11 +181,16 @@ static bool tryFoldPostInc(MachineInstr &IncMI,
   if (IsLoad && AddrReg == ValueReg)
     return false;
 
+  // The original sequence leaves the increment's status result in ST, while
+  // the auto-increment instruction leaves the memory operation's status
+  // result.  They are interchangeable only when the final status is dead.
+  if (!IncMI.registerDefIsDead(TMS9900::ST, TRI))
+    return false;
+
   MachineBasicBlock &MBB = *IncMI.getParent();
   DebugLoc DL = Prev->getDebugLoc();
   bool DeadAddr = IncMI.getOperand(0).isDead();
   bool KillAddr = IncMI.getOperand(1).isKill();
-  bool DeadST = Prev->registerDefIsDead(TMS9900::ST, TRI);
 
   MachineInstrBuilder MIB = BuildMI(MBB, Prev, DL, TII->get(NewOpc));
   if (IsLoad) {
@@ -138,9 +204,10 @@ static bool tryFoldPostInc(MachineInstr &IncMI,
     unsigned ValFlags = Prev->getOperand(1).isKill() ? RegState::Kill : 0;
     MIB.addReg(ValueReg, ValFlags);
   }
+  MIB.cloneMemRefs(*Prev);
 
-  if (int STIdx = MIB->findRegisterDefOperandIdx(TMS9900::ST, TRI, true);
-      STIdx != -1 && DeadST) {
+  if (int STIdx = MIB->findRegisterDefOperandIdx(TMS9900::ST, TRI);
+      STIdx != -1) {
     MIB->getOperand(STIdx).setIsDead();
   }
 
@@ -239,6 +306,7 @@ public:
             Register DefReg = MI.getOperand(0).getReg();
             if (Next->modifiesRegister(DefReg, TRI) &&
                 !Next->readsRegister(DefReg, TRI) &&
+                !(MI.mayLoad() && MI.hasOrderedMemoryRef()) &&
                 MI.registerDefIsDead(TMS9900::ST, TRI)) {
               MI.eraseFromParent();
               Changed = true;
@@ -285,7 +353,7 @@ public:
           MIB.addReg(Reg, RegState::Define | (DeadDef ? RegState::Dead : 0));
           MIB.addReg(Reg, KillUse ? RegState::Kill : 0);
 
-          if (int STIdx = MIB->findRegisterDefOperandIdx(TMS9900::ST, TRI, true);
+          if (int STIdx = MIB->findRegisterDefOperandIdx(TMS9900::ST, TRI);
               STIdx != -1 &&
               MI.registerDefIsDead(TMS9900::ST, TRI)) {
             MIB->getOperand(STIdx).setIsDead();
@@ -383,8 +451,8 @@ public:
           // Safety: skip calls, branches, returns.
           if (Prev->isCall() || Prev->isBranch() || Prev->isReturn())
             continue;
-          // Preceding instruction must set ST.
-          if (!Prev->modifiesRegister(TMS9900::ST, TRI))
+          // Its flags must describe the complete word result in Dst.
+          if (!setsWordResultComparisonFlags(Prev->getOpcode()))
             continue;
           // Operand 0 must be a def of Dst (primary result = flags
           // reflect Dst's value, not a secondary def).
@@ -454,7 +522,7 @@ public:
             // - Not be a call, branch, or other non-ALU instruction
             if (Prev->isCall() || Prev->isBranch() || Prev->isReturn())
               break;
-            if (!Prev->modifiesRegister(TMS9900::ST, TRI))
+            if (!setsWordResultComparisonFlags(Prev->getOpcode()))
               break;
 
             // Check that operand 0 is a def of TestReg. This ensures the
@@ -570,7 +638,7 @@ public:
             // (operand 0 isDef).
             if (Prev->isCall() || Prev->isBranch() || Prev->isReturn())
               break;
-            if (!Prev->modifiesRegister(TMS9900::ST, TRI))
+            if (!setsWordResultComparisonFlags(Prev->getOpcode()))
               break;
             if (Prev->getNumOperands() == 0 ||
                 !Prev->getOperand(0).isReg() ||
@@ -697,6 +765,27 @@ public:
           do {
             // Both operands must be killed at the Crr.
             if (!MI.getOperand(0).isKill() || !MI.getOperand(1).isKill())
+              break;
+
+            // C compares zero-extended words here, while CB performs both
+            // signed and unsigned comparisons on bytes and also updates OP.
+            // Equality and unsigned branches are equivalent.  Require OP to
+            // be dead after that branch so the extra parity update is hidden.
+            MachineInstr *Next = MI.getNextNode();
+            while (Next && Next->isDebugInstr())
+              Next = Next->getNextNode();
+            if (!Next)
+              break;
+            unsigned NextOpc = Next->getOpcode();
+            if (NextOpc != TMS9900::JEQ && NextOpc != TMS9900::JNE &&
+                NextOpc != TMS9900::JH && NextOpc != TMS9900::JHE &&
+                NextOpc != TMS9900::JL && NextOpc != TMS9900::JLE)
+              break;
+            if (!MF.getRegInfo().tracksLiveness() ||
+                MBB.computeRegisterLiveness(
+                    TRI, TMS9900::ST,
+                    std::next(MachineBasicBlock::const_iterator(Next)),
+                    MBB.size()) != MachineBasicBlock::LQR_Dead)
               break;
 
             // Source and destination must be different registers.

@@ -10,11 +10,13 @@
 #   - LI R5,100; LI R5,200 -> first LI deleted
 #   - MOV @foo,R3; A R3,R4; MOV @bar,R3 -> first kept (used by A)
 #   - MOV @foo,R3; MOV @bar,R4 -> both kept (different regs)
+#   - volatile MOV @foo,R3; MOV @bar,R3 -> both kept (ordered load)
 
 --- |
   @foo = external global i16
   @bar = external global i16
   define i16 @redund_mov_mov() { ret i16 0 }
+  define i16 @no_redund_volatile() { ret i16 0 }
   define i16 @redund_li_li() { ret i16 0 }
   define i16 @no_redund_used() { ret i16 0 }
   define i16 @no_redund_diff_regs() { ret i16 0 }
@@ -26,8 +28,8 @@ name: redund_mov_mov
 tracksRegLiveness: true
 body: |
   bb.0:
-    renamable $r3 = MOVam @foo, implicit-def dead $st
-    renamable $r3 = MOVam @bar, implicit-def dead $st
+    renamable $r3 = MOVam @foo, implicit-def dead $st :: (load (s16) from @foo)
+    renamable $r3 = MOVam @bar, implicit-def dead $st :: (load (s16) from @bar)
     RET
 ...
 
@@ -36,6 +38,22 @@ body: |
 # CHECK-NOT: MOVam{{.*}}@foo
 # CHECK: MOVam{{.*}}@bar
 # CHECK: RET
+
+# A volatile load remains observable even when its result is overwritten.
+---
+name: no_redund_volatile
+tracksRegLiveness: true
+body: |
+  bb.0:
+    renamable $r3 = MOVam @foo, implicit-def dead $st :: (volatile load (s16) from @foo)
+    renamable $r3 = MOVam @bar, implicit-def dead $st
+    RET
+...
+
+# CHECK-LABEL: name: no_redund_volatile
+# CHECK: MOVam{{.*}}@foo{{.*}}:: (volatile load (s16) from @foo)
+# CHECK-NEXT: $r3 = MOVam @bar
+# CHECK-NEXT: RET
 
 # Two consecutive LI to same register -> first deleted.
 ---

@@ -35,6 +35,7 @@
   define i16 @crr_no_elim_diff_reg() { ret i16 0 }
   define i16 @crr_no_elim_bb_start() { ret i16 0 }
   define i16 @crr_elim_case_a_jgt() { ret i16 0 }
+  define i16 @crr_no_elim_byte_setter() { ret i16 0 }
 ...
 
 # Case A: ANDI R5,1 then Crr R5,R0 where R0 is the zero destination.
@@ -244,3 +245,28 @@ body: |
 # CHECK: ANDI
 # CHECK-NOT: Crr
 # CHECK: JGT
+
+# A byte operation's flags do not describe the complete word in R5.
+---
+name: crr_no_elim_byte_setter
+tracksRegLiveness: true
+body: |
+  bb.0:
+    successors: %bb.1, %bb.2
+    liveins: $r5, $r6
+    renamable $r0 = CLRr implicit-def dead $st
+    renamable $r5 = MOVBrr killed $r6, implicit-def dead $st
+    Crr killed $r5, killed $r0, implicit-def $st
+    JGT %bb.1, implicit $st
+
+  bb.2:
+    RET
+
+  bb.1:
+    RET
+...
+
+# CHECK-LABEL: name: crr_no_elim_byte_setter
+# CHECK: MOVBrr
+# CHECK-NEXT: Crr killed $r5, killed $r0
+# CHECK-NEXT: JGT

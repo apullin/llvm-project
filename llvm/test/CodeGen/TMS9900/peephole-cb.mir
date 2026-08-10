@@ -22,6 +22,9 @@
 #   Jcc target
 #
 # Saves 8 bytes and ~56 cycles (two SRL instructions removed).
+# This is valid only for equality and unsigned branches.  Signed byte
+# comparisons interpret bit 7 as a sign, unlike the original zero-extended
+# word comparison, and CB's parity update must not be observed afterward.
 
 --- |
   define i16 @cb_basic_jeq() { ret i16 0 }
@@ -32,6 +35,8 @@
   define i16 @cb_basic_jle() { ret i16 0 }
   define i16 @cb_basic_jgt() { ret i16 0 }
   define i16 @cb_basic_jlt() { ret i16 0 }
+  define i16 @cb_no_fold_jop() { ret i16 0 }
+  define i16 @cb_no_fold_op_liveout() { ret i16 0 }
   define i16 @cb_no_fold_not_killed() { ret i16 0 }
   define i16 @cb_no_fold_not_srl() { ret i16 0 }
   define i16 @cb_no_fold_srl_not_8() { ret i16 0 }
@@ -229,8 +234,10 @@ body: |
 ...
 
 # CHECK-LABEL: name: cb_basic_jgt
-# CHECK-NOT: SRLri
-# CHECK: CBrr
+# Signed comparison is not equivalent for byte values with bit 7 set.
+# CHECK: SRLri
+# CHECK: SRLri
+# CHECK: Crr
 # CHECK: JGT
 
 # JLT (signed <)
@@ -256,9 +263,75 @@ body: |
 ...
 
 # CHECK-LABEL: name: cb_basic_jlt
-# CHECK-NOT: SRLri
-# CHECK: CBrr
+# Signed comparison is not equivalent for byte values with bit 7 set.
+# CHECK: SRLri
+# CHECK: SRLri
+# CHECK: Crr
 # CHECK: JLT
+
+# JOP directly observes the parity bit that CB changes but C preserves.
+---
+name: cb_no_fold_jop
+tracksRegLiveness: true
+body: |
+  bb.0:
+    successors: %bb.1, %bb.2
+    liveins: $r0, $r1
+    renamable $r0 = MOVBim killed $r0, implicit-def dead $st
+    renamable $r1 = MOVBim killed $r1, implicit-def dead $st
+    renamable $r0 = SRLri killed $r0, 8, implicit-def dead $st
+    renamable $r1 = SRLri killed $r1, 8, implicit-def dead $st
+    Crr killed $r1, killed $r0, implicit-def $st
+    JOP %bb.1, implicit $st
+
+  bb.2:
+    RET
+
+  bb.1:
+    RET
+...
+
+# CHECK-LABEL: name: cb_no_fold_jop
+# CHECK: SRLri
+# CHECK: SRLri
+# CHECK: Crr
+# CHECK: JOP
+
+# Even after a safe equality branch, preserve C when a successor observes OP.
+---
+name: cb_no_fold_op_liveout
+tracksRegLiveness: true
+body: |
+  bb.0:
+    successors: %bb.1, %bb.2
+    liveins: $r0, $r1
+    renamable $r0 = MOVBim killed $r0, implicit-def dead $st
+    renamable $r1 = MOVBim killed $r1, implicit-def dead $st
+    renamable $r0 = SRLri killed $r0, 8, implicit-def dead $st
+    renamable $r1 = SRLri killed $r1, 8, implicit-def dead $st
+    Crr killed $r1, killed $r0, implicit-def $st
+    JEQ %bb.1, implicit $st
+
+  bb.2:
+    successors: %bb.3, %bb.4
+    liveins: $st
+    JOP %bb.3, implicit $st
+
+  bb.4:
+    RET
+
+  bb.3:
+    RET
+
+  bb.1:
+    RET
+...
+
+# CHECK-LABEL: name: cb_no_fold_op_liveout
+# CHECK: SRLri
+# CHECK: SRLri
+# CHECK: Crr
+# CHECK: JEQ
 
 # Negative: Crr operands NOT killed (register used later).
 ---

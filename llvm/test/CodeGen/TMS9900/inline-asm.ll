@@ -5,9 +5,11 @@
 ; register constraints.
 
 ; --- Simple inline asm with no operands ---
+; NOP is accepted as an input alias and canonicalized to JMP 0 in textual
+; assembly.  Address-aware object disassembly prints the NOP alias.
 ; CHECK-LABEL: asm_nop:
 ; CHECK: ;APP
-; CHECK: NOP
+; CHECK: JMP{{[ \t]+}}0
 ; CHECK: ;NO_APP
 ; CHECK: B{{[ \t]+}}*R11
 

@@ -13,7 +13,7 @@
   li r5, -1
 
 ; NOP is JMP $+2 (offset 0)
-; CHECK: NOP{{[ \t]+}}; encoding: [0x10,0x00]
+; CHECK: JMP{{[ \t]+}}0{{[ \t]+}}; encoding: [0x10,0x00]
 
 ; AI with -1 = 0xFFFF
 ; CHECK: AI{{[ \t]+}}R1,-1{{[ \t]+}}; encoding: [0x02,0x21,0xff,0xff]

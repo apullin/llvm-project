@@ -2033,7 +2033,10 @@ def LREX : Format11<0b0000001111100000, (outs), (ins),
 // NOP (alias for JMP $+2)
 //===----------------------------------------------------------------------===//
 
-def : InstAlias<"NOP", (JMP 0)>;
+// Parsing NOP as JMP 0 is address-independent, but printing it is not: the
+// disassembler represents branch operands as absolute targets.  The custom
+// instruction printer handles that address-aware aliasing.
+def : InstAlias<"NOP", (JMP 0), 0>;
 
 //===----------------------------------------------------------------------===//
 // Additional Patterns for Global/Jump Table/Block Addresses

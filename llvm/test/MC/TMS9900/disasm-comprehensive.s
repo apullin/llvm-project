@@ -713,7 +713,7 @@ fwd:
 ; CHECK: TB{{[ \t]+}}-128{{[ \t]+}}; encoding: [0x1f,0x80]
 
 ; --- Jumps ---
-; CHECK: NOP{{[ \t]+}}; encoding: [0x10,0x00]
+; CHECK: JMP{{[ \t]+}}0{{[ \t]+}}; encoding: [0x10,0x00]
 ; CHECK: JEQ{{[ \t]+}}fwd
 ; CHECK: JNE{{[ \t]+}}fwd
 ; CHECK: JGT{{[ \t]+}}fwd

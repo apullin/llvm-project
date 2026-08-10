@@ -1,0 +1,34 @@
+# RUN: llc -mtriple=tms9900 -run-pass=greedy -stress-regalloc=1 \
+# RUN:   -verify-machineinstrs %s -o - | FileCheck %s
+
+# LI and MOV loads define the physical status register.  They must not be
+# treated as trivially rematerializable: RA may otherwise move one across an
+# unrelated status definition.  The fixed R0 definition forces the LI value to
+# spill; retaining the original LI proves it was not recreated at its use.
+
+--- |
+  define void @no_remat_status_def() {
+    ret void
+  }
+...
+---
+name: no_remat_status_def
+tracksRegLiveness: true
+registers:
+  - { id: 0, class: gr16 }
+body: |
+  bb.0:
+    liveins: $r1, $r5
+    %0:gr16 = LI 4660, implicit-def dead $st
+    $r0 = COPY $r5
+    Crr $r0, $r1, implicit-def $st
+    $r3 = COPY %0
+    RET
+...
+
+# CHECK-LABEL: name: no_remat_status_def
+# CHECK: [[CONST:%[0-9]+]]:gr16 = LI 4660, implicit-def dead $st
+# CHECK-NEXT: MOV_FI_Store
+# CHECK: Crr $r0, $r1, implicit-def $st
+# CHECK-NOT: LI
+# CHECK-NEXT: $r3 = MOV_FI_Load

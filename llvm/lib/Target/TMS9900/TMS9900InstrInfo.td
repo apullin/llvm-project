@@ -332,9 +332,7 @@ def MOVBrr : Format1_Reg<0b1100, 1, (outs GR16:$rd), (ins GR16:$rs),
 
 let Defs = [ST] in {
 // MOV @addr,Rd - Load from absolute address
-// Marked as rematerializable; verified by isReallyTriviallyReMaterializable
-// which checks that the address refers to a constant global or constant pool.
-let isReMaterializable = 1 in
+// MOV changes ST, so even an invariant load cannot be rematerialized safely.
 def MOVam : Format1_SymLoad<0b1100, 0, (outs GR16:$rd), (ins symaddr:$addr),
                             "MOV\t@$addr,$rd",
                             [(set GR16:$rd, (load (TMS9900Wrapper tglobaladdr:$addr)))]> {
@@ -352,9 +350,7 @@ def MOVim : Format1_IndLoad<0b1100, 0, (outs GR16:$rd), (ins GR16:$rs),
 
 // MOV @offset(Ri),Rd - Load indexed
 // Used for stack-relative addressing (locals via SP)
-// Marked as rematerializable; verified by isReallyTriviallyReMaterializable
-// which checks that the base register is the frame pointer (R10).
-let isReMaterializable = 1 in
+// MOV changes ST, so even an invariant load cannot be rematerialized safely.
 def MOVxm : Format1_IdxLoad<0b1100, 0, (outs GR16:$rd), (ins i16imm:$offset, IdxRegs:$ri),
                             "MOV\t@${offset}(${ri}),$rd",
                             [(set GR16:$rd, (load (add IdxRegs:$ri, (i16 imm:$offset))))]> {
@@ -399,10 +395,8 @@ def MOVmx : Format1_IdxStore<0b1100, 0, (outs), (ins i16imm:$offset, IdxRegs:$ri
 // MOV @offset(Ri),Rd - Load indexed (frame index compatible)
 // This is a pseudo that will be printed by custom code in TMS9900AsmPrinter
 // or expanded by TMS9900MCInstLower
-// Marked as rematerializable; verified by isReallyTriviallyReMaterializable
-// which checks that the base is a frame index pointing to an immutable object.
-let Defs = [ST], mayLoad = 1, isCodeGenOnly = 1, isPseudo = 1,
-    isReMaterializable = 1 in
+// MOV changes ST, so even an immutable stack load cannot be rematerialized.
+let Defs = [ST], mayLoad = 1, isCodeGenOnly = 1, isPseudo = 1 in
 def MOV_FI_Load : TMS9900Inst<(outs GR16:$rd), (ins IdxRegs:$base, i16imm:$offset),
                               "MOV\t@${offset}(${base}),$rd",
                               []> {
@@ -663,9 +657,9 @@ defm C  : Format1ExtMem<0b1000, 0, "C">;
 defm CB : Format1ExtMem<0b1000, 1, "CB">;
 }
 
-// LI - Load Immediate (sets status based on value loaded)
-// Always safe to rematerialize since the immediate is encoded in the instruction.
-let Defs = [ST], isReMaterializable = 1, isAsCheapAsAMove = 1 in
+// LI - Load Immediate (sets status based on value loaded).  It cannot be
+// rematerialized because inserting it at a use may clobber live status bits.
+let Defs = [ST], isAsCheapAsAMove = 1 in
 def LI : Format8<0b0000, (outs GR16:$rd), (ins i16imm:$imm),
                  "LI\t$rd,$imm",
                  [(set GR16:$rd, imm:$imm)]> {

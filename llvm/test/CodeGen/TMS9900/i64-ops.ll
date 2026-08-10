@@ -335,10 +335,10 @@ define void @store64(i64 %v, ptr %p) {
 ; 1234567890123 = 0x000_011F_71FB_04CB
 ; R0=0, R1=0x011F, R2=0x71FB, R3=0x04CB
 ; CHECK-LABEL: const64:
-; CHECK: CLR{{[ \t]+}}R0
-; CHECK: LI{{[ \t]+}}R1,287
-; CHECK: LI{{[ \t]+}}R2,29179
-; CHECK: LI{{[ \t]+}}R3,1227
+; CHECK-DAG: CLR{{[ \t]+}}R0
+; CHECK-DAG: LI{{[ \t]+}}R1,287
+; CHECK-DAG: LI{{[ \t]+}}R2,29179
+; CHECK-DAG: LI{{[ \t]+}}R3,1227
 ; CHECK: B{{[ \t]+}}*R11
 define i64 @const64() {
   ret i64 1234567890123

@@ -660,55 +660,6 @@ void TMS9900InstrInfo::insertIndirectBranch(MachineBasicBlock &MBB,
   BuildMI(&MBB, DL, get(TMS9900::B_sym)).addMBB(&NewDestBB);
 }
 
-bool TMS9900InstrInfo::isReallyTriviallyReMaterializable(
-    const MachineInstr &MI) const {
-  switch (MI.getOpcode()) {
-  default:
-    // Fall through to the base class for anything we don't explicitly handle.
-    // The base class will reject instructions that def physical registers
-    // (like ST), so only instructions listed here can be rematerialized.
-    return false;
-
-  case TMS9900::LI:
-  case TMS9900::CLRr:
-  case TMS9900::SETOr:
-    // These produce constant values and have no memory operands.
-    // They only define ST (status flags) as a side effect, which is safe
-    // to re-execute since the flags are not a preserved resource.
-    return true;
-
-  case TMS9900::MOVam: {
-    // MOV @addr,Rd - Load from a symbolic (absolute) address.
-    // Safe to rematerialize if the memory is dereferenceable and invariant
-    // (e.g., constant pool, read-only global). The isDereferenceableInvariantLoad
-    // check examines the MachineMemOperands attached to this instruction.
-    return MI.isDereferenceableInvariantLoad();
-  }
-
-  case TMS9900::MOVxm: {
-    // MOV @offset(Ri),Rd - Load from indexed address.
-    // Only safe to rematerialize if the base register is R10 (stack pointer)
-    // and the memory location is dereferenceable and invariant (e.g., an
-    // incoming argument on the stack that won't be modified).
-    // Operands: $rd (def), $offset (imm), $ri (index reg)
-    if (MI.getNumOperands() < 3)
-      return false;
-    const MachineOperand &BaseReg = MI.getOperand(2);
-    if (!BaseReg.isReg() || BaseReg.getReg() != TMS9900::R10)
-      return false;
-    return MI.isDereferenceableInvariantLoad();
-  }
-
-  case TMS9900::MOV_FI_Load: {
-    // MOV @offset(Ri),Rd - Frame index load pseudo.
-    // Only safe to rematerialize if the memory is dereferenceable and invariant
-    // (e.g., loading an immutable argument from the stack).
-    // Operands: $rd (def), $base (reg), $offset (imm)
-    return MI.isDereferenceableInvariantLoad();
-  }
-  }
-}
-
 bool TMS9900InstrInfo::expandPostRAPseudo(MachineInstr &MI) const {
   MachineBasicBlock &MBB = *MI.getParent();
   DebugLoc DL = MI.getDebugLoc();

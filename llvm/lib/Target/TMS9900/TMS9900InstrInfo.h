@@ -80,8 +80,6 @@ public:
 
   bool expandPostRAPseudo(MachineInstr &MI) const override;
 
-  bool isReallyTriviallyReMaterializable(const MachineInstr &MI) const override;
-
   bool isFunctionSafeToOutlineFrom(MachineFunction &MF,
                                    bool OutlineFromLinkOnceODRs) const override;
 

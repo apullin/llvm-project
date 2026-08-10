@@ -60,6 +60,11 @@ BitVector TMS9900RegisterInfo::getReservedRegs(const MachineFunction &MF) const 
   // R11 is the link register (return address)
   Reserved.set(TMS9900::R11);
 
+  // Functions with dynamic stack allocation or an exposed frame address use
+  // callee-saved R13 as a stable base for fixed frame objects.
+  if (Subtarget.getFrameLowering()->hasFP(MF))
+    Reserved.set(TMS9900::R13);
+
   // R12 is the CRU base address register.  Reserve it only when the
   // program uses CRU instructions (-mattr=+reserve-cru).
   if (Subtarget.reserveCRU())
@@ -98,12 +103,14 @@ bool TMS9900RegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator MI,
   const TargetInstrInfo &TII = *Subtarget.getInstrInfo();
   const TargetRegisterInfo &TRI = *Subtarget.getRegisterInfo();
   const MachineFrameInfo &MFI = MF.getFrameInfo();
+  const bool HasFP = Subtarget.getFrameLowering()->hasFP(MF);
+  const Register FrameReg = HasFP ? TMS9900::R13 : TMS9900::R10;
   DebugLoc DL = MI_ref.getDebugLoc();
 
   int FrameIndex = MI_ref.getOperand(FIOperandNum).getIndex();
-  int64_t Offset = MFI.getObjectOffset(FrameIndex) + SPAdj;
+  int64_t Offset = MFI.getObjectOffset(FrameIndex) + (HasFP ? 0 : SPAdj);
 
-  // Add the offset from the stack pointer (R10)
+  // Add the offset from the fixed frame base (R10 normally, R13 with an FP).
   // Stack objects are at negative offsets from the original SP,
   // but we need to compute from the current SP (after prologue allocation)
   //
@@ -113,7 +120,7 @@ bool TMS9900RegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator MI,
   //   SP_entry - 2
   //     [locals, StackSize bytes]
   //     [2 bytes padding] -- for 4-byte alignment after DECT
-  //   SP = SP_entry - StackSize - 4
+  //   frame base = SP_entry - StackSize - 4
   //
   // LLVM's ObjectOffset is relative to (SP_entry - 2), the frame pointer.
   // For non-fixed objects: address = (SP + StackSize + 2) + ObjectOffset
@@ -145,9 +152,9 @@ bool TMS9900RegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator MI,
     int64_t ExtraOffset = MI_ref.getOperand(FIOperandNum + 1).getImm();
     int64_t TotalOffset = Offset + ExtraOffset;
 
-    // Build: MOV R10, DestReg
+    // Copy the stable frame base into DestReg.
     BuildMI(MBB, MI, DL, TII.get(TMS9900::MOVrr), DestReg)
-        .addReg(TMS9900::R10);
+        .addReg(FrameReg);
 
     // Build: AI DestReg, TotalOffset (only if non-zero)
     if (TotalOffset != 0) {
@@ -165,8 +172,7 @@ bool TMS9900RegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator MI,
   // These instructions have a memri operand: (register, immediate)
   // The frame index is in operand FIOperandNum, and the offset is in FIOperandNum+1
   if (Opc == TMS9900::MOV_FI_Load || Opc == TMS9900::MOV_FI_Store) {
-    // Replace frame index with R10 (stack pointer)
-    MI_ref.getOperand(FIOperandNum).ChangeToRegister(TMS9900::R10, false);
+    MI_ref.getOperand(FIOperandNum).ChangeToRegister(FrameReg, false);
 
     // Add the computed offset to the existing immediate offset
     MachineOperand &OffsetOp = MI_ref.getOperand(FIOperandNum + 1);
@@ -183,9 +189,9 @@ bool TMS9900RegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator MI,
                                                      MCOI::TIED_TO);
   bool TiedToDef = (TiedOp != -1);
 
-  // If offset is 0 and the operand is not tied, simply replace with R10.
+  // If offset is 0 and the operand is not tied, use the frame base directly.
   if (Offset == 0 && !TiedToDef) {
-    MI_ref.getOperand(FIOperandNum).ChangeToRegister(TMS9900::R10, false);
+    MI_ref.getOperand(FIOperandNum).ChangeToRegister(FrameReg, false);
     return false;
   }
 
@@ -194,9 +200,10 @@ bool TMS9900RegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator MI,
     if (DefOp.isReg()) {
       Register BaseReg = DefOp.getReg();
 
-      // Compute BaseReg = R10 + Offset so the tied def uses the same register.
+      // Compute BaseReg = FrameReg + Offset so the tied def uses the same
+      // register.
       BuildMI(MBB, MI, DL, TII.get(TMS9900::MOVrr), BaseReg)
-          .addReg(TMS9900::R10);
+          .addReg(FrameReg);
       if (Offset != 0) {
         BuildMI(MBB, MI, DL, TII.get(TMS9900::AI), BaseReg)
             .addReg(BaseReg)
@@ -235,10 +242,9 @@ bool TMS9900RegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator MI,
     report_fatal_error("TMS9900: failed to scavenge scratch register");
   RS->setRegUsed(ScratchReg);
 
-  // Compute address: ScratchReg = R10 + Offset
-  // MOV R10, ScratchReg
+  // Compute address: ScratchReg = FrameReg + Offset.
   BuildMI(MBB, MI, DL, TII.get(TMS9900::MOVrr), ScratchReg)
-      .addReg(TMS9900::R10);
+      .addReg(FrameReg);
 
   // AI ScratchReg, Offset
   BuildMI(MBB, MI, DL, TII.get(TMS9900::AI), ScratchReg)
@@ -252,6 +258,7 @@ bool TMS9900RegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator MI,
 }
 
 Register TMS9900RegisterInfo::getFrameRegister(const MachineFunction &MF) const {
-  // We use R10 as the stack pointer / frame pointer
-  return TMS9900::R10;
+  const TMS9900Subtarget &Subtarget = MF.getSubtarget<TMS9900Subtarget>();
+  return Subtarget.getFrameLowering()->hasFP(MF) ? TMS9900::R13
+                                                 : TMS9900::R10;
 }

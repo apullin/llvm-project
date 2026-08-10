@@ -25,6 +25,10 @@ class TMS9900MachineFunctionInfo : public MachineFunctionInfo {
   /// VarArgsFrameIndex - FrameIndex for start of varargs area.
   int VarArgsFrameIndex = 0;
 
+  /// Frame index of the slot holding the caller's R13 when a dedicated frame
+  /// pointer is required.
+  int FramePointerSaveIndex = -1;
+
 public:
   TMS9900MachineFunctionInfo() = default;
 
@@ -39,6 +43,9 @@ public:
 
   int getVarArgsFrameIndex() const { return VarArgsFrameIndex; }
   void setVarArgsFrameIndex(int Index) { VarArgsFrameIndex = Index; }
+
+  int getFramePointerSaveIndex() const { return FramePointerSaveIndex; }
+  void setFramePointerSaveIndex(int Index) { FramePointerSaveIndex = Index; }
 };
 
 } // End llvm namespace

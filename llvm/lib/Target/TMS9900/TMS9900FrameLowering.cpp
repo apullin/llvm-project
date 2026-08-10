@@ -14,21 +14,23 @@
 // as the stack pointer. The stack grows downward (high to low addresses).
 //
 // Function Prologue:
-//   1. Save return address (R11) to stack: DECT R10, MOV R11,*R10
-//   2. Save callee-saved registers if needed
-//   3. Allocate local stack space: AI R10,-framesize
+//   1. Save return address (R11) when needed
+//   2. Allocate the fixed frame
+//   3. Save and establish R13 when a stable frame pointer is required
+//   4. Save other used callee-saved registers into fixed frame slots
 //
 // Function Epilogue:
-//   1. Deallocate local stack space: AI R10,framesize
-//   2. Restore callee-saved registers
-//   3. Restore return address: MOV *R10+,R11
-//   4. Return: B *R11
+//   1. Restore other callee-saved registers through the fixed frame base
+//   2. Restore R10 from R13 and then restore the caller's R13
+//   3. Deallocate the fixed frame
+//   4. Restore R11 and return
 //
 //===----------------------------------------------------------------------===//
 
 #include "TMS9900FrameLowering.h"
 #include "TMS9900.h"
 #include "TMS9900InstrInfo.h"
+#include "TMS9900MachineFunctionInfo.h"
 #include "TMS9900Subtarget.h"
 #include "llvm/CodeGen/MachineFrameInfo.h"
 #include "llvm/CodeGen/MachineFunction.h"
@@ -37,6 +39,7 @@
 #include "llvm/IR/Function.h"
 #include "llvm/MC/MCDwarf.h"
 #include "llvm/Support/ErrorHandling.h"
+#include "llvm/Target/TargetOptions.h"
 
 using namespace llvm;
 
@@ -52,9 +55,30 @@ TMS9900FrameLowering::TMS9900FrameLowering(const TMS9900Subtarget &STI)
 // addresses cause ORI to be a no-op, reading the high word twice.
 
 bool TMS9900FrameLowering::hasFPImpl(const MachineFunction &MF) const {
-  // We don't use a separate frame pointer - just the stack pointer (R10)
-  // Could implement FP later if needed for variable-length arrays
-  return false;
+  const MachineFrameInfo &MFI = MF.getFrameInfo();
+
+  // R13-R15 hold the hardware return context in an interrupt workspace.  An
+  // interrupt that genuinely needs a frame pointer is rejected before frame
+  // layout, while a global no-omit-frame-pointer option is harmlessly ignored.
+  if (MF.getFunction().hasFnAttribute("interrupt"))
+    return MFI.hasVarSizedObjects() || MFI.isFrameAddressTaken();
+
+  return MF.getTarget().Options.DisableFramePointerElim(MF) ||
+         MFI.hasVarSizedObjects() || MFI.isFrameAddressTaken();
+}
+
+static int64_t getFramePointerSaveOffset(const MachineFunction &MF) {
+  const MachineFrameInfo &MFI = MF.getFrameInfo();
+  const auto *FuncInfo = MF.getInfo<TMS9900MachineFunctionInfo>();
+  int FI = FuncInfo->getFramePointerSaveIndex();
+  assert(FI >= 0 && "frame-pointer save slot was not allocated");
+
+  int64_t Offset = MFI.getObjectOffset(FI) + MFI.getStackSize();
+  const Function &F = MF.getFunction();
+  const bool SavesLR = MFI.hasCalls() && !F.hasFnAttribute("interrupt");
+  if (SavesLR && MFI.getStackSize() > 0)
+    Offset += 2;
+  return Offset;
 }
 
 void TMS9900FrameLowering::emitPrologue(MachineFunction &MF,
@@ -68,6 +92,7 @@ void TMS9900FrameLowering::emitPrologue(MachineFunction &MF,
 
   MachineBasicBlock::iterator MBBI = MBB.begin();
   MachineFrameInfo &MFI = MF.getFrameInfo();
+  const bool HasFP = hasFP(MF);
   const TMS9900Subtarget &STI = MF.getSubtarget<TMS9900Subtarget>();
   const TMS9900InstrInfo &TII = *STI.getInstrInfo();
   DebugLoc DL;
@@ -85,7 +110,7 @@ void TMS9900FrameLowering::emitPrologue(MachineFunction &MF,
   // For non-leaf functions, save R11 (return address)
   // DECT R10        ; SP -= 2
   // MOV R11,*R10    ; Push R11
-  if (!MFI.hasCalls() && StackSize == 0) {
+  if (!MFI.hasCalls() && StackSize == 0 && !HasFP) {
     // Leaf function with no locals - no prologue needed
     return;
   }
@@ -142,6 +167,34 @@ void TMS9900FrameLowering::emitPrologue(MachineFunction &MF,
     BuildMI(MBB, MBBI, DL, TII.get(TargetOpcode::CFI_INSTRUCTION))
         .addCFIIndex(CFIIndex);
   }
+
+  if (HasFP) {
+    int64_t SaveOffset = getFramePointerSaveOffset(MF);
+    if (SaveOffset == 0) {
+      BuildMI(MBB, MBBI, DL, TII.get(TMS9900::MOVmi))
+          .addReg(TMS9900::R10)
+          .addReg(TMS9900::R13);
+    } else {
+      BuildMI(MBB, MBBI, DL, TII.get(TMS9900::MOVmx))
+          .addImm(SaveOffset)
+          .addReg(TMS9900::R10)
+          .addReg(TMS9900::R13);
+    }
+
+    uint64_t CFAOffset = AllocSize + (SavesLR ? 2 : 0);
+    unsigned CFIIndex = MF.addFrameInst(MCCFIInstruction::createOffset(
+        nullptr, 13, SaveOffset - static_cast<int64_t>(CFAOffset)));
+    BuildMI(MBB, MBBI, DL, TII.get(TargetOpcode::CFI_INSTRUCTION))
+        .addCFIIndex(CFIIndex);
+
+    BuildMI(MBB, MBBI, DL, TII.get(TMS9900::MOVrr), TMS9900::R13)
+        .addReg(TMS9900::R10);
+
+    CFIIndex = MF.addFrameInst(
+        MCCFIInstruction::cfiDefCfa(nullptr, 13, CFAOffset));
+    BuildMI(MBB, MBBI, DL, TII.get(TargetOpcode::CFI_INSTRUCTION))
+        .addCFIIndex(CFIIndex);
+  }
 }
 
 void TMS9900FrameLowering::emitEpilogue(MachineFunction &MF,
@@ -155,6 +208,7 @@ void TMS9900FrameLowering::emitEpilogue(MachineFunction &MF,
 
   MachineBasicBlock::iterator MBBI = MBB.getLastNonDebugInstr();
   MachineFrameInfo &MFI = MF.getFrameInfo();
+  const bool HasFP = hasFP(MF);
   const TMS9900Subtarget &STI = MF.getSubtarget<TMS9900Subtarget>();
   const TMS9900InstrInfo &TII = *STI.getInstrInfo();
   DebugLoc DL;
@@ -165,7 +219,7 @@ void TMS9900FrameLowering::emitEpilogue(MachineFunction &MF,
   uint64_t StackSize = MFI.getStackSize();
   const bool RestoresLR = MFI.hasCalls() && !IsInterrupt;
 
-  if (!RestoresLR && StackSize == 0) {
+  if (!RestoresLR && StackSize == 0 && !HasFP) {
     // Leaf function with no locals - no epilogue needed
     return;
   }
@@ -174,6 +228,32 @@ void TMS9900FrameLowering::emitEpilogue(MachineFunction &MF,
   uint64_t DeallocSize = StackSize;
   if (RestoresLR && StackSize > 0)
     DeallocSize += 2;  // alignment padding (matches prologue)
+
+  if (HasFP) {
+    uint64_t CFAOffset = DeallocSize + (RestoresLR ? 2 : 0);
+    BuildMI(MBB, MBBI, DL, TII.get(TMS9900::MOVrr), TMS9900::R10)
+        .addReg(TMS9900::R13);
+
+    unsigned CFIIndex = MF.addFrameInst(
+        MCCFIInstruction::cfiDefCfa(nullptr, 10, CFAOffset));
+    BuildMI(MBB, MBBI, DL, TII.get(TargetOpcode::CFI_INSTRUCTION))
+        .addCFIIndex(CFIIndex);
+
+    int64_t SaveOffset = getFramePointerSaveOffset(MF);
+    if (SaveOffset == 0) {
+      BuildMI(MBB, MBBI, DL, TII.get(TMS9900::MOVim), TMS9900::R13)
+          .addReg(TMS9900::R10);
+    } else {
+      BuildMI(MBB, MBBI, DL, TII.get(TMS9900::MOVxm), TMS9900::R13)
+          .addImm(SaveOffset)
+          .addReg(TMS9900::R10);
+    }
+
+    CFIIndex = MF.addFrameInst(
+        MCCFIInstruction::createRestore(nullptr, 13));
+    BuildMI(MBB, MBBI, DL, TII.get(TargetOpcode::CFI_INSTRUCTION))
+        .addCFIIndex(CFIIndex);
+  }
 
   if (DeallocSize > 0) {
     // AI R10,DeallocSize
@@ -257,6 +337,23 @@ void TMS9900FrameLowering::determineCalleeSaves(MachineFunction &MF,
 
 void TMS9900FrameLowering::processFunctionBeforeFrameFinalized(
     MachineFunction &MF, RegScavenger *RS) const {
-  // Nothing to do here -- alignment padding is handled in emitPrologue/
-  // emitEpilogue and accounted for in eliminateFrameIndex.
+  MachineFrameInfo &MFI = MF.getFrameInfo();
+  const Function &F = MF.getFunction();
+  const bool NeedsStableFrame =
+      MFI.hasVarSizedObjects() || MFI.isFrameAddressTaken();
+
+  if (NeedsStableFrame &&
+      (F.hasFnAttribute(Attribute::Naked) ||
+       F.hasFnAttribute("interrupt")))
+    report_fatal_error("TMS9900: variable stack objects and frame addresses "
+                       "are unsupported in naked and interrupt functions");
+
+  if (!hasFP(MF))
+    return;
+
+  auto *FuncInfo = MF.getInfo<TMS9900MachineFunctionInfo>();
+  assert(FuncInfo->getFramePointerSaveIndex() < 0 &&
+         "frame-pointer save slot allocated twice");
+  int FI = MFI.CreateStackObject(2, Align(2), /*isSpillSlot=*/true);
+  FuncInfo->setFramePointerSaveIndex(FI);
 }

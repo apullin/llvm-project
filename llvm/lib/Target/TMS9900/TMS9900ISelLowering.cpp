@@ -916,7 +916,8 @@ SDValue TMS9900TargetLowering::LowerRETURNADDR(SDValue Op,
 
 SDValue TMS9900TargetLowering::LowerFRAMEADDR(SDValue Op,
                                                SelectionDAG &DAG) const {
-  MachineFrameInfo &MFI = DAG.getMachineFunction().getFrameInfo();
+  MachineFunction &MF = DAG.getMachineFunction();
+  MachineFrameInfo &MFI = MF.getFrameInfo();
   MFI.setFrameAddressIsTaken(true);
 
   EVT VT = Op.getValueType();
@@ -928,9 +929,8 @@ SDValue TMS9900TargetLowering::LowerFRAMEADDR(SDValue Op,
     return DAG.getConstant(0, DL, VT);
   }
 
-  // Depth 0: return the stack pointer (R10). TMS9900 does not use a
-  // dedicated frame pointer, so SP is the best approximation.
-  return DAG.getCopyFromReg(DAG.getEntryNode(), DL, TMS9900::R10, VT);
+  // Depth 0: frame-address use forces a stable R13 frame pointer.
+  return DAG.getCopyFromReg(DAG.getEntryNode(), DL, TMS9900::R13, VT);
 }
 
 SDValue TMS9900TargetLowering::LowerBR_CC(SDValue Op, SelectionDAG &DAG) const {

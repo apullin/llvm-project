@@ -69,23 +69,30 @@ Registers
 
 .. table:: Register Usage
 
-   ===========  ==========================================
+   ===========  =============================================================
    Register     Usage
-   ===========  ==========================================
-   ``R0``       Return value (low half of i32 return)
-   ``R1``       Return value (high half of i32 return) / argument
-   ``R1--R9``   Argument passing, caller-saved
+   ===========  =============================================================
+   ``R0``       First argument / 16-bit return / high word of 32-bit return
+   ``R1``       Second argument / low word of 32-bit return
+   ``R2--R3``   Third and fourth argument units
+   ``R4--R9``   General purpose, caller-saved
    ``R10``      Stack pointer
    ``R11``      Link register (return address)
    ``R12``      General purpose (reserved with ``-mattr=+reserve-cru``)
    ``R13--R15`` Callee-saved
-   ===========  ==========================================
+   ===========  =============================================================
 
-Arguments are passed in registers R1 through R9. 32-bit values occupy two
-consecutive registers (e.g., R1:R2 for the first 32-bit argument). If all
-argument registers are exhausted, remaining arguments are passed on the stack.
+The first four 16-bit argument units are passed in R0 through R3. Multiword
+scalars occupy consecutive registers in big-endian word order, so the first
+32-bit argument uses R0 for its high word and R1 for its low word. Remaining
+argument units are passed on the stack. Variadic calls pass all arguments,
+including named arguments, on the stack so that ``va_arg`` can walk one
+contiguous area.
 
-The return value is placed in R0 for 16-bit values, or R0:R1 for 32-bit values.
+Scalar return values use R0 through R3, most-significant word first. Thus a
+16-bit value is returned in R0 and a 32-bit value in R0:R1. C structure
+arguments are passed indirectly and structure returns use a hidden result
+pointer.
 
 Toolchain Usage
 ===============
@@ -154,8 +161,10 @@ Known Limitations
   ``@address``. The register allocator is aware of this constraint.
   Note that ``*R0`` and ``*R0+`` (indirect and auto-increment) work correctly.
 
-- **No atomic instructions.** The TMS9900 is a single-core processor, so
-  all memory operations are inherently atomic at the instruction level.
+- **No native atomic read-modify-write instructions.** LLVM lowers C/C++
+  atomic operations to ``__atomic_*`` runtime calls. A freestanding runtime
+  must provide those entry points with platform-appropriate interrupt masking;
+  ordinary multi-instruction loads and stores are not sufficient.
 
 - **``llvm.returnaddress`` only supports depth 0.** Since the TMS9900 has
   no hardware stack frame chain, only the current return address (in R11)

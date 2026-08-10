@@ -1,4 +1,5 @@
 ; RUN: llc -march=tms9900 -O0 < %s | FileCheck %s
+; RUN: llc -march=tms9900 -O2 < %s | FileCheck %s --check-prefix=ORDER
 ;
 ; Test the TMS9900 calling convention:
 ;   - First 4 arguments in R0-R3
@@ -9,6 +10,7 @@
 
 declare i16 @external(i16)
 declare i16 @takes5(i16, i16, i16, i16, i16)
+declare i32 @external_i32()
 
 ; --- Leaf function: no R11 save needed ---
 ; A function that doesn't call anything should not save/restore R11.
@@ -25,13 +27,15 @@ entry:
 
 ; --- Non-leaf function: R11 saved/restored ---
 ; A function that calls another function must save R11 (link register).
-; When StackSize=0, no AI is needed (just DECT+MOV for R11).
+; Saving R11 requires a second DECT to preserve 4-byte call-site alignment.
 ; CHECK-LABEL: non_leaf:
 ; CHECK: DECT{{[ \t]+}}R10
-; CHECK: MOV{{[ \t]+}}R11,*R10
-; CHECK: BL{{[ \t]+}}@external
-; CHECK: MOV{{[ \t]+}}*R10+,R11
-; CHECK: B{{[ \t]+}}*R11
+; CHECK-NEXT: MOV{{[ \t]+}}R11,*R10
+; CHECK-NEXT: DECT{{[ \t]+}}R10
+; CHECK-NEXT: BL{{[ \t]+}}@external
+; CHECK-NEXT: INCT{{[ \t]+}}R10
+; CHECK-NEXT: MOV{{[ \t]+}}*R10+,R11
+; CHECK-NEXT: B{{[ \t]+}}*R11
 
 define i16 @non_leaf(i16 %a) {
 entry:
@@ -88,4 +92,49 @@ define i16 @arg_i32(i32 %a) {
   %hi = trunc i32 %hi32 to i16
   %sum = add i16 %lo, %hi
   ret i16 %sum
+}
+
+; Prove the big-endian register order directly. The high word already arrives
+; in the i16 return register R0, while returning the low word requires R1->R0.
+; ORDER-LABEL: arg_i32_high:
+; ORDER-NOT: MOV{{[ \t]+}}R1,R0
+; ORDER: B{{[ \t]+}}*R11
+
+define i16 @arg_i32_high(i32 %a) {
+  %high32 = lshr i32 %a, 16
+  %high = trunc i32 %high32 to i16
+  ret i16 %high
+}
+
+; ORDER-LABEL: arg_i32_low:
+; ORDER: MOV{{[ \t]+}}R1,R0
+; ORDER: B{{[ \t]+}}*R11
+
+define i16 @arg_i32_low(i32 %a) {
+  %low = trunc i32 %a to i16
+  ret i16 %low
+}
+
+; The same order applies to a value returned by another function.
+; ORDER-LABEL: call_i32_high:
+; ORDER: BL{{[ \t]+}}@external_i32
+; ORDER-NOT: MOV{{[ \t]+}}R1,R0
+; ORDER: B{{[ \t]+}}*R11
+
+define i16 @call_i32_high() {
+  %a = call i32 @external_i32()
+  %high32 = lshr i32 %a, 16
+  %high = trunc i32 %high32 to i16
+  ret i16 %high
+}
+
+; ORDER-LABEL: call_i32_low:
+; ORDER: BL{{[ \t]+}}@external_i32
+; ORDER: MOV{{[ \t]+}}R1,R0
+; ORDER: B{{[ \t]+}}*R11
+
+define i16 @call_i32_low() {
+  %a = call i32 @external_i32()
+  %low = trunc i32 %a to i16
+  ret i16 %low
 }

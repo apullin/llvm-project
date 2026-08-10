@@ -8,15 +8,16 @@
 //
 // TMS9900 Calling Convention
 //
-// This defines a simple stack-based calling convention:
+// This defines the TMS9900 C calling convention:
 //
 // Arguments:
-//   - First 4 arguments in R0-R3
-//   - Additional arguments on stack (pushed right-to-left)
+//   - First 4 16-bit argument units in R0-R3
+//   - Additional arguments on stack, with the first stack argument at SP+0
+//   - Variadic calls pass every argument on the stack
 //
 // Return Values:
 //   - Single 16-bit value in R0
-//   - 32-bit value in R0 (high) and R1 (low)
+//   - Multiword scalars in R0-R3, most-significant word first
 //
 // Stack:
 //   - R10 is the Stack Pointer (SP)

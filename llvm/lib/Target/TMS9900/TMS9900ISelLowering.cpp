@@ -317,7 +317,13 @@ const char *TMS9900TargetLowering::getTargetNodeName(unsigned Opcode) const {
 EVT TMS9900TargetLowering::getSetCCResultType(const DataLayout &DL,
                                                LLVMContext &Context,
                                                EVT VT) const {
-  return MVT::i16;
+  if (!VT.isVector())
+    return MVT::i16;
+
+  // Vector operations are scalarized, but DAG combines can form vector
+  // comparisons before type legalization.  Keep one i16 predicate per lane so
+  // those combines remain well-typed until the vector is split.
+  return EVT::getVectorVT(Context, MVT::i16, VT.getVectorElementCount());
 }
 
 //===----------------------------------------------------------------------===//

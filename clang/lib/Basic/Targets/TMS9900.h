@@ -53,6 +53,9 @@ public:
     IntMaxType = SignedLongLong;
     IntPtrType = SignedInt;
     PtrDiffType = SignedInt;
+    // unsigned int is only 16 bits, so it cannot be char32_t's underlying
+    // type. unsigned long is the target's 32-bit unsigned integer type.
+    Char32Type = UnsignedLong;
     // A single 16-bit access is indivisible with respect to interrupt entry.
     // This also matches picolibc's sig_atomic_t typedef.
     SigAtomicType = SignedInt;

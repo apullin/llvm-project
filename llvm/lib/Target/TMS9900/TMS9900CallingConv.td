@@ -25,8 +25,10 @@
 //   - Push: DECT R10, MOV Rx,*R10
 //   - Pop:  MOV *R10+,Rx
 //
-// Preserved Registers (callee-saved):
-//   - R10 (SP), R11 (LR), R13, R14, R15
+// Preserved registers (callee-saved):
+//   - R10 (SP), R13, R14, R15
+//   - BL overwrites R11 with its return address. Non-leaf functions save their
+//     incoming R11 separately so they can return to their own caller.
 //
 // Scratch Registers (caller-saved):
 //   - R0-R9, R12
@@ -75,5 +77,7 @@ def CC_TMS9900_VarArg : CallingConv<[
 // Callee-saved Registers
 //===----------------------------------------------------------------------===//
 
-// R11 is the link register - must be saved if function makes calls
-def CSR_TMS9900 : CalleeSavedRegs<(add R11, R13, R14, R15)>;
+// R10 is threaded explicitly by call-sequence pseudos and is never allocated.
+// R11 is an explicit BL definition, so only the allocatable preserved
+// registers belong in both the generated mask and the generic save set.
+def CSR_TMS9900 : CalleeSavedRegs<(add R13, R14, R15)>;

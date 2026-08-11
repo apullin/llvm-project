@@ -5,6 +5,8 @@
 ; The TMS9900 backend should pass through inline asm and handle
 ; register constraints.
 
+@asm_symbol = external global i16
+
 ; --- Simple inline asm with no operands ---
 ; NOP is accepted as an input alias and canonicalized to JMP 0 in textual
 ; assembly.  Address-aware object disassembly prints the NOP alias.
@@ -79,5 +81,27 @@ define i16 @asm_memory_local(i16 %value) {
 
 define void @asm_cc_clobber() {
   call void asm sideeffect "", "~{cc}"()
+  ret void
+}
+
+; --- Symbolic immediate operands ---
+; A generic symbolic operand is an address value, not a symbolic-addressing
+; memory operand. The inline-asm template supplies @ itself when it needs the
+; latter form.
+; CHECK-LABEL: asm_symbolic_immediate:
+; CHECK: LI R0,asm_symbol
+; CHECK-NOT: LI R0,@asm_symbol
+
+define void @asm_symbolic_immediate() {
+  call void asm sideeffect "LI R0,$0", "s"(ptr @asm_symbol)
+  ret void
+}
+
+; CHECK-LABEL: asm_symbolic_offset:
+; CHECK: LI R0,asm_symbol+2
+
+define void @asm_symbolic_offset() {
+  call void asm sideeffect "LI R0,$0", "s"(
+      ptr getelementptr (i8, ptr @asm_symbol, i16 2))
   ret void
 }

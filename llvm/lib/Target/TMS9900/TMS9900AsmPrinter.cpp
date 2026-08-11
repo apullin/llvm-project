@@ -95,17 +95,16 @@ void TMS9900AsmPrinter::printOperand(const MachineInstr *MI, int OpNum,
     MO.getMBB()->getSymbol()->print(O, MAI);
     return;
   case MachineOperand::MO_GlobalAddress:
-    O << "@";
     getSymbol(MO.getGlobal())->print(O, MAI);
-    if (MO.getOffset())
+    if (MO.getOffset() > 0)
       O << "+" << MO.getOffset();
+    else if (MO.getOffset() < 0)
+      O << MO.getOffset();
     return;
   case MachineOperand::MO_ExternalSymbol:
-    O << "@";
     O << MO.getSymbolName();
     return;
   case MachineOperand::MO_ConstantPoolIndex:
-    O << "@";
     O << MAI->getPrivateGlobalPrefix() << "CPI" << getFunctionNumber() << "_"
       << MO.getIndex();
     return;
@@ -177,8 +176,10 @@ bool TMS9900AsmPrinter::PrintAsmMemoryOperand(const MachineInstr *MI,
     // Symbolic: @symbol
     O << "@";
     getSymbol(MO.getGlobal())->print(O, MAI);
-    if (MO.getOffset())
+    if (MO.getOffset() > 0)
       O << "+" << MO.getOffset();
+    else if (MO.getOffset() < 0)
+      O << MO.getOffset();
     return false;
   case MachineOperand::MO_ExternalSymbol:
     O << "@" << MO.getSymbolName();

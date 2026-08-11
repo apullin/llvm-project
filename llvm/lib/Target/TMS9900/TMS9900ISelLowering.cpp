@@ -494,9 +494,10 @@ SDValue TMS9900TargetLowering::LowerLOAD(SDValue Op, SelectionDAG &DAG) const {
 
     // Create our custom BYTE_LOAD node - will be matched to MOVB
     // MOVB loads byte into HIGH byte position
-    SDValue ByteLoad = DAG.getNode(TMS9900ISD::BYTE_LOAD, DL,
-                                   DAG.getVTList(MVT::i16, MVT::Other),
-                                   Chain, Ptr);
+    SDValue ByteLoad = DAG.getMemIntrinsicNode(
+        TMS9900ISD::BYTE_LOAD, DL,
+        DAG.getVTList(MVT::i16, MVT::Other), {Chain, Ptr}, MVT::i8,
+        LD->getMemOperand());
 
     // Shift right by 8 to move byte from HIGH to LOW position
     SDValue ShiftAmt = DAG.getConstant(8, DL, MVT::i16);
@@ -538,8 +539,9 @@ SDValue TMS9900TargetLowering::LowerSTORE(SDValue Op, SelectionDAG &DAG) const {
       SDValue ShiftedVal = DAG.getNode(ISD::SHL, DL, MVT::i16, Value, ShiftAmt);
 
       // Create our custom BYTE_STORE node - will be matched to MOVB
-      return DAG.getNode(TMS9900ISD::BYTE_STORE, DL, MVT::Other,
-                         Chain, ShiftedVal, Ptr);
+      return DAG.getMemIntrinsicNode(
+          TMS9900ISD::BYTE_STORE, DL, DAG.getVTList(MVT::Other),
+          {Chain, ShiftedVal, Ptr}, MVT::i8, ST->getMemOperand());
     }
   }
 

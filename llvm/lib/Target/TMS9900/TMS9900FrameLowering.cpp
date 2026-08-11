@@ -43,6 +43,8 @@
 
 using namespace llvm;
 
+static constexpr uint64_t TMS9900AddressSpaceSize = uint64_t{1} << 16;
+
 TMS9900FrameLowering::TMS9900FrameLowering(const TMS9900Subtarget &STI)
     : TargetFrameLowering(StackGrowsDown,
                           /*StackAlignment=*/Align(4),
@@ -104,6 +106,30 @@ void TMS9900FrameLowering::emitPrologue(MachineFunction &MF,
 
   // Get the stack size (already aligned by processFunctionBeforeFrameFinalized)
   uint64_t StackSize = MFI.getStackSize();
+
+  // R10 is a 16-bit address. A frame which consumes the complete address
+  // space wraps R10 back to its entry value, and a larger frame aliases
+  // itself. Account for the saves emitted outside MachineFrameInfo and for
+  // the worst-case slop introduced by runtime stack realignment.
+  uint64_t ExtraFrameBytes = 0;
+  if (MFI.hasCalls() && !IsInterrupt)
+    ExtraFrameBytes += 2; // saved R11
+  if (RealignsStack) {
+    ExtraFrameBytes += 4; // saved R13 and R14
+    ExtraFrameBytes += MFI.getMaxAlign().value() - 2;
+  } else if (MFI.hasCalls() && !IsInterrupt) {
+    ExtraFrameBytes += 2; // padding after the saved R11
+  }
+
+  // A frame-pointer function adjusts R10 around each call instead of
+  // reserving the maximum outgoing call frame in StackSize.
+  if (!hasReservedCallFrame(MF) && MFI.isMaxCallFrameSizeComputed())
+    ExtraFrameBytes += MFI.getMaxCallFrameSize();
+
+  if (StackSize >= TMS9900AddressSpaceSize ||
+      ExtraFrameBytes >= TMS9900AddressSpaceSize - StackSize)
+    report_fatal_error(
+        "TMS9900: stack frame exceeds the 16-bit address space");
 
   // If we have a stack frame, we need to:
   // 1. Save the return address (R11) - done by caller or here
@@ -463,6 +489,10 @@ void TMS9900FrameLowering::processFunctionBeforeFrameFinalized(
   const bool NeedsStableFrame =
       MFI.hasVarSizedObjects() || MFI.isFrameAddressTaken();
   const bool NeedsRealignment = MFI.shouldRealignStack();
+
+  if (MFI.getMaxAlign().value() >= TMS9900AddressSpaceSize)
+    report_fatal_error(
+        "TMS9900: stack alignment must be less than 65536 bytes");
 
   const bool HasRestrictedPrologue =
       F.hasFnAttribute(Attribute::Naked) || F.hasFnAttribute("interrupt");

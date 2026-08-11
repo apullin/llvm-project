@@ -40,8 +40,8 @@ public:
 
 TMS9900::TMS9900(Ctx &ctx) : TargetInfo(ctx) {
   // BLWP @0 - trap instruction (branch to address 0, which is reset vector)
-  // Opcode: 0x0400 followed by 0x0000
-  trapInstr = {0x04, 0x00, 0x00, 0x00};
+  // Opcode: 0x0420 followed by 0x0000
+  trapInstr = {0x04, 0x20, 0x00, 0x00};
 }
 
 RelExpr TMS9900::getRelExpr(RelType type, const Symbol &s,

@@ -1,4 +1,5 @@
 ; RUN: llc -mtriple=tms9900 -O2 < %s | FileCheck %s
+; RUN: llc -mtriple=tms9900 -O2 -stop-after=finalize-isel < %s | FileCheck %s --check-prefix=MIR
 ;
 ; Test that the backend generates auto-increment addressing (*Rx+) for
 ; sequential memory access patterns in loops. The peephole pass combines
@@ -9,6 +10,9 @@
 ; CHECK-LABEL: word_copy_loop:
 ; CHECK: MOV{{[ \t]+}}*R{{[0-9]+}}+,R{{[0-9]+}}
 ; CHECK: MOV{{[ \t]+}}R{{[0-9]+}},*R{{[0-9]+}}+
+; MIR-LABEL: name: word_copy_loop
+; MIR: MOVpim {{.*}} :: (load (s16)
+; MIR: MOVmpi {{.*}} :: (store (s16)
 
 define void @word_copy_loop(ptr %dst, ptr %src, i16 %n) {
 entry:

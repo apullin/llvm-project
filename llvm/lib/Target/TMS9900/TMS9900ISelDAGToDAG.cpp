@@ -233,6 +233,8 @@ void TMS9900DAGToDAGISel::Select(SDNode *N) {
                                                 MVT::i16,  // writeback pointer
                                                 MVT::Other, // chain
                                                 Ops);
+      CurDAG->setNodeMemRefs(cast<MachineSDNode>(ResNode),
+                             {LD->getMemOperand()});
 
       // Result 0 is the loaded value, result 1 is the updated pointer
       ReplaceUses(SDValue(N, 0), SDValue(ResNode, 0));  // loaded value
@@ -263,6 +265,8 @@ void TMS9900DAGToDAGISel::Select(SDNode *N) {
                                                 MVT::i16,  // writeback pointer
                                                 MVT::Other, // chain
                                                 Ops);
+      CurDAG->setNodeMemRefs(cast<MachineSDNode>(ResNode),
+                             {ST->getMemOperand()});
 
       // Result 0 is the updated pointer, result 1 is the chain
       ReplaceUses(SDValue(N, 0), SDValue(ResNode, 0));  // updated pointer

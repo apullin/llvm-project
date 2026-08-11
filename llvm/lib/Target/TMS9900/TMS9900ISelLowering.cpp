@@ -1595,12 +1595,9 @@ bool TMS9900TargetLowering::CanLowerReturn(
     CallingConv::ID CallConv, MachineFunction &MF, bool isVarArg,
     const SmallVectorImpl<ISD::OutputArg> &Outs, LLVMContext &Context,
     const Type *RetTy) const {
-  // TMS9900 can return up to 8 bytes (4 x i16 registers: R0-R3).
-  // Anything larger (e.g. i128) must use sret (struct return).
-  unsigned TotalBytes = 0;
-  for (const auto &Out : Outs)
-    TotalBytes += Out.VT.getSizeInBits() / 8;
-  return TotalBytes <= 8;
+  SmallVector<CCValAssign, 16> RVLocs;
+  CCState CCInfo(CallConv, isVarArg, MF, RVLocs, Context);
+  return CCInfo.CheckReturn(Outs, RetCC_TMS9900);
 }
 
 SDValue TMS9900TargetLowering::LowerReturn(

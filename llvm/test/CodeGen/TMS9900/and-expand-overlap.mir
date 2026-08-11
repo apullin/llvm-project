@@ -37,3 +37,25 @@ body:             |
 # PEEP-NOT: $r1 = MOVrr $r1
 # PEEP: $r0 = MOVrr killed $r1
 ...
+
+---
+name:            and_distinct_regs_live_status
+tracksRegLiveness: true
+body:             |
+  bb.0:
+    liveins: $r2, $r3, $r11
+    $r3 = ANDrr killed $r3, $r2, implicit-def $st
+    $r4 = STST implicit $st
+    $r0 = MOVrr killed $r2, implicit-def dead $st
+    RET implicit $r0
+
+# CHECK-LABEL: name: and_distinct_regs_live_status
+# CHECK: $r2 = INVr $r2, implicit-def $st
+# CHECK-NEXT: $r3 = SZCrr $r3, $r2, implicit-def $st
+# CHECK-NEXT: $r2 = INVr $r2, implicit-def $st
+# CHECK-NEXT: $r3 = MOVrr $r3, implicit-def $st
+# CHECK-NEXT: $r4 = STST implicit $st
+# PEEP-LABEL: name: and_distinct_regs_live_status
+# PEEP: $r3 = MOVrr $r3, implicit-def $st
+# PEEP-NEXT: $r4 = STST implicit $st
+...

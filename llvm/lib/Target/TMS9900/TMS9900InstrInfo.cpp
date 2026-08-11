@@ -784,6 +784,9 @@ bool TMS9900InstrInfo::expandPostRAPseudo(MachineInstr &MI) const {
     // meaning no restore INV is needed. isDead() is for def operands only
     // and would always return false here.
     bool SrcIsKilled = MI.getOperand(2).isKill();
+    const TargetRegisterInfo *TRI =
+        MBB.getParent()->getSubtarget().getRegisterInfo();
+    bool StatusIsLive = !MI.registerDefIsDead(TMS9900::ST, TRI);
 
     // INV rs2
     BuildMI(MBB, MI, DL, get(TMS9900::INVr), SrcReg)
@@ -796,6 +799,10 @@ bool TMS9900InstrInfo::expandPostRAPseudo(MachineInstr &MI) const {
     if (!SrcIsKilled) {
       BuildMI(MBB, MI, DL, get(TMS9900::INVr), SrcReg)
           .addReg(SrcReg);
+      // Restoring rs2 overwrites ST. Re-establish flags from the AND result
+      // when a following instruction consumes ANDrr's status definition.
+      if (StatusIsLive)
+        BuildMI(MBB, MI, DL, get(TMS9900::MOVrr), DstReg).addReg(DstReg);
     }
 
     MBB.erase(MI);

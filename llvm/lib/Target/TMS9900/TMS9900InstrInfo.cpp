@@ -97,6 +97,18 @@ static unsigned getJumpOpcodeForCC(ISD::CondCode CC) {
   }
 }
 
+static unsigned getCmpBrSizeInBytes(unsigned Opc, ISD::CondCode CC) {
+  assert((Opc == TMS9900::CMPBRrr || Opc == TMS9900::CMPBRri) &&
+         "expected a fused compare-branch");
+
+  // Register compares are one word, while CI includes a second immediate
+  // word. Signed >= and <= each require JEQ plus JGT/JLT; every other
+  // supported condition expands to one jump.
+  unsigned CompareSize = Opc == TMS9900::CMPBRri ? 4 : 2;
+  unsigned BranchSize = (CC == ISD::SETGE || CC == ISD::SETLE) ? 4 : 2;
+  return CompareSize + BranchSize;
+}
+
 TMS9900InstrInfo::TMS9900InstrInfo(const TMS9900Subtarget &STI)
     : TMS9900GenInstrInfo(TMS9900::ADJCALLSTACKDOWN, TMS9900::ADJCALLSTACKUP),
       RI(STI) {}
@@ -488,9 +500,9 @@ unsigned TMS9900InstrInfo::insertBranch(MachineBasicBlock &MBB,
 
   if (Cond.empty()) {
     // Unconditional branch
-    BuildMI(&MBB, DL, get(TMS9900::JMP)).addMBB(TBB);
+    MachineInstr &MI = *BuildMI(&MBB, DL, get(TMS9900::JMP)).addMBB(TBB);
     if (BytesAdded)
-      *BytesAdded += 2;
+      *BytesAdded += getInstSizeInBytes(MI);
     return 1;
   }
 
@@ -505,11 +517,12 @@ unsigned TMS9900InstrInfo::insertBranch(MachineBasicBlock &MBB,
     MIB.addMBB(TBB);
     unsigned Count = 1;
     if (BytesAdded)
-      *BytesAdded += 2;
+      *BytesAdded += getInstSizeInBytes(*MIB);
     if (FBB) {
-      BuildMI(&MBB, DL, get(TMS9900::JMP)).addMBB(FBB);
+      MachineInstr &MI =
+          *BuildMI(&MBB, DL, get(TMS9900::JMP)).addMBB(FBB);
       if (BytesAdded)
-        *BytesAdded += 2;
+        *BytesAdded += getInstSizeInBytes(MI);
       ++Count;
     }
     return Count;
@@ -520,16 +533,16 @@ unsigned TMS9900InstrInfo::insertBranch(MachineBasicBlock &MBB,
 
   // Conditional branch
   unsigned Count = 0;
-  BuildMI(&MBB, DL, get(Opc)).addMBB(TBB);
+  MachineInstr &CondMI = *BuildMI(&MBB, DL, get(Opc)).addMBB(TBB);
   if (BytesAdded)
-    *BytesAdded += 2;
+    *BytesAdded += getInstSizeInBytes(CondMI);
   ++Count;
 
   if (FBB) {
     // Two-way Conditional branch. Insert the second branch.
-    BuildMI(&MBB, DL, get(TMS9900::JMP)).addMBB(FBB);
+    MachineInstr &MI = *BuildMI(&MBB, DL, get(TMS9900::JMP)).addMBB(FBB);
     if (BytesAdded)
-      *BytesAdded += 2;
+      *BytesAdded += getInstSizeInBytes(MI);
     ++Count;
   }
 
@@ -541,6 +554,9 @@ unsigned TMS9900InstrInfo::removeBranch(MachineBasicBlock &MBB,
   MachineBasicBlock::iterator I = MBB.end();
   unsigned Count = 0;
 
+  if (BytesRemoved)
+    *BytesRemoved = 0;
+
   while (I != MBB.begin()) {
     --I;
 
@@ -550,14 +566,14 @@ unsigned TMS9900InstrInfo::removeBranch(MachineBasicBlock &MBB,
     if (!I->isBranch())
       break;
 
+    if (BytesRemoved)
+      *BytesRemoved += getInstSizeInBytes(*I);
+
     // Remove the branch
     I->eraseFromParent();
     I = MBB.end();
     ++Count;
   }
-
-  if (BytesRemoved)
-    *BytesRemoved = Count * 2;  // Each branch is 2 bytes (may be wrong for some)
 
   return Count;
 }
@@ -599,6 +615,11 @@ unsigned TMS9900InstrInfo::getInstSizeInBytes(const MachineInstr &MI) const {
   case TargetOpcode::KILL:
   case TargetOpcode::DBG_VALUE:
     return 0;
+  case TMS9900::CMPBRrr:
+  case TMS9900::CMPBRri:
+    assert(MI.getOperand(2).isImm() && "CMPBR condition must be immediate");
+    return getCmpBrSizeInBytes(
+        MI.getOpcode(), static_cast<ISD::CondCode>(MI.getOperand(2).getImm()));
   case TargetOpcode::INLINEASM:
   case TargetOpcode::INLINEASM_BR: {
     const MachineFunction &MF = *MI.getParent()->getParent();

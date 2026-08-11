@@ -1,0 +1,83 @@
+# RUN: llc -mtriple=tms9900 -run-pass=branch-relaxation %s -o - | FileCheck %s
+
+# A forward JMP can reach a destination 256 bytes from the instruction. Each
+# filler block below would appear to fit if CMPBR had its generic pseudo size
+# of zero, but is two bytes beyond the range once its expansion is counted.
+
+--- |
+  define void @rr_eq() { ret void }
+  define void @rr_ge() { ret void }
+  define void @ri_eq() { ret void }
+  define void @ri_ge() { ret void }
+...
+---
+name: rr_eq
+tracksRegLiveness: true
+body: |
+  bb.0:
+    successors: %bb.2
+    JMP %bb.2
+  bb.1:
+    successors: %bb.2
+    $r1 = IMPLICIT_DEF
+    $r2 = IMPLICIT_DEF
+    INLINEASM &".space 252", 1
+    CMPBRrr $r1, $r2, 17, %bb.2
+  bb.2:
+    RET
+...
+---
+name: rr_ge
+tracksRegLiveness: true
+body: |
+  bb.0:
+    successors: %bb.2
+    JMP %bb.2
+  bb.1:
+    successors: %bb.2
+    $r1 = IMPLICIT_DEF
+    $r2 = IMPLICIT_DEF
+    INLINEASM &".space 250", 1
+    CMPBRrr $r1, $r2, 19, %bb.2
+  bb.2:
+    RET
+...
+---
+name: ri_eq
+tracksRegLiveness: true
+body: |
+  bb.0:
+    successors: %bb.2
+    JMP %bb.2
+  bb.1:
+    successors: %bb.2
+    $r1 = IMPLICIT_DEF
+    INLINEASM &".space 250", 1
+    CMPBRri $r1, 0, 17, %bb.2
+  bb.2:
+    RET
+...
+---
+name: ri_ge
+tracksRegLiveness: true
+body: |
+  bb.0:
+    successors: %bb.2
+    JMP %bb.2
+  bb.1:
+    successors: %bb.2
+    $r1 = IMPLICIT_DEF
+    INLINEASM &".space 248", 1
+    CMPBRri $r1, 0, 19, %bb.2
+  bb.2:
+    RET
+...
+
+# CHECK-LABEL: name: rr_eq
+# CHECK: B_sym %bb.2
+# CHECK-LABEL: name: rr_ge
+# CHECK: B_sym %bb.2
+# CHECK-LABEL: name: ri_eq
+# CHECK: B_sym %bb.2
+# CHECK-LABEL: name: ri_ge
+# CHECK: B_sym %bb.2

@@ -1245,6 +1245,12 @@ TMS9900TargetLowering::EmitInstrWithCustomInserter(MachineInstr &MI,
     MachineBasicBlock *NegateResultBB = MF->CreateMachineBasicBlock();
     MachineBasicBlock *DoneBB = MF->CreateMachineBasicBlock();
 
+    // Custom insertion can run while a call sequence has an active outgoing
+    // stack frame. Preserve that state on every block created by the split.
+    unsigned CallFrameSize = TII.getCallFrameSizeAt(MI);
+    NegateResultBB->setCallFrameSize(CallFrameSize);
+    DoneBB->setCallFrameSize(CallFrameSize);
+
     MachineFunction::iterator It = ++BB->getIterator();
     MF->insert(It, NegateResultBB);
     MF->insert(It, DoneBB);
@@ -1349,6 +1355,13 @@ TMS9900TargetLowering::EmitInstrWithCustomInserter(MachineInstr &MI,
     MachineBasicBlock *TrueBB = MF->CreateMachineBasicBlock();
     MachineBasicBlock *FalseBB = MF->CreateMachineBasicBlock();
     MachineBasicBlock *DoneBB = MF->CreateMachineBasicBlock();
+
+    // Custom insertion can run while a call sequence has an active outgoing
+    // stack frame. Preserve that state on every block created by the split.
+    unsigned CallFrameSize = TII.getCallFrameSizeAt(MI);
+    TrueBB->setCallFrameSize(CallFrameSize);
+    FalseBB->setCallFrameSize(CallFrameSize);
+    DoneBB->setCallFrameSize(CallFrameSize);
 
     MachineFunction::iterator It = ++BB->getIterator();
     MF->insert(It, TrueBB);
@@ -1470,6 +1483,12 @@ skip_normal_jump:
     MachineBasicBlock *StartBB = BB;
     MachineBasicBlock *ShiftBB = MF->CreateMachineBasicBlock();
     MachineBasicBlock *DoneBB = MF->CreateMachineBasicBlock();
+
+    // Custom insertion can run while a call sequence has an active outgoing
+    // stack frame. Preserve that state on every block created by the split.
+    unsigned CallFrameSize = TII.getCallFrameSizeAt(MI);
+    ShiftBB->setCallFrameSize(CallFrameSize);
+    DoneBB->setCallFrameSize(CallFrameSize);
 
     MachineFunction::iterator It = ++BB->getIterator();
     MF->insert(It, ShiftBB);

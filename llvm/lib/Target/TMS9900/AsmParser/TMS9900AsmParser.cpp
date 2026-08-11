@@ -275,6 +275,7 @@ private:
     SmallVector<MCSymbol *, 4> Symbols;
   };
   StringMap<XasLocalLabelState> XasLocalLabels;
+  StringMap<unsigned> XasXops;
 
   bool matchAndEmitInstruction(SMLoc IDLoc, unsigned &Opcode,
                                OperandVector &Operands, MCStreamer &Out,
@@ -322,6 +323,7 @@ private:
   bool parseDirectiveEND();
   bool parseDirectiveIDT();
   bool parseDirectiveCOPY();
+  bool parseDirectiveDXOP();
   bool parseIgnoredDirective();
 
   bool parseXasLocalLabel(ParseInstructionInfo &Info, SMLoc LabelLoc,
@@ -528,6 +530,7 @@ bool TMS9900AsmParser::isKnownDirective(StringRef Name) const {
          Name.equals_insensitive("END") ||
          Name.equals_insensitive("IDT") ||
          Name.equals_insensitive("COPY") ||
+         Name.equals_insensitive("DXOP") ||
          StringSwitch<bool>(Name.upper())
              .Cases("PSEG", "PEND", "CSEG", "CEND", true)
              .Cases("DSEG", "DEND", "LOAD", "SREF", true)
@@ -536,6 +539,9 @@ bool TMS9900AsmParser::isKnownDirective(StringRef Name) const {
 }
 
 bool TMS9900AsmParser::isKnownMnemonic(StringRef Name) const {
+  if (isXas99Dialect() && XasXops.count(Name.upper()))
+    return true;
+
   // TMS9900 instruction mnemonics (case-insensitive)
   return StringSwitch<bool>(Name.upper())
     // Format 1: Dual operand (MOV, ADD, etc.)
@@ -950,6 +956,9 @@ bool TMS9900AsmParser::parseInstruction(ParseInstructionInfo &Info,
   if (Name.equals_insensitive("COPY")) {
     return parseDirectiveCOPY();
   }
+  if (Name.equals_insensitive("DXOP")) {
+    return parseDirectiveDXOP();
+  }
   if (isKnownDirective(Name)) {
     return parseIgnoredDirective();
   }
@@ -1043,10 +1052,22 @@ bool TMS9900AsmParser::parseInstruction(ParseInstructionInfo &Info,
     if (Name.equals_insensitive("COPY")) {
       return parseDirectiveCOPY();
     }
+    if (Name.equals_insensitive("DXOP")) {
+      return parseDirectiveDXOP();
+    }
     if (isKnownDirective(Name)) {
       return parseIgnoredDirective();
     }
     // Continue with instruction parsing below
+  }
+
+  int XopMode = -1;
+  if (isXas99Dialect()) {
+    auto It = XasXops.find(Name.upper());
+    if (It != XasXops.end()) {
+      XopMode = It->second;
+      Name = "xop";
+    }
   }
 
   getStreamer().emitValueToAlignment(Align(2));
@@ -1070,6 +1091,12 @@ bool TMS9900AsmParser::parseInstruction(ParseInstructionInfo &Info,
     if (!parseOperand(Operands, Name).isSuccess()) {
       return Error(Parser.getTok().getLoc(), "unexpected token in operand");
     }
+  }
+
+  if (XopMode >= 0) {
+    SMLoc Loc = Parser.getTok().getLoc();
+    Operands.push_back(TMS9900Operand::createImm(
+        MCConstantExpr::create(XopMode, getContext()), Loc, Loc));
   }
 
   if (Parser.getTok().isNot(AsmToken::EndOfStatement)) {
@@ -1432,6 +1459,28 @@ bool TMS9900AsmParser::parseDirectiveIDT() {
 
 bool TMS9900AsmParser::parseDirectiveCOPY() {
   return Parser.parseInclude();
+}
+
+bool TMS9900AsmParser::parseDirectiveDXOP() {
+  if (Parser.getTok().isNot(AsmToken::Identifier))
+    return Error(Parser.getTok().getLoc(), "expected DXOP mnemonic");
+  StringRef Name = canonicalizeSymbolName(Parser.getTok().getIdentifier());
+  Parser.Lex();
+  if (Parser.parseComma())
+    return true;
+
+  const MCExpr *Expr;
+  if (parseExpression(Expr))
+    return true;
+  int64_t Mode;
+  if (!Expr->evaluateAsAbsolute(Mode) || Mode < 0 || Mode > 15)
+    return Error(Parser.getTok().getLoc(),
+                 "DXOP vector must be in the range 0..15");
+  if (XasXops.count(Name))
+    return Error(Parser.getTok().getLoc(), "DXOP mnemonic is already defined");
+
+  XasXops[Name] = Mode;
+  return expectEndOfStatement("DXOP");
 }
 
 bool TMS9900AsmParser::parseIgnoredDirective() {

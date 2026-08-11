@@ -39,6 +39,7 @@
 #include "llvm/IR/Function.h"
 #include "llvm/MC/MCDwarf.h"
 #include "llvm/Support/ErrorHandling.h"
+#include "llvm/Support/MathExtras.h"
 #include "llvm/Target/TargetOptions.h"
 
 using namespace llvm;
@@ -124,7 +125,7 @@ void TMS9900FrameLowering::emitPrologue(MachineFunction &MF,
   // A frame-pointer function adjusts R10 around each call instead of
   // reserving the maximum outgoing call frame in StackSize.
   if (!hasReservedCallFrame(MF) && MFI.isMaxCallFrameSizeComputed())
-    ExtraFrameBytes += MFI.getMaxCallFrameSize();
+    ExtraFrameBytes += alignTo(MFI.getMaxCallFrameSize(), getStackAlign());
 
   if (StackSize >= TMS9900AddressSpaceSize ||
       ExtraFrameBytes >= TMS9900AddressSpaceSize - StackSize)
@@ -443,6 +444,10 @@ MachineBasicBlock::iterator TMS9900FrameLowering::eliminateCallFramePseudoInstr(
   int64_t Amount = MI.getOperand(0).getImm();
 
   if (Amount != 0) {
+    // Calls must observe the target's four-byte stack alignment even when the
+    // actual stack arguments occupy only one 16-bit slot.
+    Amount = alignTo(static_cast<uint64_t>(Amount), getStackAlign());
+
     // Adjust stack pointer
     if (MI.getOpcode() == TMS9900::ADJCALLSTACKDOWN) {
       // Allocate space: AI R10,-Amount

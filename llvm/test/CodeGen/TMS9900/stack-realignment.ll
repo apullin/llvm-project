@@ -109,11 +109,11 @@ define i16 @aligned16_dynamic_only(i16 %count) noinline {
 ; CHECK:      ANDI R10,-16
 ; CHECK-NEXT: MOV R10,R14
 ; CHECK:      MOV R14,R{{[0-9]+}}
-; CHECK:      DECT R10
+; CHECK:      AI R10,-4
 ; CHECK-NEXT: MOV R10,R[[ARGADDR:[0-9]+]]
 ; CHECK-NEXT: MOV R{{[0-9]+}},*R[[ARGADDR]]
 ; CHECK:      BL @consume5
-; CHECK:      INCT R10
+; CHECK:      AI R10,4
 ; CHECK:      MOV R13,R10
 define i16 @aligned16_outgoing_stack_arg() noinline {
   %slot = alloca i16, align 16

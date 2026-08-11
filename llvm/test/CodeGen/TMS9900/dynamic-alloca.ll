@@ -60,10 +60,10 @@ define i16 @dynalloca_read(i16 %n) {
 ; CHECK: MOV{{[ \t]+}}R1,*R14
 ; CHECK: MOV{{[ \t]+}}R{{[0-9]+}},R10
 ; CHECK: MOV{{[ \t]+}}*R14,R0
-; CHECK: DECT{{[ \t]+}}R10
+; CHECK: AI{{[ \t]+}}R10,-4
 ; CHECK: MOV{{[ \t]+}}R{{[0-9]+}},*R10
 ; CHECK: BL{{[ \t]+}}@consume
-; CHECK: INCT{{[ \t]+}}R10
+; CHECK: AI{{[ \t]+}}R10,4
 ; CHECK: MOV{{[ \t]+}}*R14,R0
 ; CHECK: MOV{{[ \t]+}}@{{[0-9]+}}(R13),R14
 ; CHECK: MOV{{[ \t]+}}R13,R10

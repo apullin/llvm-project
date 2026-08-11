@@ -1929,14 +1929,14 @@ def UREM16 : Pseudo<(outs GR16:$dst), (ins GR16:$lhs, GR16:$rhs),
 // 2. Take absolute values
 // 3. Unsigned divide
 // 4. Negate result if signs differed
-let usesCustomInserter = 1, Defs = [R0, R1, R2, R3, ST] in
+let usesCustomInserter = 1, Defs = [R0, R1, R2, ST] in
 def SDIV16 : Pseudo<(outs GR16:$dst), (ins GR16:$lhs, GR16:$rhs),
                     "# SDIV16 $lhs / $rhs -> $dst",
                     [(set GR16:$dst, (sdiv GR16:$lhs, GR16:$rhs))]>;
 
 // Pseudo instruction for signed remainder
 // Remainder has the sign of the dividend (C99 semantics)
-let usesCustomInserter = 1, Defs = [R0, R1, R2, R3, ST] in
+let usesCustomInserter = 1, Defs = [R0, R1, R2, ST] in
 def SREM16 : Pseudo<(outs GR16:$dst), (ins GR16:$lhs, GR16:$rhs),
                     "# SREM16 $lhs %% $rhs -> $dst",
                     [(set GR16:$dst, (srem GR16:$lhs, GR16:$rhs))]>;

@@ -1217,276 +1217,101 @@ TMS9900TargetLowering::EmitInstrWithCustomInserter(MachineInstr &MI,
     return BB;
   }
 
-  case TMS9900::SDIV16: {
-    // SDIV16 $dst, $dividend, $divisor
-    // TMS9900 DIV is unsigned. For signed divide:
-    // 1. Compute sign of result (XOR of operand signs)
-    // 2. Take absolute values
-    // 3. Unsigned divide
-    // 4. Negate quotient if signs differed
-    //
-    // We use R2 for sign tracking and R3 as scratch for abs values
-    // R0:R1 are used for the division itself
-    Register DstReg = MI.getOperand(0).getReg();
-    Register DividendReg = MI.getOperand(1).getReg();
-    Register DivisorReg = MI.getOperand(2).getReg();
-
-    MachineFunction *MF = BB->getParent();
-
-    // Create basic blocks for the control flow
-    MachineBasicBlock *StartBB = BB;
-    MachineBasicBlock *DividendNegBB = MF->CreateMachineBasicBlock();
-    MachineBasicBlock *CheckDivisorBB = MF->CreateMachineBasicBlock();
-    MachineBasicBlock *DivisorNegBB = MF->CreateMachineBasicBlock();
-    MachineBasicBlock *DoDivideBB = MF->CreateMachineBasicBlock();
-    MachineBasicBlock *NegateResultBB = MF->CreateMachineBasicBlock();
-    MachineBasicBlock *DoneBB = MF->CreateMachineBasicBlock();
-
-    // Insert all new blocks
-    MachineFunction::iterator It = ++BB->getIterator();
-    MF->insert(It, DividendNegBB);
-    MF->insert(It, CheckDivisorBB);
-    MF->insert(It, DivisorNegBB);
-    MF->insert(It, DoDivideBB);
-    MF->insert(It, NegateResultBB);
-    MF->insert(It, DoneBB);
-
-    // Transfer successors to DoneBB
-    DoneBB->splice(DoneBB->begin(), StartBB,
-                   std::next(MachineBasicBlock::iterator(MI)), StartBB->end());
-    DoneBB->transferSuccessorsAndUpdatePHIs(StartBB);
-
-    // Add live-ins to ensure registers are preserved across blocks
-    DividendNegBB->addLiveIn(TMS9900::R1);
-    DividendNegBB->addLiveIn(TMS9900::R2);
-    DividendNegBB->addLiveIn(TMS9900::R3);
-    CheckDivisorBB->addLiveIn(TMS9900::R1);
-    CheckDivisorBB->addLiveIn(TMS9900::R2);
-    CheckDivisorBB->addLiveIn(TMS9900::R3);
-    DivisorNegBB->addLiveIn(TMS9900::R1);
-    DivisorNegBB->addLiveIn(TMS9900::R2);
-    DivisorNegBB->addLiveIn(TMS9900::R3);
-    DoDivideBB->addLiveIn(TMS9900::R1);
-    DoDivideBB->addLiveIn(TMS9900::R2);
-    DoDivideBB->addLiveIn(TMS9900::R3);
-    NegateResultBB->addLiveIn(TMS9900::R0);
-    DoneBB->addLiveIn(TMS9900::R0);
-
-    // StartBB: Initialize sign tracker, check dividend sign
-    // CLR R2 (sign tracker = 0)
-    BuildMI(StartBB, DL, TII.get(TMS9900::CLRr), TMS9900::R2);
-
-    // MOV $dividend, R1 (put dividend in R1)
-    BuildMI(StartBB, DL, TII.get(TMS9900::MOVrr), TMS9900::R1)
-        .addReg(DividendReg);
-
-    // MOV $divisor, R3 (put divisor in R3 for abs value)
-    BuildMI(StartBB, DL, TII.get(TMS9900::MOVrr), TMS9900::R3)
-        .addReg(DivisorReg);
-
-    // Keep each compare and branch in one terminator pseudo. Otherwise the
-    // scheduler may place another status-defining instruction between them.
-    BuildMI(StartBB, DL, TII.get(TMS9900::CMPBRri))
-        .addReg(TMS9900::R1)
-        .addImm(0)
-        .addImm(ISD::SETLT)
-        .addMBB(DividendNegBB);
-    BuildMI(StartBB, DL, TII.get(TMS9900::JMP))
-        .addMBB(CheckDivisorBB);
-    StartBB->addSuccessor(DividendNegBB);
-    StartBB->addSuccessor(CheckDivisorBB);
-
-    // DividendNegBB: Dividend is negative, negate it and flip sign
-    BuildMI(DividendNegBB, DL, TII.get(TMS9900::NEGr), TMS9900::R1)
-        .addReg(TMS9900::R1);
-    // INV R2 to flip sign tracker (0 -> -1, -1 -> 0)
-    BuildMI(DividendNegBB, DL, TII.get(TMS9900::INVr), TMS9900::R2)
-        .addReg(TMS9900::R2);
-    BuildMI(DividendNegBB, DL, TII.get(TMS9900::JMP))
-        .addMBB(CheckDivisorBB);
-    DividendNegBB->addSuccessor(CheckDivisorBB);
-
-    // CheckDivisorBB: Check divisor sign.
-    BuildMI(CheckDivisorBB, DL, TII.get(TMS9900::CMPBRri))
-        .addReg(TMS9900::R3)
-        .addImm(0)
-        .addImm(ISD::SETLT)
-        .addMBB(DivisorNegBB);
-    BuildMI(CheckDivisorBB, DL, TII.get(TMS9900::JMP))
-        .addMBB(DoDivideBB);
-    CheckDivisorBB->addSuccessor(DivisorNegBB);
-    CheckDivisorBB->addSuccessor(DoDivideBB);
-
-    // DivisorNegBB: Divisor is negative, negate it and flip sign
-    BuildMI(DivisorNegBB, DL, TII.get(TMS9900::NEGr), TMS9900::R3)
-        .addReg(TMS9900::R3);
-    BuildMI(DivisorNegBB, DL, TII.get(TMS9900::INVr), TMS9900::R2)
-        .addReg(TMS9900::R2);
-    BuildMI(DivisorNegBB, DL, TII.get(TMS9900::JMP))
-        .addMBB(DoDivideBB);
-    DivisorNegBB->addSuccessor(DoDivideBB);
-
-    // DoDivideBB: Perform unsigned divide with absolute values
-    // CLR R0 (high word = 0)
-    BuildMI(DoDivideBB, DL, TII.get(TMS9900::CLRr), TMS9900::R0);
-    // DIV R3,R0 (divides R0:R1 by R3, quotient in R0, remainder in R1)
-    BuildMI(DoDivideBB, DL, TII.get(TMS9900::DIVrr))
-        .addReg(TMS9900::R3)
-        .addReg(TMS9900::R0);
-    // Check if we need to negate result (R2 != 0).
-    BuildMI(DoDivideBB, DL, TII.get(TMS9900::CMPBRri))
-        .addReg(TMS9900::R2)
-        .addImm(0)
-        .addImm(ISD::SETNE)
-        .addMBB(NegateResultBB);
-    BuildMI(DoDivideBB, DL, TII.get(TMS9900::JMP))
-        .addMBB(DoneBB);
-    DoDivideBB->addSuccessor(NegateResultBB);
-    DoDivideBB->addSuccessor(DoneBB);
-
-    // NegateResultBB: Negate the quotient
-    BuildMI(NegateResultBB, DL, TII.get(TMS9900::NEGr), TMS9900::R0)
-        .addReg(TMS9900::R0);
-    BuildMI(NegateResultBB, DL, TII.get(TMS9900::JMP))
-        .addMBB(DoneBB);
-    NegateResultBB->addSuccessor(DoneBB);
-
-    // DoneBB: Copy result to destination
-    BuildMI(*DoneBB, DoneBB->begin(), DL, TII.get(TMS9900::MOVrr), DstReg)
-        .addReg(TMS9900::R0);
-
-    MI.eraseFromParent();
-    return DoneBB;
-  }
-
+  case TMS9900::SDIV16:
   case TMS9900::SREM16: {
-    // SREM16 $dst, $dividend, $divisor
-    // Similar to SDIV16 but:
-    // - Result is the remainder (from R1 after DIV)
-    // - Sign of remainder follows sign of dividend (C99 semantics)
+    // DIV is unsigned, so divide the operand magnitudes and conditionally
+    // negate the selected result. Keep all values that cross block boundaries
+    // in virtual registers; allocatable physical registers cannot be live-ins
+    // to custom-inserter blocks, and doing so also lets operand allocation
+    // overlap the R0:R2 scratch sequence unsafely.
+    const bool IsRemainder = MI.getOpcode() == TMS9900::SREM16;
     Register DstReg = MI.getOperand(0).getReg();
     Register DividendReg = MI.getOperand(1).getReg();
     Register DivisorReg = MI.getOperand(2).getReg();
 
     MachineFunction *MF = BB->getParent();
+    MachineRegisterInfo &MRI = MF->getRegInfo();
+    const TargetRegisterClass *RC = MRI.getRegClass(DstReg);
 
-    // Create basic blocks for the control flow
+    Register SignInputReg = MRI.createVirtualRegister(RC);
+    Register SignReg;
+    Register DividendCopyReg = MRI.createVirtualRegister(RC);
+    Register AbsDividendReg = MRI.createVirtualRegister(RC);
+    Register DivisorCopyReg = MRI.createVirtualRegister(RC);
+    Register AbsDivisorReg = MRI.createVirtualRegister(RC);
+    Register RawResultReg = MRI.createVirtualRegister(RC);
+    Register NegResultReg = MRI.createVirtualRegister(RC);
+
     MachineBasicBlock *StartBB = BB;
-    MachineBasicBlock *DividendNegBB = MF->CreateMachineBasicBlock();
-    MachineBasicBlock *CheckDivisorBB = MF->CreateMachineBasicBlock();
-    MachineBasicBlock *DivisorNegBB = MF->CreateMachineBasicBlock();
-    MachineBasicBlock *DoDivideBB = MF->CreateMachineBasicBlock();
     MachineBasicBlock *NegateResultBB = MF->CreateMachineBasicBlock();
     MachineBasicBlock *DoneBB = MF->CreateMachineBasicBlock();
 
-    // Insert all new blocks
     MachineFunction::iterator It = ++BB->getIterator();
-    MF->insert(It, DividendNegBB);
-    MF->insert(It, CheckDivisorBB);
-    MF->insert(It, DivisorNegBB);
-    MF->insert(It, DoDivideBB);
     MF->insert(It, NegateResultBB);
     MF->insert(It, DoneBB);
 
-    // Transfer successors to DoneBB
     DoneBB->splice(DoneBB->begin(), StartBB,
                    std::next(MachineBasicBlock::iterator(MI)), StartBB->end());
     DoneBB->transferSuccessorsAndUpdatePHIs(StartBB);
 
-    // Add live-ins to ensure registers are preserved across blocks
-    DividendNegBB->addLiveIn(TMS9900::R1);
-    DividendNegBB->addLiveIn(TMS9900::R3);
-    CheckDivisorBB->addLiveIn(TMS9900::R1);
-    CheckDivisorBB->addLiveIn(TMS9900::R2);
-    CheckDivisorBB->addLiveIn(TMS9900::R3);
-    DivisorNegBB->addLiveIn(TMS9900::R1);
-    DivisorNegBB->addLiveIn(TMS9900::R2);
-    DivisorNegBB->addLiveIn(TMS9900::R3);
-    DoDivideBB->addLiveIn(TMS9900::R1);
-    DoDivideBB->addLiveIn(TMS9900::R2);
-    DoDivideBB->addLiveIn(TMS9900::R3);
-    NegateResultBB->addLiveIn(TMS9900::R1);
-    DoneBB->addLiveIn(TMS9900::R1);
-
-    // StartBB: Initialize sign tracker (for dividend only), check dividend sign
-    // CLR R2 (dividend sign tracker = 0 means positive)
-    BuildMI(StartBB, DL, TII.get(TMS9900::CLRr), TMS9900::R2);
-
-    // MOV $dividend, R1 (put dividend in R1)
-    BuildMI(StartBB, DL, TII.get(TMS9900::MOVrr), TMS9900::R1)
+    // The quotient sign is the XOR of the operand signs. The remainder sign is
+    // the dividend sign, matching LLVM/C truncation-toward-zero semantics.
+    BuildMI(StartBB, DL, TII.get(TMS9900::MOVrr), SignInputReg)
         .addReg(DividendReg);
+    if (IsRemainder)
+      SignReg = SignInputReg;
+    else {
+      SignReg = MRI.createVirtualRegister(RC);
+      BuildMI(StartBB, DL, TII.get(TMS9900::XORrr), SignReg)
+          .addReg(SignInputReg)
+          .addReg(DivisorReg);
+    }
 
-    // MOV $divisor, R3 (put divisor in R3 for abs value)
-    BuildMI(StartBB, DL, TII.get(TMS9900::MOVrr), TMS9900::R3)
+    BuildMI(StartBB, DL, TII.get(TMS9900::MOVrr), DividendCopyReg)
+        .addReg(DividendReg);
+    BuildMI(StartBB, DL, TII.get(TMS9900::ABSr), AbsDividendReg)
+        .addReg(DividendCopyReg);
+    BuildMI(StartBB, DL, TII.get(TMS9900::MOVrr), DivisorCopyReg)
         .addReg(DivisorReg);
+    BuildMI(StartBB, DL, TII.get(TMS9900::ABSr), AbsDivisorReg)
+        .addReg(DivisorCopyReg);
 
-    // Keep each compare and branch in one terminator pseudo. Otherwise the
-    // scheduler may place another status-defining instruction between them.
-    BuildMI(StartBB, DL, TII.get(TMS9900::CMPBRri))
-        .addReg(TMS9900::R1)
-        .addImm(0)
-        .addImm(ISD::SETLT)
-        .addMBB(DividendNegBB);
-    BuildMI(StartBB, DL, TII.get(TMS9900::JMP))
-        .addMBB(CheckDivisorBB);
-    StartBB->addSuccessor(DividendNegBB);
-    StartBB->addSuccessor(CheckDivisorBB);
-
-    // DividendNegBB: Dividend is negative, negate it and mark
-    BuildMI(DividendNegBB, DL, TII.get(TMS9900::NEGr), TMS9900::R1)
-        .addReg(TMS9900::R1);
-    // Set R2 to non-zero to indicate dividend was negative
-    BuildMI(DividendNegBB, DL, TII.get(TMS9900::SETOr), TMS9900::R2);
-    BuildMI(DividendNegBB, DL, TII.get(TMS9900::JMP))
-        .addMBB(CheckDivisorBB);
-    DividendNegBB->addSuccessor(CheckDivisorBB);
-
-    // CheckDivisorBB: Check divisor sign (only need abs value, not tracking).
-    BuildMI(CheckDivisorBB, DL, TII.get(TMS9900::CMPBRri))
-        .addReg(TMS9900::R3)
-        .addImm(0)
-        .addImm(ISD::SETLT)
-        .addMBB(DivisorNegBB);
-    BuildMI(CheckDivisorBB, DL, TII.get(TMS9900::JMP))
-        .addMBB(DoDivideBB);
-    CheckDivisorBB->addSuccessor(DivisorNegBB);
-    CheckDivisorBB->addSuccessor(DoDivideBB);
-
-    // DivisorNegBB: Divisor is negative, negate it (no sign tracking needed)
-    BuildMI(DivisorNegBB, DL, TII.get(TMS9900::NEGr), TMS9900::R3)
-        .addReg(TMS9900::R3);
-    BuildMI(DivisorNegBB, DL, TII.get(TMS9900::JMP))
-        .addMBB(DoDivideBB);
-    DivisorNegBB->addSuccessor(DoDivideBB);
-
-    // DoDivideBB: Perform unsigned divide
-    // CLR R0 (high word = 0)
-    BuildMI(DoDivideBB, DL, TII.get(TMS9900::CLRr), TMS9900::R0);
-    // DIV R3,R0 (divides R0:R1 by R3, quotient in R0, remainder in R1)
-    BuildMI(DoDivideBB, DL, TII.get(TMS9900::DIVrr))
-        .addReg(TMS9900::R3)
-        .addReg(TMS9900::R0);
-    // Check if we need to negate remainder (dividend was negative).
-    BuildMI(DoDivideBB, DL, TII.get(TMS9900::CMPBRri))
+    // DIV consumes R0:R1 and an arbitrary source register. Keep this fixed-
+    // register sequence in one block, then immediately copy its result back to
+    // a virtual register before introducing control flow.
+    BuildMI(StartBB, DL, TII.get(TMS9900::MOVrr), TMS9900::R1)
+        .addReg(AbsDividendReg);
+    BuildMI(StartBB, DL, TII.get(TMS9900::MOVrr), TMS9900::R2)
+        .addReg(AbsDivisorReg);
+    BuildMI(StartBB, DL, TII.get(TMS9900::CLRr), TMS9900::R0);
+    BuildMI(StartBB, DL, TII.get(TMS9900::DIVrr))
         .addReg(TMS9900::R2)
-        .addImm(0)
-        .addImm(ISD::SETNE)
-        .addMBB(NegateResultBB);
-    BuildMI(DoDivideBB, DL, TII.get(TMS9900::JMP))
-        .addMBB(DoneBB);
-    DoDivideBB->addSuccessor(NegateResultBB);
-    DoDivideBB->addSuccessor(DoneBB);
+        .addReg(TMS9900::R0);
+    BuildMI(StartBB, DL, TII.get(TMS9900::MOVrr), RawResultReg)
+        .addReg(IsRemainder ? TMS9900::R1 : TMS9900::R0);
 
-    // NegateResultBB: Negate the remainder
-    BuildMI(NegateResultBB, DL, TII.get(TMS9900::NEGr), TMS9900::R1)
-        .addReg(TMS9900::R1);
+    BuildMI(StartBB, DL, TII.get(TMS9900::CMPBRri))
+        .addReg(SignReg)
+        .addImm(0)
+        .addImm(ISD::SETLT)
+        .addMBB(NegateResultBB);
+    BuildMI(StartBB, DL, TII.get(TMS9900::JMP))
+        .addMBB(DoneBB);
+    StartBB->addSuccessor(NegateResultBB);
+    StartBB->addSuccessor(DoneBB);
+
+    BuildMI(NegateResultBB, DL, TII.get(TMS9900::NEGr), NegResultReg)
+        .addReg(RawResultReg);
     BuildMI(NegateResultBB, DL, TII.get(TMS9900::JMP))
         .addMBB(DoneBB);
     NegateResultBB->addSuccessor(DoneBB);
 
-    // DoneBB: Copy result to destination
-    BuildMI(*DoneBB, DoneBB->begin(), DL, TII.get(TMS9900::MOVrr), DstReg)
-        .addReg(TMS9900::R1);  // Remainder is in R1
+    BuildMI(*DoneBB, DoneBB->begin(), DL, TII.get(TargetOpcode::PHI), DstReg)
+        .addReg(NegResultReg)
+        .addMBB(NegateResultBB)
+        .addReg(RawResultReg)
+        .addMBB(StartBB);
+    MF->getProperties().reset(MachineFunctionProperties::Property::NoPHIs);
 
     MI.eraseFromParent();
     return DoneBB;

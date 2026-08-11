@@ -155,6 +155,11 @@ public:
 
   virtual void addAliasForDirective(StringRef Directive, StringRef Alias) = 0;
 
+  /// Parse an include filename at the current token and enter that source
+  /// buffer. This allows target-specific aliases of the generic .include
+  /// directive to retain the parser's include-stack behavior.
+  virtual bool parseInclude() = 0;
+
   virtual SourceMgr &getSourceManager() = 0;
 
   virtual MCAsmLexer &getLexer() = 0;

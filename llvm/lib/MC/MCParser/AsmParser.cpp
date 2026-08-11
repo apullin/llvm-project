@@ -219,6 +219,8 @@ public:
     DirectiveKindMap[Directive.lower()] = DirectiveKindMap[Alias.lower()];
   }
 
+  bool parseInclude() override { return parseDirectiveInclude(); }
+
   /// @name MCAsmParser Interface
   /// {
 
@@ -1837,6 +1839,11 @@ bool AsmParser::parseStatement(ParseStatementInfo &Info,
     // Accept '*' as a valid start of statement.
     Lex();
     IDVal = "*";
+  } else if (Lexer.is(AsmToken::Exclaim) &&
+             getTargetParser().exclaimIsStartOfStatement()) {
+    // Accept '!' as a valid start of statement.
+    Lex();
+    IDVal = "!";
   } else if (parseIdentifier(IDVal)) {
     if (!TheCondState.Ignore) {
       Lex(); // always eat a token

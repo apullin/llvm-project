@@ -486,6 +486,8 @@ public:
     DirectiveKindMap[Directive] = DirectiveKindMap[Alias];
   }
 
+  bool parseInclude() override { return parseDirectiveInclude(); }
+
   /// @name MCAsmParser Interface
   /// {
 

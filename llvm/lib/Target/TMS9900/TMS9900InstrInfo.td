@@ -2067,6 +2067,7 @@ def LREX : Format11<0b0000001111100000, (outs), (ins),
 // disassembler represents branch operands as absolute targets.  The custom
 // instruction printer handles that address-aware aliasing.
 def : InstAlias<"NOP", (JMP 0), 0>;
+def : InstAlias<"RT", (RET_REAL), 0>;
 
 //===----------------------------------------------------------------------===//
 // Additional Patterns for Global/Jump Table/Block Addresses

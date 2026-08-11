@@ -9,6 +9,7 @@
 #include "MCTargetDesc/TMS9900MCTargetDesc.h"
 #include "TargetInfo/TMS9900TargetInfo.h"
 #include "llvm/ADT/STLExtras.h"
+#include "llvm/ADT/StringMap.h"
 #include "llvm/ADT/StringSwitch.h"
 #include "llvm/MC/MCContext.h"
 #include "llvm/MC/MCExpr.h"
@@ -269,6 +270,12 @@ private:
   BumpPtrAllocator Allocator;
   StringSaver Saver{Allocator};
 
+  struct XasLocalLabelState {
+    unsigned Defined = 0;
+    SmallVector<MCSymbol *, 4> Symbols;
+  };
+  StringMap<XasLocalLabelState> XasLocalLabels;
+
   bool matchAndEmitInstruction(SMLoc IDLoc, unsigned &Opcode,
                                OperandVector &Operands, MCStreamer &Out,
                                uint64_t &ErrorInfo,
@@ -280,6 +287,8 @@ private:
   bool parsePrimaryExpr(const MCExpr *&Res, SMLoc &EndLoc) override;
   void doBeforeLabelEmit(MCSymbol *Symbol, SMLoc IDLoc) override;
   void onLabelParsed(MCSymbol *Symbol) override;
+  bool starIsStartOfStatement() override { return isXas99Dialect(); }
+  bool exclaimIsStartOfStatement() override { return isXas99Dialect(); }
 
   bool parseInstruction(ParseInstructionInfo &Info, StringRef Name,
                         SMLoc NameLoc, OperandVector &Operands) override;
@@ -302,12 +311,23 @@ private:
   bool parseDirectiveDATA(bool AlignData = true);
   bool parseDirectiveBYTE();
   bool parseDirectiveTEXT();
+  bool parseDirectiveSTRI();
   bool parseDirectiveBSS();
+  bool parseDirectiveBES();
+  bool parseDirectiveEVEN();
   bool parseDirectiveDEF();
   bool parseDirectiveREF();
   bool parseDirectiveAORG();
   bool parseDirectiveEQU(SMLoc NameLoc);
   bool parseDirectiveEND();
+  bool parseDirectiveIDT();
+  bool parseDirectiveCOPY();
+  bool parseIgnoredDirective();
+
+  bool parseXasLocalLabel(ParseInstructionInfo &Info, SMLoc LabelLoc,
+                          OperandVector &Operands);
+  MCSymbol *getXasLocalLabel(StringRef Name, unsigned Index);
+  bool parseXasLocalReference(const MCExpr *&Res, SMLoc &EndLoc);
 
   StringRef canonicalizeSymbolName(StringRef Name);
   bool parseStringLiteral(std::string &Data);
@@ -369,6 +389,12 @@ bool TMS9900AsmParser::parsePrimaryExpr(const MCExpr *&Res, SMLoc &EndLoc) {
     return false;
   }
 
+  if (isXas99Dialect() &&
+      (Parser.getTok().is(AsmToken::Exclaim) ||
+       (Parser.getTok().is(AsmToken::Minus) &&
+        Parser.getLexer().peekTok().is(AsmToken::Exclaim))))
+    return parseXasLocalReference(Res, EndLoc);
+
   if (!isXas99Dialect())
     return getParser().parsePrimaryExpr(Res, EndLoc, nullptr);
 
@@ -380,6 +406,51 @@ bool TMS9900AsmParser::parsePrimaryExpr(const MCExpr *&Res, SMLoc &EndLoc) {
   Res = MCSymbolRefExpr::create(Sym, MCSymbolRefExpr::VK_None, getContext());
   EndLoc = Parser.getTok().getEndLoc();
   Parser.Lex();
+  return false;
+}
+
+MCSymbol *TMS9900AsmParser::getXasLocalLabel(StringRef Name, unsigned Index) {
+  XasLocalLabelState &State = XasLocalLabels[Name];
+  while (State.Symbols.size() < Index)
+    State.Symbols.push_back(getContext().createTempSymbol());
+  return State.Symbols[Index - 1];
+}
+
+bool TMS9900AsmParser::parseXasLocalReference(const MCExpr *&Res,
+                                               SMLoc &EndLoc) {
+  bool Backward = Parser.getTok().is(AsmToken::Minus);
+  SMLoc StartLoc = Parser.getTok().getLoc();
+  if (Backward)
+    Parser.Lex();
+
+  unsigned Distance = 0;
+  while (Parser.getTok().is(AsmToken::Exclaim)) {
+    ++Distance;
+    Parser.Lex();
+  }
+  assert(Distance && "local reference must contain an exclamation mark");
+
+  StringRef Name;
+  if (Parser.getTok().is(AsmToken::Identifier)) {
+    Name = canonicalizeSymbolName(Parser.getTok().getIdentifier());
+    EndLoc = Parser.getTok().getEndLoc();
+    Parser.Lex();
+  } else {
+    EndLoc = Parser.getTok().getLoc();
+  }
+
+  XasLocalLabelState &State = XasLocalLabels[Name];
+  unsigned Index;
+  if (Backward) {
+    if (Distance > State.Defined)
+      return Error(StartLoc, "xas99 backward local label is undefined");
+    Index = State.Defined - Distance + 1;
+  } else {
+    Index = State.Defined + Distance;
+  }
+
+  Res = MCSymbolRefExpr::create(getXasLocalLabel(Name, Index),
+                                MCSymbolRefExpr::VK_None, getContext());
   return false;
 }
 
@@ -446,12 +517,22 @@ bool TMS9900AsmParser::isKnownDirective(StringRef Name) const {
   return Name.equals_insensitive("DATA") ||
          Name.equals_insensitive("BYTE") ||
          Name.equals_insensitive("TEXT") ||
+         Name.equals_insensitive("STRI") ||
          Name.equals_insensitive("BSS") ||
+         Name.equals_insensitive("BES") ||
+         Name.equals_insensitive("EVEN") ||
          Name.equals_insensitive("DEF") ||
          Name.equals_insensitive("REF") ||
          Name.equals_insensitive("AORG") ||
          Name.equals_insensitive("EQU") ||
-         Name.equals_insensitive("END");
+         Name.equals_insensitive("END") ||
+         Name.equals_insensitive("IDT") ||
+         Name.equals_insensitive("COPY") ||
+         StringSwitch<bool>(Name.upper())
+             .Cases("PSEG", "PEND", "CSEG", "CEND", true)
+             .Cases("DSEG", "DEND", "LOAD", "SREF", true)
+             .Cases("UNL", "LIST", "PAGE", "TITL", true)
+             .Default(false);
 }
 
 bool TMS9900AsmParser::isKnownMnemonic(StringRef Name) const {
@@ -818,6 +899,13 @@ ParseStatus TMS9900AsmParser::parseBranchTarget(OperandVector &Operands) {
 bool TMS9900AsmParser::parseInstruction(ParseInstructionInfo &Info,
                                          StringRef Name, SMLoc NameLoc,
                                          OperandVector &Operands) {
+  if (Name == "*" && isXas99Dialect()) {
+    Parser.eatToEndOfStatement();
+    return false;
+  }
+  if (Name == "!" && isXas99Dialect())
+    return parseXasLocalLabel(Info, NameLoc, Operands);
+
   // Check for xas99-style directives (no '.' prefix)
   // These look like instructions but are actually assembler directives
   if (Name.equals_insensitive("DATA")) {
@@ -829,8 +917,17 @@ bool TMS9900AsmParser::parseInstruction(ParseInstructionInfo &Info,
   if (Name.equals_insensitive("TEXT")) {
     return parseDirectiveTEXT();
   }
+  if (Name.equals_insensitive("STRI")) {
+    return parseDirectiveSTRI();
+  }
   if (Name.equals_insensitive("BSS")) {
     return parseDirectiveBSS();
+  }
+  if (Name.equals_insensitive("BES")) {
+    return parseDirectiveBES();
+  }
+  if (Name.equals_insensitive("EVEN")) {
+    return parseDirectiveEVEN();
   }
   if (Name.equals_insensitive("DEF")) {
     return parseDirectiveDEF();
@@ -846,6 +943,15 @@ bool TMS9900AsmParser::parseInstruction(ParseInstructionInfo &Info,
   }
   if (Name.equals_insensitive("END")) {
     return parseDirectiveEND();
+  }
+  if (Name.equals_insensitive("IDT")) {
+    return parseDirectiveIDT();
+  }
+  if (Name.equals_insensitive("COPY")) {
+    return parseDirectiveCOPY();
+  }
+  if (isKnownDirective(Name)) {
+    return parseIgnoredDirective();
   }
 
   // xas99-style labels without colons:
@@ -893,6 +999,18 @@ bool TMS9900AsmParser::parseInstruction(ParseInstructionInfo &Info,
       getStreamer().emitAssignment(Sym, Expr);
       return expectEndOfStatement("EQU");
     }
+    if (Name.equals_insensitive("BES")) {
+      if (parseDirectiveBES())
+        return true;
+      getStreamer().emitLabel(Sym);
+      return false;
+    }
+    if (Name.equals_insensitive("EVEN")) {
+      if (parseDirectiveEVEN())
+        return true;
+      getStreamer().emitLabel(Sym);
+      return false;
+    }
 
     if (isKnownMnemonic(Name))
       getStreamer().emitValueToAlignment(Align(2));
@@ -903,6 +1021,9 @@ bool TMS9900AsmParser::parseInstruction(ParseInstructionInfo &Info,
     }
     if (Name.equals_insensitive("TEXT")) {
       return parseDirectiveTEXT();
+    }
+    if (Name.equals_insensitive("STRI")) {
+      return parseDirectiveSTRI();
     }
     if (Name.equals_insensitive("BSS")) {
       return parseDirectiveBSS();
@@ -915,6 +1036,15 @@ bool TMS9900AsmParser::parseInstruction(ParseInstructionInfo &Info,
     }
     if (Name.equals_insensitive("END")) {
       return parseDirectiveEND();
+    }
+    if (Name.equals_insensitive("IDT")) {
+      return parseDirectiveIDT();
+    }
+    if (Name.equals_insensitive("COPY")) {
+      return parseDirectiveCOPY();
+    }
+    if (isKnownDirective(Name)) {
+      return parseIgnoredDirective();
     }
     // Continue with instruction parsing below
   }
@@ -948,6 +1078,78 @@ bool TMS9900AsmParser::parseInstruction(ParseInstructionInfo &Info,
   }
 
   return false;
+}
+
+bool TMS9900AsmParser::parseXasLocalLabel(ParseInstructionInfo &Info,
+                                          SMLoc LabelLoc,
+                                          OperandVector &Operands) {
+  // Only the first exclamation mark marks a local definition. Any additional
+  // marks are part of its name; counts select distance only in references.
+  SmallString<16> LocalName;
+  while (Parser.getTok().is(AsmToken::Exclaim)) {
+    LocalName.push_back('!');
+    Parser.Lex();
+  }
+
+  StringRef Name = Saver.save(StringRef(LocalName));
+  if (Parser.getTok().is(AsmToken::Identifier)) {
+    AsmToken Next = Parser.getLexer().peekTok();
+    bool CurrentStartsStatement =
+        isKnownMnemonic(Parser.getTok().getIdentifier()) ||
+        isKnownDirective(Parser.getTok().getIdentifier());
+    bool IsNamedLabel = !CurrentStartsStatement ||
+                        Next.is(AsmToken::Identifier) ||
+                        Next.is(AsmToken::Colon) || Next.is(AsmToken::Dot);
+    if (IsNamedLabel) {
+      LocalName += Parser.getTok().getIdentifier().upper();
+      Name = Saver.save(StringRef(LocalName));
+      Parser.Lex();
+    }
+  }
+  if (Parser.getTok().is(AsmToken::Colon))
+    Parser.Lex();
+
+  XasLocalLabelState &State = XasLocalLabels[Name];
+  MCSymbol *Symbol = getXasLocalLabel(Name, ++State.Defined);
+
+  if (Parser.getTok().is(AsmToken::EndOfStatement)) {
+    getStreamer().emitLabel(Symbol);
+    return false;
+  }
+  if (Parser.getTok().isNot(AsmToken::Identifier))
+    return Error(Parser.getTok().getLoc(),
+                 "expected instruction or directive after local label");
+
+  StringRef Mnemonic = Saver.save(Parser.getTok().getIdentifier().lower());
+  SMLoc MnemonicLoc = Parser.getTok().getLoc();
+  Parser.Lex();
+
+  if (Mnemonic.equals_insensitive("DATA") || isKnownMnemonic(Mnemonic))
+    getStreamer().emitValueToAlignment(Align(2));
+
+  if (Mnemonic.equals_insensitive("AORG")) {
+    if (parseDirectiveAORG())
+      return true;
+    getStreamer().emitLabel(Symbol);
+    return false;
+  }
+  if (Mnemonic.equals_insensitive("BES")) {
+    if (parseDirectiveBES())
+      return true;
+    getStreamer().emitLabel(Symbol);
+    return false;
+  }
+  if (Mnemonic.equals_insensitive("EVEN")) {
+    if (parseDirectiveEVEN())
+      return true;
+    getStreamer().emitLabel(Symbol);
+    return false;
+  }
+  if (Mnemonic.equals_insensitive("EQU"))
+    return Error(LabelLoc, "xas99 local labels cannot be used with EQU");
+
+  getStreamer().emitLabel(Symbol);
+  return parseInstruction(Info, Mnemonic, MnemonicLoc, Operands);
 }
 
 bool TMS9900AsmParser::matchAndEmitInstruction(SMLoc IDLoc, unsigned &Opcode,
@@ -1125,6 +1327,45 @@ bool TMS9900AsmParser::parseDirectiveTEXT() {
   return expectEndOfStatement("TEXT");
 }
 
+bool TMS9900AsmParser::parseDirectiveSTRI() {
+  std::string Data;
+  do {
+    std::string Part;
+    if (parseStringLiteral(Part))
+      return true;
+    Data += Part;
+  } while (Parser.getTok().is(AsmToken::Comma) && (Parser.Lex(), true));
+
+  if (Data.size() > UINT8_MAX)
+    return Error(Parser.getTok().getLoc(),
+                 "STRI value cannot exceed 255 bytes");
+  getStreamer().emitInt8(Data.size());
+  getStreamer().emitBytes(Data);
+  return expectEndOfStatement("STRI");
+}
+
+bool TMS9900AsmParser::parseDirectiveBES() {
+  const MCExpr *Expr;
+  if (parseExpression(Expr))
+    return true;
+
+  int64_t Size;
+  if (!Expr->evaluateAsAbsolute(Size))
+    return Error(Parser.getTok().getLoc(), "BES size must be absolute");
+  if (Size < 0)
+    return Error(Parser.getTok().getLoc(), "BES size cannot be negative");
+
+  getStreamer().emitZeros(Size);
+  return expectEndOfStatement("BES");
+}
+
+bool TMS9900AsmParser::parseDirectiveEVEN() {
+  if (expectEndOfStatement("EVEN"))
+    return true;
+  getStreamer().emitValueToAlignment(Align(2));
+  return false;
+}
+
 bool TMS9900AsmParser::parseDirectiveREF() {
   // REF symbol[,symbol...]
   // Import external symbols (like .extern)
@@ -1176,6 +1417,26 @@ bool TMS9900AsmParser::parseDirectiveEND() {
   }
 
   while (Parser.getTok().isNot(AsmToken::Eof))
+    Parser.Lex();
+  return false;
+}
+
+bool TMS9900AsmParser::parseDirectiveIDT() {
+  if (Parser.getTok().isNot(AsmToken::EndOfStatement)) {
+    std::string Name;
+    if (parseStringLiteral(Name))
+      return true;
+  }
+  return expectEndOfStatement("IDT");
+}
+
+bool TMS9900AsmParser::parseDirectiveCOPY() {
+  return Parser.parseInclude();
+}
+
+bool TMS9900AsmParser::parseIgnoredDirective() {
+  while (Parser.getTok().isNot(AsmToken::EndOfStatement) &&
+         Parser.getTok().isNot(AsmToken::Eof))
     Parser.Lex();
   return false;
 }

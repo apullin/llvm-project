@@ -1767,61 +1767,71 @@ def RET_REAL : Format3_Reg_R11<0b0000010001, (outs), (ins),
 // Before: Rd contains multiplicand1
 // After: Rd:Rd+1 = multiplicand1 * Rs (32-bit result)
 //        Rd has high 16 bits, Rd+1 has low 16 bits
-// Note: Rd must be an even register (R0, R2, R4, R6, R8)
+// Rd may be any workspace register. For R15, the low half is stored in the
+// word immediately following the workspace.
 // The destination register is encoded in bits 9-6 of the instruction word.
-// We still hardcode Uses/Defs to R0:R1 since the pseudo expanders always
-// target R0, but the encoding now correctly encodes the $rd operand.
 let SchedRW = [WriteSlow] in {
-let Uses = [R0], Defs = [R0, R1] in
+let hasSideEffects = 1 in
 def MPYrr : Format2_Reg<0b001110, (outs), (ins GR16:$rs, GR16:$rd),
                          "MPY\t$rs,$rd",
                          []>;
-let Uses = [R0], Defs = [R0, R1] in
+let hasSideEffects = 1 in
 def MPYim : Format2_Ind<0b001110, (outs), (ins GR16:$rs, GR16:$rd),
                          "MPY\t*$rs,$rd",
                          []>;
-let Uses = [R0], Defs = [R0, R1] in
+let hasSideEffects = 1 in
 def MPYam : Format2_Sym<0b001110, (outs), (ins symaddr:$addr, GR16:$rd),
                          "MPY\t@$addr,$rd",
                          []>;
-let Uses = [R0], Defs = [R0, R1] in
+let hasSideEffects = 1 in
 def MPYxm : Format2_Idx<0b001110, (outs),
                          (ins i16imm:$offset, IdxRegs:$ri, GR16:$rd),
                          "MPY\t@${offset}(${ri}),$rd",
                          []>;
-let Uses = [R0], Defs = [R0, R1] in
+let hasSideEffects = 1 in
 def MPYpim : Format2_AutoInc<0b001110, (outs), (ins GR16:$rs, GR16:$rd),
                               "MPY\t*${rs}+,$rd",
                               []>;
+
+// Code generation always uses R0:R1. Keep that fixed-register form separate
+// so MachineInstr liveness is exact without lying about arbitrary MC syntax.
+let isCodeGenOnly = 1, Uses = [R0], Defs = [R0, R1] in
+def MPYrr_R0 : Format2_Reg_R0<0b001110, (outs), (ins GR16:$rs),
+                              "MPY\t$rs,R0", []>;
 }
 
 // DIV - Divide (unsigned 32/16 -> 16q, 16r)
 // Dividend in Rd:Rd+1 (32-bit input), divisor in Rs
 // Result: quotient in Rd, remainder in Rd+1
-// Note: Rd must be an even register
+// Rd may be any workspace register. For R15, the remainder is stored in the
+// word immediately following the workspace.
 // The destination register is encoded in bits 9-6 of the instruction word.
 let SchedRW = [WriteDiv] in {
-let Uses = [R0, R1], Defs = [R0, R1, ST] in
+let hasSideEffects = 1, Defs = [ST] in
 def DIVrr : Format2_Reg<0b001111, (outs), (ins GR16:$rs, GR16:$rd),
                          "DIV\t$rs,$rd",
                          []>;
-let Uses = [R0, R1], Defs = [R0, R1, ST] in
+let hasSideEffects = 1, Defs = [ST] in
 def DIVim : Format2_Ind<0b001111, (outs), (ins GR16:$rs, GR16:$rd),
                          "DIV\t*$rs,$rd",
                          []>;
-let Uses = [R0, R1], Defs = [R0, R1, ST] in
+let hasSideEffects = 1, Defs = [ST] in
 def DIVam : Format2_Sym<0b001111, (outs), (ins symaddr:$addr, GR16:$rd),
                          "DIV\t@$addr,$rd",
                          []>;
-let Uses = [R0, R1], Defs = [R0, R1, ST] in
+let hasSideEffects = 1, Defs = [ST] in
 def DIVxm : Format2_Idx<0b001111, (outs),
                          (ins i16imm:$offset, IdxRegs:$ri, GR16:$rd),
                          "DIV\t@${offset}(${ri}),$rd",
                          []>;
-let Uses = [R0, R1], Defs = [R0, R1, ST] in
+let hasSideEffects = 1, Defs = [ST] in
 def DIVpim : Format2_AutoInc<0b001111, (outs), (ins GR16:$rs, GR16:$rd),
                               "DIV\t*${rs}+,$rd",
                               []>;
+
+let isCodeGenOnly = 1, Uses = [R0, R1], Defs = [R0, R1, ST] in
+def DIVrr_R0 : Format2_Reg_R0<0b001111, (outs), (ins GR16:$rs),
+                              "DIV\t$rs,R0", []>;
 }
 
 //===----------------------------------------------------------------------===//

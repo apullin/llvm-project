@@ -1147,9 +1147,7 @@ TMS9900TargetLowering::EmitInstrWithCustomInserter(MachineInstr &MI,
         .addReg(LhsReg);
 
     // MPY $rhs,R0 (multiplicand in R0, result in R0:R1)
-    BuildMI(*BB, MI, DL, TII.get(TMS9900::MPYrr))
-        .addReg(RhsReg)
-        .addReg(TMS9900::R0);
+    BuildMI(*BB, MI, DL, TII.get(TMS9900::MPYrr_R0)).addReg(RhsReg);
 
     // MOV R1, $dst (low 16 bits of result are in R1)
     BuildMI(*BB, MI, DL, TII.get(TMS9900::MOVrr), DstReg)
@@ -1178,9 +1176,7 @@ TMS9900TargetLowering::EmitInstrWithCustomInserter(MachineInstr &MI,
         .addReg(DividendReg);
 
     // DIV $divisor,R0 (divides R0:R1, quotient in R0, remainder in R1)
-    BuildMI(*BB, MI, DL, TII.get(TMS9900::DIVrr))
-        .addReg(DivisorReg)
-        .addReg(TMS9900::R0);
+    BuildMI(*BB, MI, DL, TII.get(TMS9900::DIVrr_R0)).addReg(DivisorReg);
 
     // MOV R0, $dst (quotient)
     BuildMI(*BB, MI, DL, TII.get(TMS9900::MOVrr), DstReg)
@@ -1205,9 +1201,7 @@ TMS9900TargetLowering::EmitInstrWithCustomInserter(MachineInstr &MI,
         .addReg(DividendReg);
 
     // DIV $divisor,R0 (divides R0:R1, quotient in R0, remainder in R1)
-    BuildMI(*BB, MI, DL, TII.get(TMS9900::DIVrr))
-        .addReg(DivisorReg)
-        .addReg(TMS9900::R0);
+    BuildMI(*BB, MI, DL, TII.get(TMS9900::DIVrr_R0)).addReg(DivisorReg);
 
     // MOV R1, $dst (remainder)
     BuildMI(*BB, MI, DL, TII.get(TMS9900::MOVrr), DstReg)
@@ -1284,9 +1278,7 @@ TMS9900TargetLowering::EmitInstrWithCustomInserter(MachineInstr &MI,
     BuildMI(StartBB, DL, TII.get(TMS9900::MOVrr), TMS9900::R2)
         .addReg(AbsDivisorReg);
     BuildMI(StartBB, DL, TII.get(TMS9900::CLRr), TMS9900::R0);
-    BuildMI(StartBB, DL, TII.get(TMS9900::DIVrr))
-        .addReg(TMS9900::R2)
-        .addReg(TMS9900::R0);
+    BuildMI(StartBB, DL, TII.get(TMS9900::DIVrr_R0)).addReg(TMS9900::R2);
     BuildMI(StartBB, DL, TII.get(TMS9900::MOVrr), RawResultReg)
         .addReg(IsRemainder ? TMS9900::R1 : TMS9900::R0);
 

@@ -8,6 +8,7 @@
 
 #include "MCTargetDesc/TMS9900MCTargetDesc.h"
 #include "TargetInfo/TMS9900TargetInfo.h"
+#include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/ADT/StringMap.h"
@@ -31,6 +32,7 @@
 #include "llvm/Support/MathExtras.h"
 #include "llvm/Support/SourceMgr.h"
 #include "llvm/Support/StringSaver.h"
+#include <array>
 
 using namespace llvm;
 
@@ -326,6 +328,7 @@ private:
   bool parseDirectiveBYTE();
   bool parseDirectiveTEXT();
   bool parseDirectiveSTRI();
+  bool parseDirectiveFLOA();
   bool parseDirectiveBSS();
   bool parseDirectiveBES();
   bool parseDirectiveEVEN();
@@ -337,6 +340,7 @@ private:
   bool parseDirectiveEND();
   bool parseDirectiveIDT();
   bool parseDirectiveCOPY();
+  bool parseDirectiveBCOPY();
   bool parseDirectiveDXOP();
   bool parseDirectiveDEFM(SMLoc DirectiveLoc);
   bool parseIgnoredDirective();
@@ -347,8 +351,10 @@ private:
   bool parseXasLocalReference(const MCExpr *&Res, SMLoc &EndLoc);
 
   StringRef canonicalizeSymbolName(StringRef Name);
+  bool isXasLabelField(SMLoc NameLoc) const;
   bool consumeXasTrailingComment();
   bool parseStringLiteral(std::string &Data);
+  bool parseXasTextValue(std::string &Data);
   bool expectEndOfStatement(StringRef Directive);
 
   // Helper to check if a name is a known instruction mnemonic or directive
@@ -430,6 +436,24 @@ StringRef TMS9900AsmParser::canonicalizeSymbolName(StringRef Name) {
   return isXas99Dialect() ? Saver.save(Name.upper()) : Name;
 }
 
+bool TMS9900AsmParser::isXasLabelField(SMLoc NameLoc) const {
+  if (!isXas99Dialect())
+    return false;
+
+  SourceMgr &SM = Parser.getSourceManager();
+  unsigned BufferID = SM.FindBufferContainingLoc(NameLoc);
+  if (!BufferID)
+    return false;
+  const MemoryBuffer *Buffer = SM.getMemoryBuffer(BufferID);
+  // Generic macro expansion omits the leading whitespace before the first
+  // token, so its synthetic buffer cannot preserve xas99 field position.
+  if (Buffer->getBufferIdentifier() == "<instantiation>")
+    return false;
+  const char *BufferStart = Buffer->getBufferStart();
+  const char *Name = NameLoc.getPointer();
+  return Name == BufferStart || Name[-1] == '\n' || Name[-1] == '\r';
+}
+
 bool TMS9900AsmParser::parsePrimaryExpr(const MCExpr *&Res, SMLoc &EndLoc) {
   if (Parser.getTok().is(AsmToken::String)) {
     SMLoc StartLoc = Parser.getTok().getLoc();
@@ -458,6 +482,22 @@ bool TMS9900AsmParser::parsePrimaryExpr(const MCExpr *&Res, SMLoc &EndLoc) {
     if (parseExpression(Res))
       return true;
     EndLoc = Parser.getTok().getLoc();
+    return false;
+  }
+
+  if (isXas99Dialect() && Parser.getTok().is(AsmToken::Colon)) {
+    SMLoc StartLoc = Parser.getTok().getLoc();
+    Parser.Lex();
+    if (Parser.getTok().isNot(AsmToken::Integer))
+      return Error(StartLoc, "expected binary digits after ':'");
+
+    StringRef Digits = Parser.getTok().getString();
+    uint64_t Value;
+    if (Digits.empty() || Digits.getAsInteger(2, Value))
+      return Error(StartLoc, "invalid binary integer literal");
+    EndLoc = Parser.getTok().getEndLoc();
+    Parser.Lex();
+    Res = MCConstantExpr::create(Value, getContext());
     return false;
   }
 
@@ -550,6 +590,48 @@ bool TMS9900AsmParser::parseStringLiteral(std::string &Data) {
   return false;
 }
 
+bool TMS9900AsmParser::parseXasTextValue(std::string &Data) {
+  if (Parser.getTok().is(AsmToken::String))
+    return parseStringLiteral(Data);
+
+  SMLoc StartLoc = Parser.getTok().getLoc();
+  bool CombinedMinusGreater = Parser.getTok().is(AsmToken::MinusGreater);
+  bool NegateLast =
+      CombinedMinusGreater || Parser.getTok().is(AsmToken::Minus);
+  if (NegateLast)
+    Parser.Lex();
+  if (!CombinedMinusGreater && Parser.getTok().isNot(AsmToken::Greater))
+    return Error(StartLoc, "expected string or hexadecimal byte string");
+  if (!CombinedMinusGreater)
+    Parser.Lex();
+
+  SmallString<64> Hex;
+  while (Parser.getTok().is(AsmToken::Integer) ||
+         Parser.getTok().is(AsmToken::BigNum) ||
+         Parser.getTok().is(AsmToken::Identifier)) {
+    StringRef Part = Parser.getTok().getString();
+    if (!llvm::all_of(Part, [](char C) { return isHexDigit(C); }))
+      break;
+    Hex += Part;
+    Parser.Lex();
+  }
+  if (Hex.empty())
+    return Error(StartLoc, "expected hexadecimal digits after '>'");
+  if (Hex.size() % 2)
+    Hex.push_back('0');
+
+  Data.clear();
+  Data.reserve(Hex.size() / 2);
+  for (size_t I = 0; I < Hex.size(); I += 2) {
+    uint8_t Byte = static_cast<uint8_t>(hexDigitValue(Hex[I]) * 16 +
+                                        hexDigitValue(Hex[I + 1]));
+    Data.push_back(static_cast<char>(Byte));
+  }
+  if (NegateLast)
+    Data.back() = static_cast<char>(0U - static_cast<uint8_t>(Data.back()));
+  return false;
+}
+
 bool TMS9900AsmParser::expectEndOfStatement(StringRef Directive) {
   consumeXasTrailingComment();
   if (Parser.getTok().is(AsmToken::EndOfStatement) ||
@@ -593,6 +675,7 @@ bool TMS9900AsmParser::isKnownDirective(StringRef Name) const {
          Name.equals_insensitive("BYTE") ||
          Name.equals_insensitive("TEXT") ||
          Name.equals_insensitive("STRI") ||
+         Name.equals_insensitive("FLOA") ||
          Name.equals_insensitive("BSS") ||
          Name.equals_insensitive("BES") ||
          Name.equals_insensitive("EVEN") ||
@@ -604,6 +687,7 @@ bool TMS9900AsmParser::isKnownDirective(StringRef Name) const {
          Name.equals_insensitive("END") ||
          Name.equals_insensitive("IDT") ||
          Name.equals_insensitive("COPY") ||
+         Name.equals_insensitive("BCOPY") ||
          Name.equals_insensitive("DXOP") ||
          StringSwitch<bool>(Name.upper())
              .Cases("PSEG", "PEND", "CSEG", "CEND", true)
@@ -1102,64 +1186,55 @@ bool TMS9900AsmParser::parseInstruction(ParseInstructionInfo &Info,
   if (Name == "!" && isXas99Dialect())
     return parseXasLocalLabel(Info, NameLoc, Operands);
 
+  bool InLabelField = isXasLabelField(NameLoc);
+
   // Check for xas99-style directives (no '.' prefix)
   // These look like instructions but are actually assembler directives
-  if (Name.equals_insensitive("DATA")) {
-    return parseDirectiveDATA();
-  }
-  if (Name.equals_insensitive("BYTE")) {
-    return parseDirectiveBYTE();
-  }
-  if (Name.equals_insensitive("TEXT")) {
-    return parseDirectiveTEXT();
-  }
-  if (Name.equals_insensitive("STRI")) {
-    return parseDirectiveSTRI();
-  }
-  if (Name.equals_insensitive("BSS")) {
-    return parseDirectiveBSS();
-  }
-  if (Name.equals_insensitive("BES")) {
-    return parseDirectiveBES();
-  }
-  if (Name.equals_insensitive("EVEN")) {
-    return parseDirectiveEVEN();
-  }
-  if (Name.equals_insensitive("DEF")) {
-    return parseDirectiveDEF();
-  }
-  if (Name.equals_insensitive("REF")) {
-    return parseDirectiveREF();
-  }
-  if (Name.equals_insensitive("AORG")) {
-    return parseDirectiveAORG();
-  }
-  if (Name.equals_insensitive("EQU")) {
-    return parseDirectiveEQU(NameLoc);
-  }
-  if (Name.equals_insensitive("REQU")) {
-    return parseDirectiveREQU(NameLoc);
-  }
-  if (Name.equals_insensitive("END")) {
-    return parseDirectiveEND();
-  }
-  if (Name.equals_insensitive("IDT")) {
-    return parseDirectiveIDT();
-  }
-  if (Name.equals_insensitive("COPY")) {
-    return parseDirectiveCOPY();
-  }
-  if (Name.equals_insensitive("DXOP")) {
-    return parseDirectiveDXOP();
-  }
-  if (isKnownDirective(Name)) {
-    return parseIgnoredDirective();
+  if (!InLabelField) {
+    if (Name.equals_insensitive("DATA"))
+      return parseDirectiveDATA();
+    if (Name.equals_insensitive("BYTE"))
+      return parseDirectiveBYTE();
+    if (Name.equals_insensitive("TEXT"))
+      return parseDirectiveTEXT();
+    if (Name.equals_insensitive("STRI"))
+      return parseDirectiveSTRI();
+    if (Name.equals_insensitive("FLOA"))
+      return parseDirectiveFLOA();
+    if (Name.equals_insensitive("BSS"))
+      return parseDirectiveBSS();
+    if (Name.equals_insensitive("BES"))
+      return parseDirectiveBES();
+    if (Name.equals_insensitive("EVEN"))
+      return parseDirectiveEVEN();
+    if (Name.equals_insensitive("DEF"))
+      return parseDirectiveDEF();
+    if (Name.equals_insensitive("REF"))
+      return parseDirectiveREF();
+    if (Name.equals_insensitive("AORG"))
+      return parseDirectiveAORG();
+    if (Name.equals_insensitive("EQU"))
+      return parseDirectiveEQU(NameLoc);
+    if (Name.equals_insensitive("REQU"))
+      return parseDirectiveREQU(NameLoc);
+    if (Name.equals_insensitive("END"))
+      return parseDirectiveEND();
+    if (Name.equals_insensitive("IDT"))
+      return parseDirectiveIDT();
+    if (Name.equals_insensitive("COPY"))
+      return parseDirectiveCOPY();
+    if (Name.equals_insensitive("BCOPY"))
+      return parseDirectiveBCOPY();
+    if (Name.equals_insensitive("DXOP"))
+      return parseDirectiveDXOP();
+    if (isKnownDirective(Name))
+      return parseIgnoredDirective();
   }
 
   // xas99-style labels without colons:
   // If Name is not a known mnemonic or directive, treat it as a label
   // Then parse the rest of the line as the actual instruction
-  if (!isKnownMnemonic(Name) && !isKnownDirective(Name)) {
+  if (InLabelField || (!isKnownMnemonic(Name) && !isKnownDirective(Name))) {
     // This looks like a label without a colon (xas99 style)
     StringRef LabelName = canonicalizeSymbolName(Name);
     if (XasRegisterAliases.count(LabelName))
@@ -1240,6 +1315,9 @@ bool TMS9900AsmParser::parseInstruction(ParseInstructionInfo &Info,
     if (Name.equals_insensitive("STRI")) {
       return parseDirectiveSTRI();
     }
+    if (Name.equals_insensitive("FLOA")) {
+      return parseDirectiveFLOA();
+    }
     if (Name.equals_insensitive("BSS")) {
       return parseDirectiveBSS();
     }
@@ -1257,6 +1335,9 @@ bool TMS9900AsmParser::parseInstruction(ParseInstructionInfo &Info,
     }
     if (Name.equals_insensitive("COPY")) {
       return parseDirectiveCOPY();
+    }
+    if (Name.equals_insensitive("BCOPY")) {
+      return parseDirectiveBCOPY();
     }
     if (Name.equals_insensitive("DXOP")) {
       return parseDirectiveDXOP();
@@ -1452,6 +1533,8 @@ ParseStatus TMS9900AsmParser::parseDirective(AsmToken DirectiveID) {
     return parseDirectiveDATA() ? ParseStatus::Failure : ParseStatus::Success;
   if (IDVal.equals_insensitive("BYTE"))
     return parseDirectiveBYTE() ? ParseStatus::Failure : ParseStatus::Success;
+  if (IDVal.equals_insensitive("FLOA"))
+    return parseDirectiveFLOA() ? ParseStatus::Failure : ParseStatus::Success;
   if (IDVal.equals_insensitive("BSS"))
     return parseDirectiveBSS() ? ParseStatus::Failure : ParseStatus::Success;
   if (IDVal.equals_insensitive("DEF"))
@@ -1559,7 +1642,7 @@ bool TMS9900AsmParser::parseDirectiveTEXT() {
   // TEXT 'string'[,"string"...]
   do {
     std::string Data;
-    if (parseStringLiteral(Data))
+    if (parseXasTextValue(Data))
       return true;
     getStreamer().emitBytes(Data);
   } while (Parser.getTok().is(AsmToken::Comma) && (Parser.Lex(), true));
@@ -1571,7 +1654,7 @@ bool TMS9900AsmParser::parseDirectiveSTRI() {
   std::string Data;
   do {
     std::string Part;
-    if (parseStringLiteral(Part))
+    if (parseXasTextValue(Part))
       return true;
     Data += Part;
   } while (Parser.getTok().is(AsmToken::Comma) && (Parser.Lex(), true));
@@ -1582,6 +1665,106 @@ bool TMS9900AsmParser::parseDirectiveSTRI() {
   getStreamer().emitInt8(Data.size());
   getStreamer().emitBytes(Data);
   return expectEndOfStatement("STRI");
+}
+
+static bool encodeXasRadix100(StringRef Literal,
+                              std::array<uint8_t, 8> &Bytes) {
+  bool Negative = Literal.consume_front("-");
+  Literal.consume_front("+");
+  if (Literal.empty())
+    return true;
+
+  size_t Dot = Literal.find('.');
+  if (Dot != StringRef::npos && Literal.find('.', Dot + 1) != StringRef::npos)
+    return true;
+
+  StringRef Integer = Dot == StringRef::npos ? Literal : Literal.take_front(Dot);
+  StringRef Fraction =
+      Dot == StringRef::npos ? StringRef() : Literal.drop_front(Dot + 1);
+  if (Integer.empty() && Fraction.empty())
+    return true;
+  if (!llvm::all_of(Integer, [](char C) { return isDigit(C); }) ||
+      !llvm::all_of(Fraction, [](char C) { return isDigit(C); }))
+    return true;
+
+  while (Integer.starts_with("0"))
+    Integer = Integer.drop_front();
+  while (Fraction.ends_with("0"))
+    Fraction = Fraction.drop_back();
+
+  if (Integer.empty() && Fraction.empty()) {
+    Bytes.fill(0);
+    return false;
+  }
+
+  SmallString<64> Mantissa;
+  int Exponent;
+  if (!Integer.empty()) {
+    Exponent = (Integer.size() - 1) / 2;
+    if (Integer.size() % 2)
+      Mantissa.push_back('0');
+    Mantissa += Integer;
+    Mantissa += Fraction;
+  } else {
+    size_t FirstNonzero = 0;
+    while (FirstNonzero < Fraction.size() && Fraction[FirstNonzero] == '0')
+      ++FirstNonzero;
+    if (FirstNonzero == Fraction.size()) {
+      Bytes.fill(0);
+      return false;
+    }
+    Exponent = -static_cast<int>(FirstNonzero / 2) - 1;
+    Mantissa += Fraction.drop_front((FirstNonzero / 2) * 2);
+  }
+
+  if (Exponent < -64 || Exponent > 63)
+    return true;
+  while (Mantissa.size() < 14)
+    Mantissa.push_back('0');
+
+  Bytes[0] = static_cast<uint8_t>(Exponent + 0x40);
+  for (size_t I = 0; I < 7; ++I)
+    Bytes[I + 1] =
+        static_cast<uint8_t>((Mantissa[I * 2] - '0') * 10 +
+                             Mantissa[I * 2 + 1] - '0');
+  if (Negative) {
+    Bytes[0] = static_cast<uint8_t>(~Bytes[0]);
+    Bytes[1] = static_cast<uint8_t>(0U - Bytes[1]);
+  }
+  return false;
+}
+
+bool TMS9900AsmParser::parseDirectiveFLOA() {
+  do {
+    SMLoc StartLoc = Parser.getTok().getLoc();
+    const char *Start = StartLoc.getPointer();
+    const char *End = Start;
+    bool HaveToken = false;
+    while (Parser.getTok().isNot(AsmToken::Comma) &&
+           Parser.getTok().isNot(AsmToken::EndOfStatement) &&
+           Parser.getTok().isNot(AsmToken::Eof)) {
+      if (HaveToken && isTokenStartOfTrailingComment(Parser.getTok()))
+        break;
+      HaveToken = true;
+      End = Parser.getTok().getEndLoc().getPointer();
+      Parser.Lex();
+    }
+    if (!HaveToken)
+      return Error(StartLoc, "expected floating-point literal after FLOA");
+
+    SmallString<64> Literal;
+    for (char C : StringRef(Start, End - Start))
+      if (!isSpace(C))
+        Literal.push_back(C);
+
+    std::array<uint8_t, 8> Bytes;
+    if (encodeXasRadix100(Literal, Bytes))
+      return Error(StartLoc, "invalid TI radix-100 floating-point literal");
+    for (uint8_t Byte : Bytes)
+      getStreamer().emitInt8(Byte);
+  } while (Parser.getTok().is(AsmToken::Comma) && (Parser.Lex(), true));
+
+  return expectEndOfStatement("FLOA");
 }
 
 bool TMS9900AsmParser::parseDirectiveBES() {
@@ -1677,6 +1860,21 @@ bool TMS9900AsmParser::parseDirectiveIDT() {
 
 bool TMS9900AsmParser::parseDirectiveCOPY() {
   return Parser.parseInclude();
+}
+
+bool TMS9900AsmParser::parseDirectiveBCOPY() {
+  SMLoc FilenameLoc = Parser.getTok().getLoc();
+  std::string Filename;
+  if (parseStringLiteral(Filename) || expectEndOfStatement("BCOPY"))
+    return true;
+
+  std::string IncludedFile;
+  SourceMgr &SM = Parser.getSourceManager();
+  unsigned BufferID = SM.AddIncludeFile(Filename, FilenameLoc, IncludedFile);
+  if (!BufferID)
+    return Error(FilenameLoc, "could not find BCOPY file '" + Filename + "'");
+  getStreamer().emitBytes(SM.getMemoryBuffer(BufferID)->getBuffer());
+  return false;
 }
 
 bool TMS9900AsmParser::parseDirectiveDXOP() {

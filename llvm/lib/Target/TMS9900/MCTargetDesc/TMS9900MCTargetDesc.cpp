@@ -33,8 +33,6 @@ using namespace llvm;
 // 1 = XAS99: >XXXX hex immediates, xas99-compatible output
 //===----------------------------------------------------------------------===//
 
-enum TMS9900AsmDialect { AD_Default = 0, AD_XAS99 = 1 };
-
 static cl::opt<TMS9900AsmDialect> TMS9900AsmDialectOpt(
     "tms9900-asm-dialect", cl::init(AD_Default), cl::Hidden,
     cl::desc("Choose TMS9900 assembly dialect:"),
@@ -63,12 +61,15 @@ public:
     // Code pointer size is 16 bits (2 bytes)
     CodePointerSize = 2;
     CalleeSaveStackSlotSize = 2;
+    MinInstAlignment = 2;
+    MaxInstLength = 6;
 
     // Set assembler dialect based on command-line option
     AssemblerDialect = TMS9900AsmDialectOpt;
 
     // TMS9900 is big-endian
     IsLittleEndian = false;
+    DollarIsPC = true;
 
     // xas99 accepts ; for comments
     CommentString = ";";
@@ -78,7 +79,7 @@ public:
     Data8bitsDirective = "\tBYTE ";
     Data32bitsDirective = nullptr;
 
-    AsciiDirective = "\tTEXT '";
+    AsciiDirective = "\tTEXT ";
     AscizDirective = nullptr;
 
     // xas99 uses DEF to export symbols

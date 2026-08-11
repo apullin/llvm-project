@@ -277,6 +277,9 @@ private:
   bool parseRegister(MCRegister &Reg, SMLoc &StartLoc, SMLoc &EndLoc) override;
   ParseStatus tryParseRegister(MCRegister &Reg, SMLoc &StartLoc,
                                SMLoc &EndLoc) override;
+  bool parsePrimaryExpr(const MCExpr *&Res, SMLoc &EndLoc) override;
+  void doBeforeLabelEmit(MCSymbol *Symbol, SMLoc IDLoc) override;
+  void onLabelParsed(MCSymbol *Symbol) override;
 
   bool parseInstruction(ParseInstructionInfo &Info, StringRef Name,
                         SMLoc NameLoc, OperandVector &Operands) override;
@@ -296,7 +299,7 @@ private:
   bool isXas99Dialect() const;
 
   // xas99 directive handlers
-  bool parseDirectiveDATA();
+  bool parseDirectiveDATA(bool AlignData = true);
   bool parseDirectiveBYTE();
   bool parseDirectiveTEXT();
   bool parseDirectiveBSS();
@@ -304,6 +307,11 @@ private:
   bool parseDirectiveREF();
   bool parseDirectiveAORG();
   bool parseDirectiveEQU(SMLoc NameLoc);
+  bool parseDirectiveEND();
+
+  StringRef canonicalizeSymbolName(StringRef Name);
+  bool parseStringLiteral(std::string &Data);
+  bool expectEndOfStatement(StringRef Directive);
 
   // Helper to check if a name is a known instruction mnemonic or directive
   bool isKnownMnemonic(StringRef Name) const;
@@ -323,6 +331,9 @@ public:
     MCAsmParserExtension::Initialize(Parser);
     MRI = getContext().getRegisterInfo();
     setAvailableFeatures(ComputeAvailableFeatures(STI.getFeatureBits()));
+    Parser.getLexer().setLexMasmStrings(true);
+    if (isXas99Dialect())
+      Parser.getLexer().setLexHLASMIntegers(true);
   }
 };
 
@@ -333,9 +344,102 @@ public:
 #include "TMS9900GenAsmMatcher.inc"
 
 bool TMS9900AsmParser::isXas99Dialect() const {
-  // Check if we're using xas99 dialect
-  // This would be set via -mllvm -tms9900-asm-dialect=xas99
-  return false; // Default to LLVM dialect for now
+  return Parser.getAssemblerDialect() == AD_XAS99;
+}
+
+StringRef TMS9900AsmParser::canonicalizeSymbolName(StringRef Name) {
+  return isXas99Dialect() ? Saver.save(Name.upper()) : Name;
+}
+
+bool TMS9900AsmParser::parsePrimaryExpr(const MCExpr *&Res, SMLoc &EndLoc) {
+  if (Parser.getTok().is(AsmToken::String)) {
+    SMLoc StartLoc = Parser.getTok().getLoc();
+    std::string Data;
+    if (parseStringLiteral(Data))
+      return true;
+    if (Data.size() > 2)
+      return Error(StartLoc,
+                   "string constant must contain at most two bytes");
+
+    uint16_t Value = 0;
+    for (unsigned char C : Data)
+      Value = (Value << 8) | C;
+    Res = MCConstantExpr::create(Value, getContext());
+    EndLoc = Parser.getTok().getLoc();
+    return false;
+  }
+
+  if (!isXas99Dialect())
+    return getParser().parsePrimaryExpr(Res, EndLoc, nullptr);
+
+  if (Parser.getTok().isNot(AsmToken::Identifier))
+    return getParser().parsePrimaryExpr(Res, EndLoc, nullptr);
+
+  StringRef Name = canonicalizeSymbolName(Parser.getTok().getIdentifier());
+  MCSymbol *Sym = getContext().getOrCreateSymbol(Name);
+  Res = MCSymbolRefExpr::create(Sym, MCSymbolRefExpr::VK_None, getContext());
+  EndLoc = Parser.getTok().getEndLoc();
+  Parser.Lex();
+  return false;
+}
+
+bool TMS9900AsmParser::parseStringLiteral(std::string &Data) {
+  if (Parser.getTok().isNot(AsmToken::String))
+    return Error(Parser.getTok().getLoc(), "expected string");
+
+  StringRef Token = Parser.getTok().getString();
+  if (Token.starts_with("\""))
+    return Parser.parseEscapedString(Data);
+
+  StringRef Contents = Parser.getTok().getStringContents();
+  Data.clear();
+  for (size_t I = 0; I < Contents.size(); ++I) {
+    if (Contents[I] == '\'' && I + 1 < Contents.size() &&
+        Contents[I + 1] == '\'')
+      ++I;
+    Data.push_back(Contents[I]);
+  }
+  if (Data.empty())
+    Data.push_back('\0');
+  Parser.Lex();
+  return false;
+}
+
+bool TMS9900AsmParser::expectEndOfStatement(StringRef Directive) {
+  if (Parser.getTok().is(AsmToken::EndOfStatement) ||
+      Parser.getTok().is(AsmToken::Eof))
+    return false;
+  return Error(Parser.getTok().getLoc(),
+               "unexpected token in " + Directive + " directive");
+}
+
+void TMS9900AsmParser::onLabelParsed(MCSymbol *Symbol) {
+  if (!isXas99Dialect())
+    return;
+
+  StringRef CanonicalName = canonicalizeSymbolName(Symbol->getName());
+  if (CanonicalName == Symbol->getName())
+    return;
+
+  MCSymbol *Canonical = getContext().getOrCreateSymbol(CanonicalName);
+  if (!Canonical->isUndefined()) {
+    Error(Parser.getTok().getLoc(),
+          "symbol is already defined with different capitalization");
+    return;
+  }
+
+  getStreamer().emitAssignment(
+      Canonical, MCSymbolRefExpr::create(Symbol, MCSymbolRefExpr::VK_None,
+                                        getContext()));
+}
+
+void TMS9900AsmParser::doBeforeLabelEmit(MCSymbol *Symbol, SMLoc IDLoc) {
+  if (Parser.getTok().isNot(AsmToken::Identifier))
+    return;
+
+  StringRef Next = Parser.getTok().getIdentifier();
+  if (isKnownMnemonic(Next) || Next.equals_insensitive("DATA"))
+    getStreamer().emitValueToAlignment(Align(2));
 }
 
 bool TMS9900AsmParser::isKnownDirective(StringRef Name) const {
@@ -741,8 +845,7 @@ bool TMS9900AsmParser::parseInstruction(ParseInstructionInfo &Info,
     return parseDirectiveEQU(NameLoc);
   }
   if (Name.equals_insensitive("END")) {
-    // END directive - just ignore the rest of the file
-    return false;
+    return parseDirectiveEND();
   }
 
   // xas99-style labels without colons:
@@ -750,14 +853,14 @@ bool TMS9900AsmParser::parseInstruction(ParseInstructionInfo &Info,
   // Then parse the rest of the line as the actual instruction
   if (!isKnownMnemonic(Name) && !isKnownDirective(Name)) {
     // This looks like a label without a colon (xas99 style)
-    // Emit the label with uppercase name for xas99 case-insensitivity
-    StringRef LabelName = Saver.save(Name.upper());
+    StringRef LabelName = canonicalizeSymbolName(Name);
     MCSymbol *Sym = getContext().getOrCreateSymbol(LabelName);
-    getStreamer().emitLabel(Sym);
 
     // If there's nothing more on the line, we're done (label-only line)
-    if (Parser.getTok().is(AsmToken::EndOfStatement))
+    if (Parser.getTok().is(AsmToken::EndOfStatement)) {
+      getStreamer().emitLabel(Sym);
       return false;
+    }
 
     // Get the actual mnemonic/directive that follows the label
     if (Parser.getTok().isNot(AsmToken::Identifier)) {
@@ -773,8 +876,28 @@ bool TMS9900AsmParser::parseInstruction(ParseInstructionInfo &Info,
 
     // Now check if this new Name is a directive
     if (Name.equals_insensitive("DATA")) {
-      return parseDirectiveDATA();
+      getStreamer().emitValueToAlignment(Align(2));
+      getStreamer().emitLabel(Sym);
+      return parseDirectiveDATA(/*AlignData=*/false);
     }
+    if (Name.equals_insensitive("AORG")) {
+      if (parseDirectiveAORG())
+        return true;
+      getStreamer().emitLabel(Sym);
+      return false;
+    }
+    if (Name.equals_insensitive("EQU")) {
+      const MCExpr *Expr;
+      if (parseExpression(Expr))
+        return true;
+      getStreamer().emitAssignment(Sym, Expr);
+      return expectEndOfStatement("EQU");
+    }
+
+    if (isKnownMnemonic(Name))
+      getStreamer().emitValueToAlignment(Align(2));
+    getStreamer().emitLabel(Sym);
+
     if (Name.equals_insensitive("BYTE")) {
       return parseDirectiveBYTE();
     }
@@ -790,29 +913,13 @@ bool TMS9900AsmParser::parseInstruction(ParseInstructionInfo &Info,
     if (Name.equals_insensitive("REF")) {
       return parseDirectiveREF();
     }
-    if (Name.equals_insensitive("AORG")) {
-      return parseDirectiveAORG();
-    }
-    if (Name.equals_insensitive("EQU")) {
-      // For EQU after a label, we handle it specially
-      // The label we just emitted is the symbol being defined
-      const MCExpr *Expr;
-      if (parseExpression(Expr))
-        return true;
-
-      // Reassign the symbol's value
-      int64_t Value;
-      if (!Expr->evaluateAsAbsolute(Value)) {
-        return Error(NameLoc, "EQU value must be absolute");
-      }
-      Sym->setVariableValue(MCConstantExpr::create(Value, getContext()));
-      return false;
-    }
     if (Name.equals_insensitive("END")) {
-      return false;
+      return parseDirectiveEND();
     }
     // Continue with instruction parsing below
   }
+
+  getStreamer().emitValueToAlignment(Align(2));
 
   // First operand is the mnemonic itself
   Operands.push_back(TMS9900Operand::createToken(Name, NameLoc));
@@ -912,14 +1019,17 @@ ParseStatus TMS9900AsmParser::parseDirective(AsmToken DirectiveID) {
 
   // .word is target-dependent; on TMS9900 it emits 16-bit values (same as DATA)
   if (IDVal == ".word")
-    return parseDirectiveDATA() ? ParseStatus::Failure : ParseStatus::Success;
+    return parseDirectiveDATA(/*AlignData=*/false) ? ParseStatus::Failure
+                                                   : ParseStatus::Success;
 
   return ParseStatus::NoMatch;
 }
 
-bool TMS9900AsmParser::parseDirectiveDATA() {
+bool TMS9900AsmParser::parseDirectiveDATA(bool AlignData) {
   // DATA value[,value...]
   // Emit 16-bit words
+  if (AlignData)
+    getStreamer().emitValueToAlignment(Align(2));
   do {
     const MCExpr *Expr;
     if (parseExpression(Expr))
@@ -929,7 +1039,7 @@ bool TMS9900AsmParser::parseDirectiveDATA() {
 
   } while (Parser.getTok().is(AsmToken::Comma) && (Parser.Lex(), true));
 
-  return false;
+  return expectEndOfStatement("DATA");
 }
 
 bool TMS9900AsmParser::parseDirectiveBYTE() {
@@ -944,7 +1054,7 @@ bool TMS9900AsmParser::parseDirectiveBYTE() {
 
   } while (Parser.getTok().is(AsmToken::Comma) && (Parser.Lex(), true));
 
-  return false;
+  return expectEndOfStatement("BYTE");
 }
 
 bool TMS9900AsmParser::parseDirectiveBSS() {
@@ -958,9 +1068,11 @@ bool TMS9900AsmParser::parseDirectiveBSS() {
   if (!Expr->evaluateAsAbsolute(Size)) {
     return Error(Parser.getTok().getLoc(), "BSS size must be absolute");
   }
+  if (Size < 0)
+    return Error(Parser.getTok().getLoc(), "BSS size cannot be negative");
 
   getStreamer().emitZeros(Size);
-  return false;
+  return expectEndOfStatement("BSS");
 }
 
 bool TMS9900AsmParser::parseDirectiveDEF() {
@@ -970,7 +1082,8 @@ bool TMS9900AsmParser::parseDirectiveDEF() {
     if (Parser.getTok().isNot(AsmToken::Identifier))
       return Error(Parser.getTok().getLoc(), "expected symbol name");
 
-    StringRef Name = Parser.getTok().getIdentifier();
+    StringRef Name =
+        canonicalizeSymbolName(Parser.getTok().getIdentifier());
     MCSymbol *Sym = getContext().getOrCreateSymbol(Name);
     getStreamer().emitSymbolAttribute(Sym, MCSA_Global);
 
@@ -978,12 +1091,13 @@ bool TMS9900AsmParser::parseDirectiveDEF() {
 
   } while (Parser.getTok().is(AsmToken::Comma) && (Parser.Lex(), true));
 
-  return false;
+  return expectEndOfStatement("DEF");
 }
 
 bool TMS9900AsmParser::parseDirectiveAORG() {
   // AORG address
   // Set assembly origin (absolute origin)
+  SMLoc AddressLoc = Parser.getTok().getLoc();
   const MCExpr *Expr;
   if (parseExpression(Expr))
     return true;
@@ -992,30 +1106,23 @@ bool TMS9900AsmParser::parseDirectiveAORG() {
   if (!Expr->evaluateAsAbsolute(Address)) {
     return Error(Parser.getTok().getLoc(), "AORG address must be absolute");
   }
+  if (Address < 0 || Address > 0xffff)
+    return Error(AddressLoc, "AORG address must be in the range 0..65535");
 
-  // Create an absolute section at this address
-  // Note: This is a simplified implementation
-  // Full support would require section management
-
-  return false;
+  getStreamer().emitValueToOffset(Expr, 0, AddressLoc);
+  return expectEndOfStatement("AORG");
 }
 
 bool TMS9900AsmParser::parseDirectiveTEXT() {
-  // TEXT 'string' or TEXT "string"
-  // Emit ASCII text bytes
-  if (Parser.getTok().isNot(AsmToken::String)) {
-    return Error(Parser.getTok().getLoc(), "expected string after TEXT");
-  }
+  // TEXT 'string'[,"string"...]
+  do {
+    std::string Data;
+    if (parseStringLiteral(Data))
+      return true;
+    getStreamer().emitBytes(Data);
+  } while (Parser.getTok().is(AsmToken::Comma) && (Parser.Lex(), true));
 
-  StringRef Str = Parser.getTok().getStringContents();
-  Parser.Lex(); // Consume string
-
-  // Emit each character as a byte
-  for (char C : Str) {
-    getStreamer().emitInt8(C);
-  }
-
-  return false;
+  return expectEndOfStatement("TEXT");
 }
 
 bool TMS9900AsmParser::parseDirectiveREF() {
@@ -1026,7 +1133,8 @@ bool TMS9900AsmParser::parseDirectiveREF() {
       return Error(Parser.getTok().getLoc(), "expected symbol name after REF");
     }
 
-    StringRef SymName = Parser.getTok().getIdentifier();
+    StringRef SymName =
+        canonicalizeSymbolName(Parser.getTok().getIdentifier());
     MCSymbol *Sym = getContext().getOrCreateSymbol(SymName);
     // Mark as external/undefined - the linker will resolve it
     (void)Sym; // Symbol is created, linker will handle it
@@ -1034,7 +1142,7 @@ bool TMS9900AsmParser::parseDirectiveREF() {
 
   } while (Parser.getTok().is(AsmToken::Comma) && (Parser.Lex(), true));
 
-  return false;
+  return expectEndOfStatement("REF");
 }
 
 bool TMS9900AsmParser::parseDirectiveEQU(SMLoc NameLoc) {
@@ -1052,6 +1160,24 @@ bool TMS9900AsmParser::parseDirectiveEQU(SMLoc NameLoc) {
   // Unfortunately, the label is handled by the main parser before ParseInstruction
   // We'll emit a warning - proper EQU support requires parser integration
   return Error(NameLoc, "EQU directive requires label (use: LABEL EQU value)");
+}
+
+bool TMS9900AsmParser::parseDirectiveEND() {
+  // xas99 permits an optional entry symbol. ELF linkers select the entry point,
+  // but accepting the expression preserves source compatibility.
+  if (Parser.getTok().isNot(AsmToken::EndOfStatement) &&
+      Parser.getTok().isNot(AsmToken::Eof)) {
+    const MCExpr *Entry;
+    if (parseExpression(Entry))
+      return true;
+    if (Parser.getTok().isNot(AsmToken::EndOfStatement))
+      return Error(Parser.getTok().getLoc(),
+                   "unexpected token after END entry symbol");
+  }
+
+  while (Parser.getTok().isNot(AsmToken::Eof))
+    Parser.Lex();
+  return false;
 }
 
 extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializeTMS9900AsmParser() {

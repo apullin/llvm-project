@@ -26,6 +26,8 @@ class MCSubtargetInfo;
 class MCTargetOptions;
 class Target;
 
+enum TMS9900AsmDialect { AD_Default = 0, AD_XAS99 = 1 };
+
 MCCodeEmitter *createTMS9900MCCodeEmitter(const MCInstrInfo &MCII,
                                           MCContext &Ctx);
 

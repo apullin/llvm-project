@@ -9,6 +9,7 @@
 #include "MCTargetDesc/TMS9900MCTargetDesc.h"
 #include "TargetInfo/TMS9900TargetInfo.h"
 #include "llvm/ADT/STLExtras.h"
+#include "llvm/ADT/StringExtras.h"
 #include "llvm/ADT/StringMap.h"
 #include "llvm/ADT/StringSwitch.h"
 #include "llvm/MC/MCContext.h"
@@ -19,6 +20,7 @@
 #include "llvm/MC/MCParser/MCAsmLexer.h"
 #include "llvm/MC/MCParser/MCParsedAsmOperand.h"
 #include "llvm/MC/MCParser/MCTargetAsmParser.h"
+#include "llvm/MC/MCRegisterInfo.h"
 #include "llvm/MC/MCStreamer.h"
 #include "llvm/MC/MCSubtargetInfo.h"
 #include "llvm/MC/MCSymbol.h"
@@ -275,6 +277,7 @@ private:
     SmallVector<MCSymbol *, 4> Symbols;
   };
   StringMap<XasLocalLabelState> XasLocalLabels;
+  StringMap<MCRegister> XasRegisterAliases;
   StringMap<unsigned> XasXops;
 
   bool matchAndEmitInstruction(SMLoc IDLoc, unsigned &Opcode,
@@ -297,14 +300,20 @@ private:
   ParseStatus parseDirective(AsmToken DirectiveID) override;
 
   // Custom operand parsing
-  ParseStatus parseOperand(OperandVector &Operands, StringRef Mnemonic);
+  ParseStatus parseOperand(OperandVector &Operands, StringRef Mnemonic,
+                           unsigned OperandIndex);
   ParseStatus parseMemOperand(OperandVector &Operands);
   ParseStatus parseIndirectOperand(OperandVector &Operands);
   ParseStatus parsePostIndirectOperand(OperandVector &Operands);
   ParseStatus parseBranchTarget(OperandVector &Operands);
 
   // Helper methods
+  MCRegister getRegisterByNumber(unsigned Number) const;
+  bool operandAllowsRegister(StringRef Mnemonic, unsigned OperandIndex) const;
   bool parseRegisterName(MCRegister &RegNo);
+  bool parseXasRegisterValue(MCRegister &RegNo);
+  ParseStatus tryParseRegisterOperand(MCRegister &RegNo, SMLoc &StartLoc,
+                                      SMLoc &EndLoc);
   bool parseExpression(const MCExpr *&Expr);
   bool isXas99Dialect() const;
 
@@ -320,6 +329,7 @@ private:
   bool parseDirectiveREF();
   bool parseDirectiveAORG();
   bool parseDirectiveEQU(SMLoc NameLoc);
+  bool parseDirectiveREQU(SMLoc NameLoc);
   bool parseDirectiveEND();
   bool parseDirectiveIDT();
   bool parseDirectiveCOPY();
@@ -397,11 +407,26 @@ bool TMS9900AsmParser::parsePrimaryExpr(const MCExpr *&Res, SMLoc &EndLoc) {
         Parser.getLexer().peekTok().is(AsmToken::Exclaim))))
     return parseXasLocalReference(Res, EndLoc);
 
+  if (isXas99Dialect() && Parser.getTok().is(AsmToken::Greater)) {
+    if (parseExpression(Res))
+      return true;
+    EndLoc = Parser.getTok().getLoc();
+    return false;
+  }
+
   if (!isXas99Dialect())
     return getParser().parsePrimaryExpr(Res, EndLoc, nullptr);
 
   if (Parser.getTok().isNot(AsmToken::Identifier))
     return getParser().parsePrimaryExpr(Res, EndLoc, nullptr);
+
+  MCRegister RegNo;
+  if (parseRegisterName(RegNo)) {
+    Res = MCConstantExpr::create(MRI->getEncodingValue(RegNo), getContext());
+    EndLoc = Parser.getTok().getEndLoc();
+    Parser.Lex();
+    return false;
+  }
 
   StringRef Name = canonicalizeSymbolName(Parser.getTok().getIdentifier());
   MCSymbol *Sym = getContext().getOrCreateSymbol(Name);
@@ -527,6 +552,7 @@ bool TMS9900AsmParser::isKnownDirective(StringRef Name) const {
          Name.equals_insensitive("REF") ||
          Name.equals_insensitive("AORG") ||
          Name.equals_insensitive("EQU") ||
+         Name.equals_insensitive("REQU") ||
          Name.equals_insensitive("END") ||
          Name.equals_insensitive("IDT") ||
          Name.equals_insensitive("COPY") ||
@@ -628,6 +654,37 @@ bool TMS9900AsmParser::isKnownMnemonic(StringRef Name) const {
     .Default(false);
 }
 
+MCRegister TMS9900AsmParser::getRegisterByNumber(unsigned Number) const {
+  static constexpr MCRegister Registers[] = {
+      TMS9900::R0,  TMS9900::R1,  TMS9900::R2,  TMS9900::R3,
+      TMS9900::R4,  TMS9900::R5,  TMS9900::R6,  TMS9900::R7,
+      TMS9900::R8,  TMS9900::R9,  TMS9900::R10, TMS9900::R11,
+      TMS9900::R12, TMS9900::R13, TMS9900::R14, TMS9900::R15};
+  return Number < std::size(Registers) ? Registers[Number]
+                                       : TMS9900::NoRegister;
+}
+
+bool TMS9900AsmParser::operandAllowsRegister(StringRef Mnemonic,
+                                              unsigned OperandIndex) const {
+  unsigned RegisterMask =
+      StringSwitch<unsigned>(Mnemonic.upper())
+          .Cases("A", "AB", "C", "CB", 0x3)
+          .Cases("S", "SB", "SOC", "SOCB", 0x3)
+          .Cases("SZC", "SZCB", "MOV", "MOVB", 0x3)
+          .Cases("COC", "CZC", "XOR", "MPY", 0x3)
+          .Case("DIV", 0x3)
+          .Cases("XOP", "LDCR", "STCR", 0x1)
+          .Cases("SRA", "SRL", "SLA", "SRC", 0x1)
+          .Cases("BLWP", "B", "X", "CLR", 0x1)
+          .Cases("NEG", "INV", "INC", "INCT", 0x1)
+          .Cases("DEC", "DECT", "BL", "SWPB", 0x1)
+          .Cases("SETO", "ABS", "LI", "AI", 0x1)
+          .Cases("ANDI", "ORI", "CI", "STST", 0x1)
+          .Case("STWP", 0x1)
+          .Default(0);
+  return OperandIndex < 2 && (RegisterMask & (1U << OperandIndex));
+}
+
 bool TMS9900AsmParser::parseRegisterName(MCRegister &RegNo) {
   StringRef Name = Parser.getTok().getIdentifier();
 
@@ -638,8 +695,58 @@ bool TMS9900AsmParser::parseRegisterName(MCRegister &RegNo) {
     // Try alternate names
     RegNo = MatchRegisterAltName(Name.upper());
   }
+  if (RegNo == TMS9900::NoRegister && isXas99Dialect()) {
+    auto It = XasRegisterAliases.find(Name.upper());
+    if (It != XasRegisterAliases.end())
+      RegNo = It->second;
+  }
 
   return RegNo != TMS9900::NoRegister;
+}
+
+bool TMS9900AsmParser::parseXasRegisterValue(MCRegister &RegNo) {
+  if (Parser.getTok().is(AsmToken::Identifier) && parseRegisterName(RegNo)) {
+    Parser.Lex();
+    return false;
+  }
+
+  const MCExpr *Expr;
+  if (parseExpression(Expr))
+    return true;
+
+  int64_t Value;
+  if (!Expr->evaluateAsAbsolute(Value) || Value < 0 || Value > 15)
+    return Error(Parser.getTok().getLoc(),
+                 "register value must be in the range 0..15");
+  RegNo = getRegisterByNumber(Value);
+  return false;
+}
+
+ParseStatus TMS9900AsmParser::tryParseRegisterOperand(MCRegister &RegNo,
+                                                       SMLoc &StartLoc,
+                                                       SMLoc &EndLoc) {
+  ParseStatus Status = tryParseRegister(RegNo, StartLoc, EndLoc);
+  if (!Status.isNoMatch() || !isXas99Dialect())
+    return Status;
+
+  if (Parser.getTok().isNot(AsmToken::Integer) &&
+      Parser.getTok().isNot(AsmToken::Greater))
+    return ParseStatus::NoMatch;
+
+  StartLoc = Parser.getTok().getLoc();
+  if (Parser.getTok().is(AsmToken::Integer)) {
+    int64_t Value = Parser.getTok().getIntVal();
+    if (Value < 0 || Value > 15) {
+      Error(StartLoc, "register value must be in the range 0..15");
+      return ParseStatus::Failure;
+    }
+    RegNo = getRegisterByNumber(Value);
+    Parser.Lex();
+  } else if (parseXasRegisterValue(RegNo)) {
+    return ParseStatus::Failure;
+  }
+  EndLoc = Parser.getTok().getLoc();
+  return ParseStatus::Success;
 }
 
 bool TMS9900AsmParser::parseRegister(MCRegister &Reg, SMLoc &StartLoc,
@@ -707,11 +814,39 @@ bool TMS9900AsmParser::parseExpression(const MCExpr *&Expr) {
     return false;
   }
 
-  return getParser().parseExpression(Expr);
+  if (getParser().parseExpression(Expr))
+    return true;
+
+  // LLVM lexes "->" as one token. In xas99 source it is subtraction followed
+  // by a TI-style hexadecimal literal, as in LABEL->10.
+  while (isXas99Dialect() && Parser.getTok().is(AsmToken::MinusGreater)) {
+    Parser.Lex();
+    if (Parser.getTok().isNot(AsmToken::Integer) &&
+        Parser.getTok().isNot(AsmToken::Identifier))
+      return Error(Parser.getTok().getLoc(), "expected hex value after '->'");
+
+    std::string HexStr = Parser.getTok().getString().str();
+    Parser.Lex();
+    while (Parser.getTok().is(AsmToken::Identifier)) {
+      StringRef Next = Parser.getTok().getString();
+      if (Next.empty() || !isHexDigit(Next.front()))
+        break;
+      HexStr += Next.str();
+      Parser.Lex();
+    }
+
+    uint64_t Value;
+    if (StringRef(HexStr).getAsInteger(16, Value))
+      return Error(Parser.getTok().getLoc(), "invalid hex value after '->'");
+    Expr = MCBinaryExpr::createSub(
+        Expr, MCConstantExpr::create(Value, getContext()), getContext());
+  }
+  return false;
 }
 
 ParseStatus TMS9900AsmParser::parseOperand(OperandVector &Operands,
-                                            StringRef Mnemonic) {
+                                           StringRef Mnemonic,
+                                           unsigned OperandIndex) {
   SMLoc StartLoc = Parser.getTok().getLoc();
 
   // Check for '*' token (indirect addressing prefix)
@@ -724,7 +859,7 @@ ParseStatus TMS9900AsmParser::parseOperand(OperandVector &Operands,
     MCRegister RegNo;
     SMLoc RegEnd;
 
-    if (!tryParseRegister(RegNo, RegStart, RegEnd).isSuccess()) {
+    if (!tryParseRegisterOperand(RegNo, RegStart, RegEnd).isSuccess()) {
       return Error(RegStart, "expected register after '*'");
     }
     Operands.push_back(TMS9900Operand::createReg(RegNo, RegStart, RegEnd));
@@ -762,7 +897,7 @@ ParseStatus TMS9900AsmParser::parseOperand(OperandVector &Operands,
       MCRegister RegNo;
       SMLoc RegEnd;
 
-      if (!tryParseRegister(RegNo, RegStart, RegEnd).isSuccess()) {
+      if (!tryParseRegisterOperand(RegNo, RegStart, RegEnd).isSuccess()) {
         return Error(RegStart, "expected register in indexed addressing");
       }
       Operands.push_back(TMS9900Operand::createReg(RegNo, RegStart, RegEnd));
@@ -778,14 +913,21 @@ ParseStatus TMS9900AsmParser::parseOperand(OperandVector &Operands,
   }
 
   // Check for register
-  if (Parser.getTok().is(AsmToken::Identifier)) {
+  if ((!isXas99Dialect() ||
+       operandAllowsRegister(Mnemonic, OperandIndex)) &&
+      (Parser.getTok().is(AsmToken::Identifier) ||
+       Parser.getTok().is(AsmToken::Integer) ||
+       Parser.getTok().is(AsmToken::Greater))) {
     MCRegister RegNo;
     SMLoc EndLoc;
 
-    if (tryParseRegister(RegNo, StartLoc, EndLoc).isSuccess()) {
+    ParseStatus Status = tryParseRegisterOperand(RegNo, StartLoc, EndLoc);
+    if (Status.isSuccess()) {
       Operands.push_back(TMS9900Operand::createReg(RegNo, StartLoc, EndLoc));
       return ParseStatus::Success;
     }
+    if (Status.isFailure())
+      return ParseStatus::Failure;
   }
 
   // Check for xas99 hex format: >XXXX
@@ -832,7 +974,7 @@ ParseStatus TMS9900AsmParser::parseMemOperand(OperandVector &Operands) {
     SMLoc RegEndLoc;
     MCRegister Reg;
 
-    if (!tryParseRegister(Reg, RegStartLoc, RegEndLoc).isSuccess()) {
+    if (!tryParseRegisterOperand(Reg, RegStartLoc, RegEndLoc).isSuccess()) {
       return Error(RegStartLoc, "expected register in indexed addressing");
     }
 
@@ -861,7 +1003,7 @@ ParseStatus TMS9900AsmParser::parseIndirectOperand(OperandVector &Operands) {
   SMLoc RegEndLoc;
   MCRegister RegNo;
 
-  if (!tryParseRegister(RegNo, RegStartLoc, RegEndLoc).isSuccess()) {
+  if (!tryParseRegisterOperand(RegNo, RegStartLoc, RegEndLoc).isSuccess()) {
     return Error(RegStartLoc, "expected register after '*'");
   }
 
@@ -947,6 +1089,9 @@ bool TMS9900AsmParser::parseInstruction(ParseInstructionInfo &Info,
   if (Name.equals_insensitive("EQU")) {
     return parseDirectiveEQU(NameLoc);
   }
+  if (Name.equals_insensitive("REQU")) {
+    return parseDirectiveREQU(NameLoc);
+  }
   if (Name.equals_insensitive("END")) {
     return parseDirectiveEND();
   }
@@ -969,6 +1114,8 @@ bool TMS9900AsmParser::parseInstruction(ParseInstructionInfo &Info,
   if (!isKnownMnemonic(Name) && !isKnownDirective(Name)) {
     // This looks like a label without a colon (xas99 style)
     StringRef LabelName = canonicalizeSymbolName(Name);
+    if (XasRegisterAliases.count(LabelName))
+      return Error(NameLoc, "register alias is already defined");
     MCSymbol *Sym = getContext().getOrCreateSymbol(LabelName);
 
     // If there's nothing more on the line, we're done (label-only line)
@@ -1006,7 +1153,18 @@ bool TMS9900AsmParser::parseInstruction(ParseInstructionInfo &Info,
       if (parseExpression(Expr))
         return true;
       getStreamer().emitAssignment(Sym, Expr);
+      int64_t Value;
+      if (Expr->evaluateAsAbsolute(Value) && Value >= 0 && Value <= 15)
+        XasRegisterAliases.try_emplace(LabelName,
+                                       getRegisterByNumber(Value));
       return expectEndOfStatement("EQU");
+    }
+    if (Name.equals_insensitive("REQU")) {
+      MCRegister RegNo;
+      if (parseXasRegisterValue(RegNo))
+        return true;
+      XasRegisterAliases.try_emplace(LabelName, RegNo);
+      return expectEndOfStatement("REQU");
     }
     if (Name.equals_insensitive("BES")) {
       if (parseDirectiveBES())
@@ -1080,15 +1238,17 @@ bool TMS9900AsmParser::parseInstruction(ParseInstructionInfo &Info,
     return false;
 
   // Parse first operand
-  if (!parseOperand(Operands, Name).isSuccess()) {
+  unsigned OperandIndex = 0;
+  if (!parseOperand(Operands, Name, OperandIndex).isSuccess()) {
     return Error(Parser.getTok().getLoc(), "unexpected token in operand");
   }
 
   // Parse additional operands separated by comma
   while (Parser.getTok().is(AsmToken::Comma)) {
     Parser.Lex(); // Consume comma
+    ++OperandIndex;
 
-    if (!parseOperand(Operands, Name).isSuccess()) {
+    if (!parseOperand(Operands, Name, OperandIndex).isSuccess()) {
       return Error(Parser.getTok().getLoc(), "unexpected token in operand");
     }
   }
@@ -1428,6 +1588,11 @@ bool TMS9900AsmParser::parseDirectiveEQU(SMLoc NameLoc) {
   // Unfortunately, the label is handled by the main parser before ParseInstruction
   // We'll emit a warning - proper EQU support requires parser integration
   return Error(NameLoc, "EQU directive requires label (use: LABEL EQU value)");
+}
+
+bool TMS9900AsmParser::parseDirectiveREQU(SMLoc NameLoc) {
+  return Error(NameLoc,
+               "REQU directive requires label (use: LABEL REQU register)");
 }
 
 bool TMS9900AsmParser::parseDirectiveEND() {

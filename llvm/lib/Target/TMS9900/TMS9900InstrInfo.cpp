@@ -685,6 +685,11 @@ bool TMS9900InstrInfo::expandPostRAPseudo(MachineInstr &MI) const {
   MachineBasicBlock &MBB = *MI.getParent();
   DebugLoc DL = MI.getDebugLoc();
 
+  auto CopyImplicitOperands = [&MI](MachineInstrBuilder &MIB) {
+    for (const MachineOperand &MO : MI.implicit_operands())
+      MIB.add(MO);
+  };
+
   switch (MI.getOpcode()) {
   default:
     return false;
@@ -718,7 +723,11 @@ bool TMS9900InstrInfo::expandPostRAPseudo(MachineInstr &MI) const {
   }
   case TMS9900::RET:
     // Expand RET pseudo to B *R11
-    BuildMI(MBB, MI, DL, get(TMS9900::RET_REAL));
+    {
+      MachineInstrBuilder MIB =
+          BuildMI(MBB, MI, DL, get(TMS9900::RET_REAL));
+      CopyImplicitOperands(MIB);
+    }
     MBB.erase(MI);
     return true;
   case TMS9900::TCRETURN:
@@ -726,16 +735,18 @@ bool TMS9900InstrInfo::expandPostRAPseudo(MachineInstr &MI) const {
     // Expand TCRETURN/TCRETURN_ext pseudo to B @target (tail call)
     // Uses TAIL_B instruction which takes a calltarget operand.
     MachineOperand &Target = MI.getOperand(0);
-    BuildMI(MBB, MI, DL, get(TMS9900::TAIL_B))
-        .add(Target);
+    MachineInstrBuilder MIB =
+        BuildMI(MBB, MI, DL, get(TMS9900::TAIL_B)).add(Target);
+    CopyImplicitOperands(MIB);
     MBB.erase(MI);
     return true;
   }
   case TMS9900::TCRETURN_ind: {
     // Expand TCRETURN_ind pseudo to B *Rx (branch indirect through register)
     Register TargetReg = MI.getOperand(0).getReg();
-    BuildMI(MBB, MI, DL, get(TMS9900::Br))
-        .addReg(TargetReg);
+    MachineInstrBuilder MIB =
+        BuildMI(MBB, MI, DL, get(TMS9900::TAIL_B_IND)).addReg(TargetReg);
+    CopyImplicitOperands(MIB);
     MBB.erase(MI);
     return true;
   }

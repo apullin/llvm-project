@@ -1551,6 +1551,16 @@ def TAIL_B : TMS9900Inst<(outs), (ins calltarget:$target),
   let isCodeGenOnly = 1;
   let SchedRW = [WriteBranch];
 }
+
+// Register-indirect tail call. Keep this distinct from the ordinary indirect
+// branch so post-RA analyses retain the call and return semantics.
+let isCall = 1, isReturn = 1, isTerminator = 1, isBarrier = 1,
+    isIndirectBranch = 1 in
+def TAIL_B_IND : Format3_IndReg<0b0000010001, (outs), (ins GR16:$rs),
+                                "B\t*$rs", []> {
+  let isCodeGenOnly = 1;
+  let SchedRW = [WriteBranch];
+}
 }
 
 // JMP - Unconditional jump (PC-relative)

@@ -5,7 +5,8 @@
 # RUN: llvm-readobj -r success.o | FileCheck %s --check-prefix=RELOC
 # RUN: ld.lld -e start -Ttext=0 success.o -o success \
 # RUN:   --defsym=cru_bit=5 --defsym=cru_negative=-1 \
-# RUN:   --defsym=near_target=8 --defsym=byte_value=0x7a
+# RUN:   --defsym=near_target=8 --defsym=byte_value=0x7a \
+# RUN:   --defsym=xop_target=0x1234
 # RUN: llvm-objdump -s success | FileCheck %s --check-prefix=LINKED
 # RUN: llvm-mc -triple tms9900 -filetype=obj odd.s -o odd.o
 # RUN: not ld.lld -Ttext=0 odd.o -o /dev/null --defsym=odd_target=5 2>&1 | \
@@ -21,9 +22,10 @@
 # RELOC: 0x3 R_TMS9900_CRU_8 cru_negative 0x0
 # RELOC: 0x4 R_TMS9900_PCREL_8 near_target 0x0
 # RELOC: 0x6 R_TMS9900_8 byte_value 0x0
+# RELOC: 0xA R_TMS9900_16 xop_target 0x0
 
 # LINKED: Contents of section .text:
-# LINKED-NEXT: 0000 1d051eff 13017a
+# LINKED-NEXT: 0000 1d051eff 13017a00 2ca01234
 
 # ODD: error: {{.*}}improper alignment for relocation R_TMS9900_PCREL_8: 0x5 is not aligned to 2 bytes
 # FAR: error: {{.*}}relocation R_TMS9900_PCREL_8 out of range: 2047 is not in [-128, 127]
@@ -37,6 +39,7 @@ start:
   sbz cru_negative
   jeq near_target
   .byte byte_value
+  xop @xop_target,2
 
 #--- odd.s
   .text

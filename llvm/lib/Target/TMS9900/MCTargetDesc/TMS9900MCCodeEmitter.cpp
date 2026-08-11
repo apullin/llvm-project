@@ -34,15 +34,13 @@ class TMS9900MCCodeEmitter : public MCCodeEmitter {
   MCContext &Ctx;
   MCInstrInfo const &MCII;
 
-  // Offset keeps track of current word number being emitted
-  // inside a particular instruction.
-  mutable unsigned Offset;
-
   /// TableGen'erated function for getting the binary encoding for an
   /// instruction.
   uint64_t getBinaryCodeForInstr(const MCInst &MI,
                                  SmallVectorImpl<MCFixup> &Fixups,
                                  const MCSubtargetInfo &STI) const;
+  uint32_t getOperandBitOffset(const MCInst &MI, unsigned OpNum,
+                               const MCSubtargetInfo &STI) const;
 
   /// Returns the binary encoding of operands.
   ///
@@ -93,9 +91,6 @@ void TMS9900MCCodeEmitter::encodeInstruction(const MCInst &MI,
   // Get byte count of instruction.
   unsigned Size = Desc.getSize();
 
-  // Initialize fixup offset
-  Offset = 2;
-
   uint64_t BinaryOpCode = getBinaryCodeForInstr(MI, Fixups, STI);
   size_t WordCount = Size / 2;
 
@@ -114,15 +109,17 @@ unsigned TMS9900MCCodeEmitter::getMachineOpValue(const MCInst &MI,
   if (MO.isReg())
     return Ctx.getRegisterInfo()->getEncodingValue(MO.getReg());
 
-  if (MO.isImm()) {
-    Offset += 2;
+  if (MO.isImm())
     return MO.getImm();
-  }
 
   assert(MO.isExpr() && "Expected expr operand");
-  Fixups.push_back(MCFixup::create(Offset, MO.getExpr(),
+  unsigned OpNum = 0;
+  while (OpNum != MI.getNumOperands() && &MI.getOperand(OpNum) != &MO)
+    ++OpNum;
+  assert(OpNum != MI.getNumOperands() && "operand does not belong to MCInst");
+  unsigned FixupOffset = getOperandBitOffset(MI, OpNum, STI) / 8;
+  Fixups.push_back(MCFixup::create(FixupOffset, MO.getExpr(),
       static_cast<MCFixupKind>(TMS9900::fixup_tms9900_16), MI.getLoc()));
-  Offset += 2;
   return 0;
 }
 
@@ -134,15 +131,13 @@ unsigned TMS9900MCCodeEmitter::getMemOpValue(const MCInst &MI, unsigned Op,
   unsigned Reg = Ctx.getRegisterInfo()->getEncodingValue(MO1.getReg());
 
   const MCOperand &MO2 = MI.getOperand(Op + 1);
-  if (MO2.isImm()) {
-    Offset += 2;
+  if (MO2.isImm())
     return ((unsigned)MO2.getImm() << 4) | Reg;
-  }
 
   assert(MO2.isExpr() && "Expr operand expected");
-  Fixups.push_back(MCFixup::create(Offset, MO2.getExpr(),
+  unsigned FixupOffset = getOperandBitOffset(MI, Op + 1, STI) / 8;
+  Fixups.push_back(MCFixup::create(FixupOffset, MO2.getExpr(),
       static_cast<MCFixupKind>(TMS9900::fixup_tms9900_16), MI.getLoc()));
-  Offset += 2;
   return Reg;
 }
 
@@ -227,6 +222,7 @@ MCCodeEmitter *createTMS9900MCCodeEmitter(const MCInstrInfo &MCII,
   return new TMS9900MCCodeEmitter(Ctx, MCII);
 }
 
+#define GET_OPERAND_BIT_OFFSET
 #include "TMS9900GenMCCodeEmitter.inc"
 
 } // end of namespace llvm

@@ -8,7 +8,7 @@
 site    DXOP service,2
 call    SERVICE @site
 
-; CHECK:      0x6 R_TMS9900_16 .text 0x2
+; CHECK:      0x4 R_TMS9900_16 .text 0x2
 ; CHECK:      Name: SITE
 ; CHECK-NEXT: Value: 0x2
 ; CHECK:      Name: CALL

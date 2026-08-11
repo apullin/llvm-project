@@ -26,6 +26,11 @@ define i16 @udiv16(i16 %a, i16 %b) {
   ret i16 %r
 }
 
+; DIV sets the architectural overflow bit on failure and clears it on success,
+; so the scheduler must see an ST definition on the selected instruction.
+; ISEL-LABEL: name: udiv16
+; ISEL: DIVrr {{.*}}implicit-def $st
+
 ; --- 16-bit unsigned remainder ---
 ; Uses DIV instruction, remainder in second register of pair.
 ; CHECK-LABEL: urem16:

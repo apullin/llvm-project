@@ -1787,24 +1787,24 @@ def MPYpim : Format2_AutoInc<0b001110, (outs), (ins GR16:$rs, GR16:$rd),
 // Note: Rd must be an even register
 // The destination register is encoded in bits 9-6 of the instruction word.
 let SchedRW = [WriteDiv] in {
-let Uses = [R0, R1], Defs = [R0, R1] in
+let Uses = [R0, R1], Defs = [R0, R1, ST] in
 def DIVrr : Format2_Reg<0b001111, (outs), (ins GR16:$rs, GR16:$rd),
                          "DIV\t$rs,$rd",
                          []>;
-let Uses = [R0, R1], Defs = [R0, R1] in
+let Uses = [R0, R1], Defs = [R0, R1, ST] in
 def DIVim : Format2_Ind<0b001111, (outs), (ins GR16:$rs, GR16:$rd),
                          "DIV\t*$rs,$rd",
                          []>;
-let Uses = [R0, R1], Defs = [R0, R1] in
+let Uses = [R0, R1], Defs = [R0, R1, ST] in
 def DIVam : Format2_Sym<0b001111, (outs), (ins symaddr:$addr, GR16:$rd),
                          "DIV\t@$addr,$rd",
                          []>;
-let Uses = [R0, R1], Defs = [R0, R1] in
+let Uses = [R0, R1], Defs = [R0, R1, ST] in
 def DIVxm : Format2_Idx<0b001111, (outs),
                          (ins i16imm:$offset, IdxRegs:$ri, GR16:$rd),
                          "DIV\t@${offset}(${ri}),$rd",
                          []>;
-let Uses = [R0, R1], Defs = [R0, R1] in
+let Uses = [R0, R1], Defs = [R0, R1, ST] in
 def DIVpim : Format2_AutoInc<0b001111, (outs), (ins GR16:$rs, GR16:$rd),
                               "DIV\t*${rs}+,$rd",
                               []>;
@@ -1911,14 +1911,14 @@ def MUL16 : Pseudo<(outs GR16:$dst), (ins GR16:$lhs, GR16:$rhs),
 // 2. MOV $dividend, R1 (low word of dividend)
 // 3. DIV $divisor, R0
 // 4. MOV R0, $quotient (quotient is in R0)
-let usesCustomInserter = 1, Defs = [R0, R1] in
+let usesCustomInserter = 1, Defs = [R0, R1, ST] in
 def UDIV16 : Pseudo<(outs GR16:$dst), (ins GR16:$lhs, GR16:$rhs),
                     "# UDIV16 $lhs / $rhs -> $dst",
                     [(set GR16:$dst, (udiv GR16:$lhs, GR16:$rhs))]>;
 
 // Pseudo instruction for unsigned remainder
 // Same setup as UDIV16, but result comes from R1
-let usesCustomInserter = 1, Defs = [R0, R1] in
+let usesCustomInserter = 1, Defs = [R0, R1, ST] in
 def UREM16 : Pseudo<(outs GR16:$dst), (ins GR16:$lhs, GR16:$rhs),
                     "# UREM16 $lhs %% $rhs -> $dst",
                     [(set GR16:$dst, (urem GR16:$lhs, GR16:$rhs))]>;
@@ -1929,14 +1929,14 @@ def UREM16 : Pseudo<(outs GR16:$dst), (ins GR16:$lhs, GR16:$rhs),
 // 2. Take absolute values
 // 3. Unsigned divide
 // 4. Negate result if signs differed
-let usesCustomInserter = 1, Defs = [R0, R1, R2, R3] in
+let usesCustomInserter = 1, Defs = [R0, R1, R2, R3, ST] in
 def SDIV16 : Pseudo<(outs GR16:$dst), (ins GR16:$lhs, GR16:$rhs),
                     "# SDIV16 $lhs / $rhs -> $dst",
                     [(set GR16:$dst, (sdiv GR16:$lhs, GR16:$rhs))]>;
 
 // Pseudo instruction for signed remainder
 // Remainder has the sign of the dividend (C99 semantics)
-let usesCustomInserter = 1, Defs = [R0, R1, R2, R3] in
+let usesCustomInserter = 1, Defs = [R0, R1, R2, R3, ST] in
 def SREM16 : Pseudo<(outs GR16:$dst), (ins GR16:$lhs, GR16:$rhs),
                     "# SREM16 $lhs %% $rhs -> $dst",
                     [(set GR16:$dst, (srem GR16:$lhs, GR16:$rhs))]>;

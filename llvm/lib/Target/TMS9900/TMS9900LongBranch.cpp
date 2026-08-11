@@ -66,16 +66,31 @@ public:
           *LongBB->pred_begin() != &MBB)
         continue;
 
-      auto LongIt = LongBB->getFirstNonDebugInstr();
-      if (LongIt == LongBB->instr_end() ||
+      // BranchRelaxation may put an empty forwarding block between the short
+      // conditional branch and the block containing B_sym. Accept both that
+      // pipeline shape and the direct form used by older LLVM revisions.
+      MachineBasicBlock *BranchBB = LongBB;
+      auto LongIt = BranchBB->getFirstNonDebugInstr();
+      if (LongIt == BranchBB->instr_end()) {
+        if (BranchBB->succ_size() != 1)
+          continue;
+        MachineBasicBlock *ForwardBB = *BranchBB->succ_begin();
+        if (!ForwardBB || ForwardBB->pred_size() != 1 ||
+            *ForwardBB->pred_begin() != BranchBB)
+          continue;
+        BranchBB = ForwardBB;
+        LongIt = BranchBB->getFirstNonDebugInstr();
+      }
+
+      if (LongIt == BranchBB->instr_end() ||
           LongIt->getOpcode() != TMS9900::B_sym ||
           !LongIt->getOperand(0).isMBB())
         continue;
       auto NextIt = LongIt;
       ++NextIt;
-      while (NextIt != LongBB->end() && NextIt->isDebugInstr())
+      while (NextIt != BranchBB->end() && NextIt->isDebugInstr())
         ++NextIt;
-      if (NextIt != LongBB->end())
+      if (NextIt != BranchBB->end())
         continue;
 
       MachineBasicBlock *TargetBB = LongIt->getOperand(0).getMBB();
@@ -85,7 +100,7 @@ public:
       // The trampoline must represent exactly the edge being redirected.  If
       // MBB already reaches TargetBB, merging the two edges could require a
       // value-selecting PHI rewrite rather than a predecessor substitution.
-      if (!MBB.isSuccessor(LongBB) || !LongBB->isSuccessor(TargetBB) ||
+      if (!MBB.isSuccessor(LongBB) || !BranchBB->isSuccessor(TargetBB) ||
           MBB.isSuccessor(TargetBB))
         continue;
 
@@ -97,7 +112,7 @@ public:
       } else {
         FalseBB = MBB.getNextNode();
       }
-      if (!FalseBB || FalseBB == LongBB)
+      if (!FalseBB || FalseBB == LongBB || FalseBB == BranchBB)
         continue;
 
       DebugLoc DL = CondMI->getDebugLoc();
@@ -111,14 +126,21 @@ public:
       if (JmpMI)
         JmpMI->eraseFromParent();
 
-      TargetBB->replacePhiUsesWith(LongBB, &MBB);
+      TargetBB->replacePhiUsesWith(BranchBB, &MBB);
       MBB.replaceSuccessor(LongBB, TargetBB);
-      LongBB->removeSuccessor(TargetBB);
+      if (BranchBB != LongBB) {
+        LongBB->removeSuccessor(BranchBB);
+        BranchBB->removeSuccessor(TargetBB);
+      } else {
+        LongBB->removeSuccessor(TargetBB);
+      }
       if (!MBB.isSuccessor(FalseBB))
         MBB.addSuccessor(FalseBB);
 
       if (LongBB->pred_empty())
         DeadBlocks.push_back(LongBB);
+      if (BranchBB != LongBB && BranchBB->pred_empty())
+        DeadBlocks.push_back(BranchBB);
 
       Changed = true;
     }

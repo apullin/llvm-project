@@ -1,5 +1,8 @@
 # RUN: llc -mtriple=tms9900 -run-pass tms9900-long-branch \
 # RUN:   -verify-machineinstrs %s -o - | FileCheck %s
+# RUN: llc -mtriple=tms9900 \
+# RUN:   -run-pass tms9900-long-branch,branch-relaxation \
+# RUN:   -verify-machineinstrs %s -o - | FileCheck %s --check-prefix=RANGE
 
 ---
 name: long_signed_expand_gt
@@ -93,3 +96,66 @@ body: |
 # CHECK: bb.3:
 # CHECK: %2:gr16 = PHI %0, %bb.0, %1, %bb.1
 # CHECK-NOT: %bb.2
+
+---
+name: long_signed_forwarding_block
+tracksRegLiveness: true
+body: |
+  bb.0:
+    successors: %bb.1, %bb.2
+
+    JGT %bb.2, implicit $st
+    JMP %bb.1
+
+  bb.2:
+    successors: %bb.3
+
+  bb.3:
+    successors: %bb.4
+    B_sym %bb.4
+
+  bb.1:
+    RET
+
+  bb.4:
+    RET
+
+# CHECK-LABEL: name: long_signed_forwarding_block
+# CHECK: bb.0:
+# CHECK: JEQ %bb.[[FWD_FALSE:[0-9]+]]
+# CHECK-NEXT: JLT %bb.[[FWD_FALSE]]
+# CHECK-NEXT: B_sym %bb.[[FWD_TARGET:[0-9]+]]
+# CHECK-NOT: JGT
+
+---
+name: long_signed_forward_boundary
+tracksRegLiveness: true
+body: |
+  bb.0:
+    successors: %bb.2, %bb.4
+
+    JGT %bb.2, implicit $st
+    JMP %bb.4
+
+  bb.2:
+    successors: %bb.5
+    B_sym %bb.5
+
+  bb.3:
+    successors: %bb.4
+    INLINEASM &".space 248", 1
+    JMP %bb.4
+
+  bb.4:
+    RET
+
+  bb.5:
+    RET
+
+# RANGE-LABEL: name: long_signed_forward_boundary
+# RANGE: bb.0:
+# RANGE: JNE %bb.[[NONZERO:[0-9]+]]
+# RANGE: B_sym %bb.[[FALSE:[0-9]+]]
+# RANGE: bb.[[NONZERO]]:
+# RANGE: JLT %bb.[[FALSE]]
+# RANGE-NEXT: B_sym %bb.[[TRUE:[0-9]+]]

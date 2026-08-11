@@ -127,4 +127,7 @@ void TMS9900PassConfig::addPreEmitPass() {
     addPass(createTMS9900PeepholePass());
   addPass(&BranchRelaxationPassID);
   addPass(createTMS9900LongBranchPass());
+  // The signed-branch rewrite introduces two short branches in place of one.
+  // Recheck their ranges after the CFG and instruction sizes have changed.
+  addPass(&BranchRelaxationPassID);
 }

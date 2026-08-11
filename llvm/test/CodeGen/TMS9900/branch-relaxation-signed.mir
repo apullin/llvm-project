@@ -1,4 +1,7 @@
 # RUN: llc -mtriple=tms9900 -run-pass branch-relaxation %s -o - | FileCheck %s
+# RUN: llc -mtriple=tms9900 \
+# RUN:   -run-pass branch-relaxation,tms9900-long-branch,branch-relaxation \
+# RUN:   -verify-machineinstrs %s -o - | FileCheck %s --check-prefix=PIPE
 
 --- |
   define void @relax_long_signed() {
@@ -324,6 +327,17 @@ body: |
     RET
 
 ...
+
+# PIPE-LABEL: name: relax_long_signed
+# PIPE: bb.0:
+# PIPE: JEQ %bb.1
+# PIPE-NEXT: JLT %bb.1
+# PIPE-NEXT: B_sym %bb.2
+# PIPE-LABEL: name: relax_long_signed_lt
+# PIPE: bb.0:
+# PIPE: JEQ %bb.1
+# PIPE-NEXT: JGT %bb.1
+# PIPE-NEXT: B_sym %bb.2
 
 # CHECK-LABEL: name: relax_long_signed
 # CHECK: bb.0:

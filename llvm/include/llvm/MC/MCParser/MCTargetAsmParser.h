@@ -22,6 +22,7 @@
 
 namespace llvm {
 
+struct MCAsmMacro;
 class MCContext;
 class MCInst;
 class MCInstrInfo;
@@ -524,6 +525,16 @@ public:
   virtual bool starIsStartOfStatement() { return false; };
   // Return whether this parser accepts exclamation as start of statement
   virtual bool exclaimIsStartOfStatement() { return false; };
+
+  /// Return whether Token begins a target-specific trailing comment field.
+  /// This is queried only after an expression or macro argument has begun.
+  virtual bool isTokenStartOfTrailingComment(const AsmToken &Token) {
+    return false;
+  }
+
+  /// Look up a target-specific macro spelling after the exact generic lookup
+  /// failed, for example for an assembly dialect with case-insensitive names.
+  virtual MCAsmMacro *lookupTargetMacro(StringRef Name) { return nullptr; }
 
   virtual MCSymbolRefExpr::VariantKind
   getVariantKindForName(StringRef Name) const {

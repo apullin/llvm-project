@@ -1747,6 +1747,9 @@ bool AsmParser::parseBinOpRHS(unsigned Precedence, const MCExpr *&Res,
                               SMLoc &EndLoc) {
   SMLoc StartLoc = Lexer.getLoc();
   while (true) {
+    if (getTargetParser().isTokenStartOfTrailingComment(getTok()))
+      return false;
+
     MCBinaryExpr::Opcode Kind = MCBinaryExpr::Add;
     unsigned TokPrec = getBinOpPrecedence(Lexer.getKind(), Kind);
 
@@ -1987,9 +1990,13 @@ bool AsmParser::parseStatement(ParseStatementInfo &Info,
   }
 
   // If macros are enabled, check to see if this is a macro instantiation.
-  if (areMacrosEnabled())
-    if (MCAsmMacro *M = getContext().lookupMacro(IDVal))
+  if (areMacrosEnabled()) {
+    MCAsmMacro *M = getContext().lookupMacro(IDVal);
+    if (!M)
+      M = getTargetParser().lookupTargetMacro(IDVal);
+    if (M)
       return handleMacroEntry(M, IDLoc);
+  }
 
   // Otherwise, we have a normal instruction or directive.
 
@@ -2733,6 +2740,13 @@ bool AsmParser::parseMacroArgument(MCAsmMacroArgument &MA, bool Vararg) {
       // If the token after a space is an operator, add the token and the next
       // one into this argument
       if (!IsDarwin) {
+        if (!MA.empty() &&
+            getTargetParser().isTokenStartOfTrailingComment(getTok())) {
+          while (Lexer.isNot(AsmToken::EndOfStatement) &&
+                 Lexer.isNot(AsmToken::Eof))
+            Lexer.Lex();
+          break;
+        }
         if (isOperator(Lexer.getKind())) {
           MA.push_back(getTok());
           Lexer.Lex();

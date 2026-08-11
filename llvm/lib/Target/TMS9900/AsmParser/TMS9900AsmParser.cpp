@@ -12,6 +12,7 @@
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/ADT/StringMap.h"
 #include "llvm/ADT/StringSwitch.h"
+#include "llvm/MC/MCAsmMacro.h"
 #include "llvm/MC/MCContext.h"
 #include "llvm/MC/MCExpr.h"
 #include "llvm/MC/MCInst.h"
@@ -28,6 +29,7 @@
 #include "llvm/Support/Casting.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/MathExtras.h"
+#include "llvm/Support/SourceMgr.h"
 #include "llvm/Support/StringSaver.h"
 
 using namespace llvm;
@@ -293,6 +295,8 @@ private:
   void onLabelParsed(MCSymbol *Symbol) override;
   bool starIsStartOfStatement() override { return isXas99Dialect(); }
   bool exclaimIsStartOfStatement() override { return isXas99Dialect(); }
+  bool isTokenStartOfTrailingComment(const AsmToken &Token) override;
+  MCAsmMacro *lookupTargetMacro(StringRef Name) override;
 
   bool parseInstruction(ParseInstructionInfo &Info, StringRef Name,
                         SMLoc NameLoc, OperandVector &Operands) override;
@@ -334,6 +338,7 @@ private:
   bool parseDirectiveIDT();
   bool parseDirectiveCOPY();
   bool parseDirectiveDXOP();
+  bool parseDirectiveDEFM(SMLoc DirectiveLoc);
   bool parseIgnoredDirective();
 
   bool parseXasLocalLabel(ParseInstructionInfo &Info, SMLoc LabelLoc,
@@ -342,6 +347,7 @@ private:
   bool parseXasLocalReference(const MCExpr *&Res, SMLoc &EndLoc);
 
   StringRef canonicalizeSymbolName(StringRef Name);
+  bool consumeXasTrailingComment();
   bool parseStringLiteral(std::string &Data);
   bool expectEndOfStatement(StringRef Directive);
 
@@ -377,6 +383,47 @@ public:
 
 bool TMS9900AsmParser::isXas99Dialect() const {
   return Parser.getAssemblerDialect() == AD_XAS99;
+}
+
+bool TMS9900AsmParser::isTokenStartOfTrailingComment(
+    const AsmToken &Token) {
+  if (!isXas99Dialect())
+    return false;
+
+  SourceMgr &SM = Parser.getSourceManager();
+  unsigned BufferID = SM.FindBufferContainingLoc(Token.getLoc());
+  if (!BufferID)
+    return false;
+
+  const char *BufferStart =
+      SM.getMemoryBuffer(BufferID)->getBufferStart();
+  const char *Comment = Token.getLoc().getPointer();
+  unsigned Spaces = 0;
+  while (Comment != BufferStart) {
+    char Previous = Comment[-1];
+    if (Previous == '\t')
+      return true;
+    if (Previous != ' ')
+      break;
+    ++Spaces;
+    --Comment;
+  }
+  return Spaces >= 2;
+}
+
+MCAsmMacro *TMS9900AsmParser::lookupTargetMacro(StringRef Name) {
+  if (!isXas99Dialect())
+    return nullptr;
+  return getContext().lookupMacro(Name.upper());
+}
+
+bool TMS9900AsmParser::consumeXasTrailingComment() {
+  if (!isTokenStartOfTrailingComment(Parser.getTok()))
+    return false;
+  while (Parser.getTok().isNot(AsmToken::EndOfStatement) &&
+         Parser.getTok().isNot(AsmToken::Eof))
+    Parser.Lex();
+  return true;
 }
 
 StringRef TMS9900AsmParser::canonicalizeSymbolName(StringRef Name) {
@@ -504,6 +551,7 @@ bool TMS9900AsmParser::parseStringLiteral(std::string &Data) {
 }
 
 bool TMS9900AsmParser::expectEndOfStatement(StringRef Directive) {
+  consumeXasTrailingComment();
   if (Parser.getTok().is(AsmToken::EndOfStatement) ||
       Parser.getTok().is(AsmToken::Eof))
     return false;
@@ -1236,6 +1284,13 @@ bool TMS9900AsmParser::parseInstruction(ParseInstructionInfo &Info,
   // If there are no operands, we're done
   if (Parser.getTok().is(AsmToken::EndOfStatement))
     return false;
+  bool HasNoOperands =
+      StringSwitch<bool>(Name.upper())
+          .Cases("RTWP", "IDLE", "RSET", "CKOF", true)
+          .Cases("CKON", "LREX", "NOP", "RT", true)
+          .Default(false);
+  if (HasNoOperands && consumeXasTrailingComment())
+    return false;
 
   // Parse first operand
   unsigned OperandIndex = 0;
@@ -1259,6 +1314,7 @@ bool TMS9900AsmParser::parseInstruction(ParseInstructionInfo &Info,
         MCConstantExpr::create(XopMode, getContext()), Loc, Loc));
   }
 
+  consumeXasTrailingComment();
   if (Parser.getTok().isNot(AsmToken::EndOfStatement)) {
     return Error(Parser.getTok().getLoc(),
                  "unexpected token, expected end of statement");
@@ -1273,25 +1329,19 @@ bool TMS9900AsmParser::parseXasLocalLabel(ParseInstructionInfo &Info,
   // Only the first exclamation mark marks a local definition. Any additional
   // marks are part of its name; counts select distance only in references.
   SmallString<16> LocalName;
+  const char *LabelEnd = LabelLoc.getPointer() + 1;
   while (Parser.getTok().is(AsmToken::Exclaim)) {
+    LabelEnd = Parser.getTok().getEndLoc().getPointer();
     LocalName.push_back('!');
     Parser.Lex();
   }
 
   StringRef Name = Saver.save(StringRef(LocalName));
-  if (Parser.getTok().is(AsmToken::Identifier)) {
-    AsmToken Next = Parser.getLexer().peekTok();
-    bool CurrentStartsStatement =
-        isKnownMnemonic(Parser.getTok().getIdentifier()) ||
-        isKnownDirective(Parser.getTok().getIdentifier());
-    bool IsNamedLabel = !CurrentStartsStatement ||
-                        Next.is(AsmToken::Identifier) ||
-                        Next.is(AsmToken::Colon) || Next.is(AsmToken::Dot);
-    if (IsNamedLabel) {
-      LocalName += Parser.getTok().getIdentifier().upper();
-      Name = Saver.save(StringRef(LocalName));
-      Parser.Lex();
-    }
+  if (Parser.getTok().is(AsmToken::Identifier) &&
+      Parser.getTok().getLoc().getPointer() == LabelEnd) {
+    LocalName += Parser.getTok().getIdentifier().upper();
+    Name = Saver.save(StringRef(LocalName));
+    Parser.Lex();
   }
   if (Parser.getTok().is(AsmToken::Colon))
     Parser.Lex();
@@ -1395,6 +1445,9 @@ ParseStatus TMS9900AsmParser::parseDirective(AsmToken DirectiveID) {
   StringRef IDVal = DirectiveID.getIdentifier();
 
   // Handle xas99 directives
+  if (isXas99Dialect() && IDVal.equals_insensitive(".DEFM"))
+    return parseDirectiveDEFM(DirectiveID.getLoc()) ? ParseStatus::Failure
+                                                    : ParseStatus::Success;
   if (IDVal.equals_insensitive("DATA"))
     return parseDirectiveDATA() ? ParseStatus::Failure : ParseStatus::Success;
   if (IDVal.equals_insensitive("BYTE"))
@@ -1646,6 +1699,102 @@ bool TMS9900AsmParser::parseDirectiveDXOP() {
 
   XasXops[Name] = Mode;
   return expectEndOfStatement("DXOP");
+}
+
+bool TMS9900AsmParser::parseDirectiveDEFM(SMLoc DirectiveLoc) {
+  if (Parser.getTok().isNot(AsmToken::Identifier))
+    return Error(Parser.getTok().getLoc(), "expected macro name after .DEFM");
+
+  std::string MacroName = "." + Parser.getTok().getIdentifier().upper();
+  Parser.Lex();
+  if (expectEndOfStatement(".DEFM"))
+    return true;
+  Parser.Lex();
+
+  AsmToken StartToken = Parser.getTok();
+  AsmToken EndToken;
+  while (true) {
+    if (Parser.getTok().is(AsmToken::Eof))
+      return Error(DirectiveLoc, "no matching .ENDM in macro definition");
+
+    if (Parser.getTok().is(AsmToken::Identifier) &&
+        Parser.getTok().getIdentifier().equals_insensitive(".ENDM")) {
+      EndToken = Parser.getTok();
+      Parser.Lex();
+      if (Parser.getTok().isNot(AsmToken::EndOfStatement))
+        return Error(Parser.getTok().getLoc(),
+                     "unexpected token in .ENDM directive");
+      break;
+    }
+
+    if (Parser.getTok().is(AsmToken::Identifier) &&
+        Parser.getTok().getIdentifier().equals_insensitive(".DEFM"))
+      return Error(Parser.getTok().getLoc(),
+                   "cannot define a macro within an xas99 macro");
+    Parser.eatToEndOfStatement();
+  }
+
+  if (getContext().lookupMacro(MacroName))
+    return Error(DirectiveLoc, "macro '" + MacroName + "' is already defined");
+
+  StringRef Body(StartToken.getLoc().getPointer(),
+                 EndToken.getLoc().getPointer() -
+                     StartToken.getLoc().getPointer());
+  SmallString<256> RewrittenBody;
+  bool InSingleQuote = false;
+  bool InDoubleQuote = false;
+  for (size_t I = 0; I < Body.size();) {
+    char C = Body[I];
+    if (C == '\'' && !InDoubleQuote) {
+      RewrittenBody.push_back(C);
+      if (InSingleQuote && I + 1 < Body.size() && Body[I + 1] == '\'') {
+        RewrittenBody.push_back(Body[I + 1]);
+        I += 2;
+        continue;
+      }
+      InSingleQuote = !InSingleQuote;
+      ++I;
+      continue;
+    }
+    if (C == '"' && !InSingleQuote) {
+      InDoubleQuote = !InDoubleQuote;
+      RewrittenBody.push_back(C);
+      ++I;
+      continue;
+    }
+    if (C != '#' || InSingleQuote || InDoubleQuote ||
+        I + 1 == Body.size() || !isDigit(Body[I + 1])) {
+      RewrittenBody.push_back(C);
+      ++I;
+      continue;
+    }
+
+    size_t NumberStart = ++I;
+    while (I < Body.size() && isDigit(Body[I]))
+      ++I;
+    unsigned Number;
+    if (Body.slice(NumberStart, I).getAsInteger(10, Number) || Number == 0 ||
+        Number > 32)
+      return Error(DirectiveLoc,
+                   "xas99 macro argument must be in the range #1..#32");
+    RewrittenBody += "\\p";
+    RewrittenBody += utostr(Number);
+    RewrittenBody += "\\()";
+  }
+
+  MCAsmMacroParameters Parameters;
+  Parameters.reserve(32);
+  for (unsigned I = 1; I <= 32; ++I) {
+    MCAsmMacroParameter Parameter;
+    Parameter.Name = Saver.save("p" + utostr(I));
+    Parameters.push_back(std::move(Parameter));
+  }
+
+  StringRef SavedName = Saver.save(MacroName);
+  StringRef SavedBody = Saver.save(StringRef(RewrittenBody));
+  getContext().defineMacro(
+      SavedName, MCAsmMacro(SavedName, SavedBody, std::move(Parameters)));
+  return false;
 }
 
 bool TMS9900AsmParser::parseIgnoredDirective() {

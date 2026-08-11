@@ -1,0 +1,39 @@
+# RUN: llc -mtriple=tms9900 -run-pass=postrapseudos -verify-machineinstrs %s -o - | FileCheck %s
+# RUN: llc -mtriple=tms9900 -run-pass=postrapseudos,tms9900-peephole -verify-machineinstrs %s -o - | FileCheck %s --check-prefix=PEEP
+
+---
+name:            and_same_reg_live_status
+tracksRegLiveness: true
+body:             |
+  bb.0:
+    liveins: $r1, $r11
+    $r1 = ANDrr $r1, $r1, implicit-def $st
+    $r2 = STST implicit $st
+    $r0 = MOVrr killed $r1, implicit-def dead $st
+    RET implicit $r0
+
+# CHECK-LABEL: name: and_same_reg_live_status
+# CHECK: $r1 = MOVrr $r1, implicit-def $st
+# CHECK-NEXT: $r2 = STST implicit $st
+# PEEP-LABEL: name: and_same_reg_live_status
+# PEEP: $r1 = MOVrr $r1, implicit-def $st
+# PEEP-NEXT: $r2 = STST implicit $st
+
+---
+name:            and_same_reg_dead_status
+tracksRegLiveness: true
+body:             |
+  bb.0:
+    liveins: $r1, $r11
+    $r1 = ANDrr $r1, $r1, implicit-def dead $st
+    $r0 = MOVrr killed $r1, implicit-def dead $st
+    RET implicit $r0
+
+# CHECK-LABEL: name: and_same_reg_dead_status
+# CHECK: $r1 = MOVrr $r1, implicit-def dead $st
+# CHECK-NOT: INVr
+# CHECK-NOT: SZCrr
+# PEEP-LABEL: name: and_same_reg_dead_status
+# PEEP-NOT: $r1 = MOVrr $r1
+# PEEP: $r0 = MOVrr killed $r1
+...

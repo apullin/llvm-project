@@ -758,6 +758,27 @@ bool TMS9900InstrInfo::expandPostRAPseudo(MachineInstr &MI) const {
     //   INV rs2      ; restore rs2 (skipped if rs2 is killed here)
     Register DstReg = MI.getOperand(0).getReg();
     Register SrcReg = MI.getOperand(2).getReg();
+
+    // Coalescing identical inputs can make all three operands the same
+    // physical register.  The normal INV+SZC sequence would then clear the
+    // register instead of computing x & x.  A self-move preserves the value
+    // and sets the comparison flags from the result, just like a logical AND.
+    // The pre-emit peephole removes it when ST is dead.
+    if (DstReg == SrcReg) {
+      MachineInstrBuilder MIB =
+          BuildMI(MBB, MI, DL, get(TMS9900::MOVrr), DstReg).addReg(SrcReg);
+      const TargetRegisterInfo *TRI =
+          MBB.getParent()->getSubtarget().getRegisterInfo();
+      if (MI.registerDefIsDead(TMS9900::ST, TRI)) {
+        if (int STIdx =
+                MIB->findRegisterDefOperandIdx(TMS9900::ST, TRI);
+            STIdx != -1)
+          MIB->getOperand(STIdx).setIsDead();
+      }
+      MBB.erase(MI);
+      return true;
+    }
+
     // Use isKill() not isDead(): operand 2 is a use, not a def.
     // isKill() indicates the source register's last use is this instruction,
     // meaning no restore INV is needed. isDead() is for def operands only

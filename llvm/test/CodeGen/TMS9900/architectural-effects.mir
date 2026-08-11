@@ -1,0 +1,44 @@
+# RUN: llc -mtriple=tms9900 -run-pass=dead-mi-elimination \
+# RUN:   -verify-machineinstrs %s -o - | FileCheck %s
+
+# These instructions have externally observable or context-switch effects.
+# Even with dead register/status definitions, machine DCE must retain them.
+
+---
+name:            architectural_effects
+tracksRegLiveness: true
+body:             |
+  bb.0:
+    liveins: $r1, $r11, $r12
+    LDCRr $r1, 8, implicit-def dead $st, implicit $r12
+    dead $r2 = STCRr 8, implicit-def dead $st, implicit $r12
+    SBO 1, implicit $r12
+    SBZ -1, implicit $r12
+    TB 0, implicit-def dead $st, implicit $r12
+    LIMI 0, implicit-def dead $st, implicit $st
+    RSET implicit-def dead $st, implicit $st
+    IDLE
+    CKON
+    CKOF
+    LREX
+    X $r1
+    XOPr $r1, 2, implicit-def dead $st, implicit-def dead $pc, implicit-def dead $wp
+    BLWP $r1, implicit-def dead $wp, implicit-def dead $pc
+    RET
+
+# CHECK-LABEL: name: architectural_effects
+# CHECK: LDCRr
+# CHECK-NEXT: STCRr
+# CHECK-NEXT: SBO
+# CHECK-NEXT: SBZ
+# CHECK-NEXT: TB
+# CHECK-NEXT: LIMI
+# CHECK-NEXT: RSET
+# CHECK-NEXT: IDLE
+# CHECK-NEXT: CKON
+# CHECK-NEXT: CKOF
+# CHECK-NEXT: LREX
+# CHECK-NEXT: X
+# CHECK-NEXT: XOPr
+# CHECK-NEXT: BLWP
+...

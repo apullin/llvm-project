@@ -1675,7 +1675,8 @@ def BL_OUTLINE : TMS9900Inst<(outs), (ins calltarget:$target),
 }
 
 // BLWP - Branch and Load Workspace Pointer (general addressing)
-let SchedRW = [WriteControl26] in {
+let SchedRW = [WriteControl26], Defs = [WP, PC],
+    hasSideEffects = 1, mayLoad = 1, mayStore = 1 in {
 def BLWP : Format3_IndReg<0b0000010000, (outs), (ins GR16:$rs),
                           "BLWP\t*$rs",
                           []> {
@@ -1709,9 +1710,9 @@ def BLWP_pim : Format3_AutoInc<0b0000010000, (outs), (ins GR16:$rs),
 }
 
 // X - Execute instruction (general addressing)
+let hasSideEffects = 1, mayLoad = 1, mayStore = 1 in {
 def X : Format3_IndReg<0b0000010010, (outs), (ins GR16:$rs),
-                       "X\t*$rs",
-                       []> {
+                       "X\t*$rs", []> {
   let SchedRW = [WriteFast8];
 }
 
@@ -1731,12 +1732,15 @@ def X_idx : Format3_Idx<0b0000010010, (outs),
 def X_pim : Format3_AutoInc<0b0000010010, (outs), (ins GR16:$rs),
                             "X\t*${rs}+",
                             []>;
+}
 
 // RTWP - Return with workspace pointer (full context restore)
 // Used for returning from interrupt handlers
 def RTWP : Format11<0b0000001110000000, (outs), (ins),
                     "RTWP",
                     [(TMS9900reti)]> {
+  let Uses = [R13, R14, R15];
+  let Defs = [ST, PC, WP];
   let isReturn = 1;
   let isTerminator = 1;
   let isBarrier = 1;
@@ -1824,9 +1828,10 @@ def DIVpim : Format2_AutoInc<0b001111, (outs), (ins GR16:$rs, GR16:$rd),
 // XOP (Extended Operation)
 //===----------------------------------------------------------------------===//
 
+let Defs = [ST, PC, WP], hasSideEffects = 1, mayLoad = 1,
+    mayStore = 1 in {
 def XOPr : FormatXOP_Reg<0b001011, (outs), (ins GR16:$rs, imm4:$vec),
-                         "XOP\t$rs,$vec",
-                         []>;
+                         "XOP\t$rs,$vec", []>;
 
 def XOPi : FormatXOP_Ind<0b001011, (outs), (ins GR16:$rs, imm4:$vec),
                          "XOP\t*$rs,$vec",
@@ -1844,15 +1849,17 @@ def XOPxm : FormatXOP_Idx<0b001011, (outs),
                           (ins i16imm:$offset, IdxRegs:$ri, imm4:$vec),
                           "XOP\t@${offset}(${ri}),$vec",
                           []>;
+}
 
 //===----------------------------------------------------------------------===//
 // CRU Multi-bit Instructions (LDCR/STCR)
 //===----------------------------------------------------------------------===//
 
-let Uses = [R12] in {
+let Uses = [R12], Defs = [ST], hasSideEffects = 1 in {
 def LDCRr : Format4_Reg<0b001100, (outs), (ins GR16:$rs, cru_count:$cnt),
                         "LDCR\t$rs,$cnt",
                         []>;
+let mayLoad = 1 in {
 def LDCRi : Format4_Ind<0b001100, (outs), (ins GR16:$rs, cru_count:$cnt),
                         "LDCR\t*$rs,$cnt",
                         []>;
@@ -1866,11 +1873,13 @@ def LDCRxm : Format4_Idx<0b001100, (outs),
                          (ins i16imm:$offset, IdxRegs:$ri, cru_count:$cnt),
                          "LDCR\t@${offset}(${ri}),$cnt",
                          []>;
+}
 
 let SchedRW = [WriteCRU] in {
-def STCRr : Format4_Reg<0b001101, (outs), (ins GR16:$rs, cru_count:$cnt),
+def STCRr : Format4_Reg<0b001101, (outs GR16:$rs), (ins cru_count:$cnt),
                         "STCR\t$rs,$cnt",
                         []>;
+let mayStore = 1 in {
 def STCRi : Format4_Ind<0b001101, (outs), (ins GR16:$rs, cru_count:$cnt),
                         "STCR\t*$rs,$cnt",
                         []>;
@@ -1885,13 +1894,14 @@ def STCRxm : Format4_Idx<0b001101, (outs),
                          "STCR\t@${offset}(${ri}),$cnt",
                          []>;
 }
-} // Uses = [R12]
+}
+} // Uses = [R12], Defs = [ST]
 
 //===----------------------------------------------------------------------===//
 // CRU Single-bit Instructions (SBO/SBZ/TB)
 //===----------------------------------------------------------------------===//
 
-let Uses = [R12] in {
+let Uses = [R12], hasSideEffects = 1 in {
 def SBO : Format5<0b00011101, (outs), (ins cru_disp8:$disp),
                   "SBO\t$disp",
                   []>;
@@ -1978,6 +1988,9 @@ def LWPI : Format9<0b00000010111, (outs), (ins i16imm:$imm),
 def LIMI : Format9<0b00000011000, (outs), (ins i16imm:$imm),
                    "LIMI\t$imm",
                    []> {
+  let Uses = [ST];
+  let Defs = [ST];
+  let hasSideEffects = 1;
   let SchedRW = [WriteControl16];
 }
 
@@ -2011,14 +2024,17 @@ def STWP : TMS9900Inst<(outs GR16:$rd), (ins),
 // External Instructions
 //===----------------------------------------------------------------------===//
 
-let SchedRW = [WriteImm12] in {
+let SchedRW = [WriteImm12], hasSideEffects = 1 in {
 def IDLE : Format11<0b0000001101000000, (outs), (ins),
                     "IDLE",
                     []>;
 
 def RSET : Format11<0b0000001101100000, (outs), (ins),
                     "RSET",
-                    []>;
+                    []> {
+  let Uses = [ST];
+  let Defs = [ST];
+}
 
 def CKOF : Format11<0b0000001111000000, (outs), (ins),
                     "CKOF",

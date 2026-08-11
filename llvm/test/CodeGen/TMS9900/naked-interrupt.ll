@@ -1,4 +1,6 @@
 ; RUN: llc -mtriple=tms9900 -O2 < %s | FileCheck %s
+; RUN: llc -mtriple=tms9900 -O2 -stop-after=finalize-isel < %s \
+; RUN:   | FileCheck %s --check-prefix=MIR
 ;
 ; Test function attributes: naked and interrupt.
 ;
@@ -27,6 +29,10 @@ define void @naked_func() naked {
 define void @isr() #0 {
   ret void
 }
+
+; MIR-LABEL: name: isr
+; MIR: RTWP implicit-def dead $st, implicit-def dead $pc
+; MIR-SAME: implicit-def dead $wp, implicit $r13, implicit $r14, implicit $r15
 
 attributes #0 = { "interrupt" }
 

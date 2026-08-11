@@ -363,6 +363,9 @@ std::pair<unsigned, const TargetRegisterClass *>
 TMS9900TargetLowering::getRegForInlineAsmConstraint(
     const TargetRegisterInfo *TRI, StringRef Constraint, MVT VT) const {
 
+  if (Constraint.equals_insensitive("{cc}"))
+    return std::make_pair(TMS9900::ST, &TMS9900::SRRegClass);
+
   if (Constraint.size() == 1) {
     // GCC-style constraint letters
     switch (Constraint[0]) {

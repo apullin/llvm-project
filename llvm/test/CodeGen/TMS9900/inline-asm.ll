@@ -1,4 +1,5 @@
 ; RUN: llc -mtriple=tms9900 -O2 < %s | FileCheck %s
+; RUN: llc -mtriple=tms9900 -O2 -stop-after=finalize-isel < %s | FileCheck %s --check-prefix=MIR
 ;
 ; Test inline assembly support.
 ; The TMS9900 backend should pass through inline asm and handle
@@ -67,4 +68,16 @@ define i16 @asm_memory_local(i16 %value) {
   %result = call i16 asm sideeffect "MOV $1,$0", "=r,*m"(
       ptr elementtype(i16) %slot)
   ret i16 %result
+}
+
+; --- Status-register clobber ---
+; The C/C++ "cc" clobber is represented as ~{cc} in LLVM IR and must become
+; an explicit ST definition so machine scheduling cannot preserve stale flags
+; across the inline assembly.
+; MIR-LABEL: name: asm_cc_clobber
+; MIR: INLINEASM {{.*}} implicit-def early-clobber $st
+
+define void @asm_cc_clobber() {
+  call void asm sideeffect "", "~{cc}"()
+  ret void
 }

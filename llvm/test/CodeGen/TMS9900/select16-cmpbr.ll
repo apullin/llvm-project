@@ -11,7 +11,7 @@ entry:
 }
 
 ; CHECK-LABEL: name: select16_cmpbr
-; CHECK: CMPBRrr
+; CHECK: CMPBRrr {{.*}}implicit-def $st
 ; CHECK: PHI
 
 ; ASM-LABEL: select16_cmpbr

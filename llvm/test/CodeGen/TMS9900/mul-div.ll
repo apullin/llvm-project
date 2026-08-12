@@ -1,4 +1,5 @@
 ; RUN: llc -mtriple=tms9900 -O2 < %s | FileCheck %s
+; RUN: llc -mtriple=tms9900 -O2 -stop-before=finalize-isel < %s | FileCheck %s --check-prefix=PREISEL
 ; RUN: llc -mtriple=tms9900 -O2 -stop-after=finalize-isel < %s | FileCheck %s --check-prefix=ISEL
 ; RUN: llc -mtriple=tms9900 -O0 -verify-machineinstrs < %s -o /dev/null
 ; RUN: llc -mtriple=tms9900 -O2 -verify-machineinstrs < %s -o /dev/null
@@ -12,6 +13,8 @@
 ; CHECK-LABEL: mul16:
 ; CHECK: MPY
 ; CHECK: B{{[ \t]+}}*R11
+; PREISEL-LABEL: name: mul16
+; PREISEL: MUL16 {{.*}}implicit-def dead $r0, implicit-def dead $r1, implicit-def dead $st
 ; ISEL-LABEL: name: mul16
 ; ISEL: MPYrr_R0 {{.*}}implicit-def $r0, implicit-def $r1, implicit $r0
 

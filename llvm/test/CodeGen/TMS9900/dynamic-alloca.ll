@@ -1,4 +1,5 @@
 ; RUN: llc -march=tms9900 -O2 -verify-machineinstrs < %s | FileCheck %s
+; RUN: llc -march=tms9900 -O2 -stop-before=prologepilog < %s | FileCheck %s --check-prefix=MIR
 ;
 ; Test dynamic stack allocation (variable-length arrays).
 ; DYNAMIC_STACKALLOC is Expand on TMS9900.
@@ -84,6 +85,10 @@ define i16 @dynalloca_with_call(i16 %n, i16 %value) {
   %result = load volatile i16, ptr %fixed, align 2
   ret i16 %result
 }
+
+; MIR-LABEL: name: dynalloca_with_call
+; MIR: ADJCALLSTACKDOWN 2, 0, implicit-def dead $r10, implicit-def dead $st, implicit $r10
+; MIR: ADJCALLSTACKUP 2, 0, implicit-def dead $r10, implicit-def dead $st, implicit $r10
 
 ; --- llvm.frameaddress(0) ---
 ; Taking the frame address also establishes and returns the stable R13 base.

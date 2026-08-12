@@ -22,7 +22,7 @@ body: |
     $r1 = IMPLICIT_DEF
     $r2 = IMPLICIT_DEF
     INLINEASM &".space 252", 1
-    CMPBRrr $r1, $r2, 17, %bb.2
+    CMPBRrr $r1, $r2, 17, %bb.2, implicit-def dead $st
   bb.2:
     RET
 ...
@@ -38,7 +38,7 @@ body: |
     $r1 = IMPLICIT_DEF
     $r2 = IMPLICIT_DEF
     INLINEASM &".space 250", 1
-    CMPBRrr $r1, $r2, 19, %bb.2
+    CMPBRrr $r1, $r2, 19, %bb.2, implicit-def dead $st
   bb.2:
     RET
 ...
@@ -53,7 +53,7 @@ body: |
     successors: %bb.2
     $r1 = IMPLICIT_DEF
     INLINEASM &".space 250", 1
-    CMPBRri $r1, 0, 17, %bb.2
+    CMPBRri $r1, 0, 17, %bb.2, implicit-def dead $st
   bb.2:
     RET
 ...
@@ -68,7 +68,7 @@ body: |
     successors: %bb.2
     $r1 = IMPLICIT_DEF
     INLINEASM &".space 248", 1
-    CMPBRri $r1, 0, 19, %bb.2
+    CMPBRri $r1, 0, 19, %bb.2, implicit-def dead $st
   bb.2:
     RET
 ...

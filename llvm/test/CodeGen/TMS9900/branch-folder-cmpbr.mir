@@ -14,7 +14,7 @@ body: |
     successors: %bb.1, %bb.2
     $r1 = IMPLICIT_DEF
     $r2 = IMPLICIT_DEF
-    CMPBRrr $r1, $r2, 17, %bb.1
+    CMPBRrr $r1, $r2, 17, %bb.1, implicit-def $st
     JMP %bb.2
 
   bb.1:

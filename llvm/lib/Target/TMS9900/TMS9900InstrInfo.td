@@ -276,8 +276,9 @@ def TCRETURN_ind : Pseudo<(outs), (ins GR16:$dst),
 
 // ADJCALLSTACKDOWN/UP implicitly use/def R10 (SP) because they may be expanded
 // into a stack adjustment and the codegen must know they may modify SP
-// before prolog-epilog rewriting occurs.
-let isCodeGenOnly = 1, isPseudo = 1, Defs = [R10], Uses = [R10] in {
+// before prolog-epilog rewriting occurs. Pessimistically model ST as clobbered
+// because a nonzero adjustment expands to AI.
+let isCodeGenOnly = 1, isPseudo = 1, Defs = [R10, ST], Uses = [R10] in {
 
 // ADJCALLSTACKDOWN - Pseudo for stack adjustment before call
 def ADJCALLSTACKDOWN : Pseudo<(outs), (ins i16imm:$amt, i16imm:$amt2),
@@ -289,7 +290,7 @@ def ADJCALLSTACKUP : Pseudo<(outs), (ins i16imm:$amt1, i16imm:$amt2),
                              "# ADJCALLSTACKUP $amt1, $amt2",
                              [(TMS9900callseq_end timm:$amt1, timm:$amt2)]>;
 
-} // Defs = [R10], Uses = [R10]
+} // Defs = [R10, ST], Uses = [R10]
 
 // Other pseudos (general)
 let isCodeGenOnly = 1, isPseudo = 1 in {
@@ -1480,7 +1481,8 @@ def CI : Format8_Cmp<0b1000, (outs), (ins GR16:$rs, i16imm:$imm),
 // Compare + Branch Pseudos (to keep flags adjacent)
 //===----------------------------------------------------------------------===//
 
-let isCodeGenOnly = 1, isPseudo = 1, isBranch = 1, isTerminator = 1 in {
+let isCodeGenOnly = 1, isPseudo = 1, isBranch = 1, isTerminator = 1,
+    Defs = [ST] in {
 def CMPBRrr : Pseudo<(outs),
                      (ins GR16:$lhs, GR16:$rhs, i16imm:$cc, brtarget8:$target),
                      "# CMPBRrr $lhs, $rhs, $cc, $target",
@@ -1930,7 +1932,7 @@ def TB : Format5<0b00011111, (outs), (ins cru_disp8:$disp),
 // 1. MOV $lhs, R0 (or other even register)
 // 2. MPY $rhs, R0
 // 3. MOV R1, $dst (get low 16 bits from R1)
-let usesCustomInserter = 1, Defs = [R0, R1] in
+let usesCustomInserter = 1, Defs = [R0, R1, ST] in
 def MUL16 : Pseudo<(outs GR16:$dst), (ins GR16:$lhs, GR16:$rhs),
                    "# MUL16 $lhs, $rhs -> $dst",
                    [(set GR16:$dst, (mul GR16:$lhs, GR16:$rhs))]>;

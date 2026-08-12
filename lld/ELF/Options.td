@@ -619,6 +619,9 @@ def lto_emit_asm: FF<"lto-emit-asm">,
   HelpText<"Emit assembly code">;
 def lto_emit_llvm: FF<"lto-emit-llvm">,
   HelpText<"Emit LLVM-IR bitcode">;
+defm lto_linker_scripts: BB<"lto-linker-scripts",
+  "Enable special handling for linker scripts with LTO",
+  "Disable special handling for linker scripts with LTO">;
 def lto_newpm_passes: JJ<"lto-newpm-passes=">,
   HelpText<"Passes to run during LTO">;
 def lto_O: JJ<"lto-O">, MetaVarName<"<opt-level>">,

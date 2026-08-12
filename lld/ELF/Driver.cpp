@@ -166,6 +166,7 @@ static std::tuple<ELFKind, uint16_t, uint8_t> parseEmulation(Ctx &ctx,
           .Cases("elf32btsmip", "elf32btsmipn32", {ELF32BEKind, EM_MIPS})
           .Cases("elf32ltsmip", "elf32ltsmipn32", {ELF32LEKind, EM_MIPS})
           .Case("elf32lriscv", {ELF32LEKind, EM_RISCV})
+          .Cases("elf32-tms9900", "tms9900elf", {ELF32BEKind, EM_TMS9900})
           .Cases("elf32ppc", "elf32ppclinux", {ELF32BEKind, EM_PPC})
           .Cases("elf32lppc", "elf32lppclinux", {ELF32LEKind, EM_PPC})
           .Case("elf32loongarch", {ELF32LEKind, EM_LOONGARCH})
@@ -1342,6 +1343,8 @@ static void readConfigs(Ctx &ctx, opt::InputArgList &args) {
                                             OPT_no_lto_pgo_warn_mismatch, true);
   ctx.arg.ltoDebugPassManager = args.hasArg(OPT_lto_debug_pass_manager);
   ctx.arg.ltoEmitAsm = args.hasArg(OPT_lto_emit_asm);
+  ctx.arg.ltoLinkerScripts =
+      args.hasFlag(OPT_lto_linker_scripts, OPT_no_lto_linker_scripts, false);
   ctx.arg.ltoNewPmPasses = args.getLastArgValue(OPT_lto_newpm_passes);
   ctx.arg.ltoWholeProgramVisibility =
       args.hasFlag(OPT_lto_whole_program_visibility,

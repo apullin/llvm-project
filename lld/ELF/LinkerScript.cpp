@@ -442,6 +442,33 @@ bool LinkerScript::shouldKeep(InputSectionBase *s) {
   return false;
 }
 
+bool LinkerScript::shouldKeep(StringRef name, InputFile *file) {
+  for (InputSectionDescription *id : keptSections)
+    if (id->matchesFile(*file))
+      for (SectionPattern &p : id->sectionPatterns)
+        if (p.sectionPat.match(name))
+          return true;
+  return false;
+}
+
+StringRef LinkerScript::mapLTOSectionName(StringRef inputSection,
+                                          InputFile *file) {
+  for (SectionCommand *base : sectionCommands) {
+    auto *outDesc = dyn_cast<OutputDesc>(base);
+    if (!outDesc)
+      continue;
+    for (SectionCommand *cmd : outDesc->osec.commands) {
+      auto *isd = dyn_cast<InputSectionDescription>(cmd);
+      if (!isd || !isd->matchesFile(*file))
+        continue;
+      for (const SectionPattern &pat : isd->sectionPatterns)
+        if (pat.sectionPat.match(inputSection) && !pat.excludesFile(*file))
+          return outDesc->osec.name;
+    }
+  }
+  return StringRef();
+}
+
 // A helper function for the SORT() command.
 static bool matchConstraints(ArrayRef<InputSectionBase *> sections,
                              ConstraintKind kind) {
@@ -558,11 +585,21 @@ LinkerScript::computeInputSections(const InputSectionDescription *cmd,
             cast<InputSection>(sec)->getRelocatedSection())
           continue;
 
+        StringRef sectionName = sec->name;
+        InputFile *sectionFile = sec->file;
+        if (ctx.arg.ltoLinkerScripts) {
+          StringRef moduleId;
+          std::tie(sectionName, moduleId) = sec->name.split("^^");
+          if (!moduleId.empty())
+            if (InputFile *file = ltoInputFileMapping.lookup(moduleId))
+              sectionFile = file;
+        }
+
         // Check the name early to improve performance in the common case.
-        if (!pat.sectionPat.match(sec->name))
+        if (!pat.sectionPat.match(sectionName))
           continue;
 
-        if (!cmd->matchesFile(*sec->file) || pat.excludesFile(*sec->file) ||
+        if (!cmd->matchesFile(*sectionFile) || pat.excludesFile(*sectionFile) ||
             sec->parent == &outCmd || !flagsMatch(sec))
           continue;
 

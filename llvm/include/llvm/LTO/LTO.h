@@ -131,12 +131,14 @@ private:
   StringRef TargetTriple, SourceFileName, COFFLinkerOpts;
   std::vector<StringRef> DependentLibraries;
   std::vector<std::pair<StringRef, Comdat::SelectionKind>> ComdatTable;
+  bool IncludeLocalSymbols = false;
 
 public:
   ~InputFile();
 
   /// Create an InputFile.
-  static Expected<std::unique_ptr<InputFile>> create(MemoryBufferRef Object);
+  static Expected<std::unique_ptr<InputFile>>
+  create(MemoryBufferRef Object, bool IncludeLocalSymbols = false);
 
   /// The purpose of this struct is to only expose the symbol information that
   /// an LTO client should need in order to do symbol resolution.
@@ -162,6 +164,7 @@ public:
     using irsymtab::Symbol::getSectionName;
     using irsymtab::Symbol::isExecutable;
     using irsymtab::Symbol::isUsed;
+    using irsymtab::Symbol::isPrivate;
   };
 
   /// A range over the symbols in this InputFile.
@@ -409,6 +412,7 @@ private:
     struct AddedModule {
       std::unique_ptr<Module> M;
       std::vector<GlobalValue *> Keep;
+      bool IncludeLocalSymbols = false;
     };
     std::vector<AddedModule> ModsWithSummaries;
     bool EmptyCombinedModule = true;
@@ -512,7 +516,8 @@ private:
 
   Expected<RegularLTOState::AddedModule>
   addRegularLTO(BitcodeModule BM, ArrayRef<InputFile::Symbol> Syms,
-                const SymbolResolution *&ResI, const SymbolResolution *ResE);
+                bool IncludeLocalSymbols, const SymbolResolution *&ResI,
+                const SymbolResolution *ResE);
   Error linkRegularLTO(RegularLTOState::AddedModule Mod,
                        bool LivenessFromIndex);
 
@@ -565,6 +570,13 @@ struct SymbolResolution {
   /// Linker redefined version of the symbol which appeared in -wrap or -defsym
   /// linker option.
   unsigned LinkerRedefined : 1;
+
+  /// The linker script matched this symbol's input section with KEEP.
+  unsigned LinkerScriptKeep : 1;
+
+  /// Output section selected by the linker script for this symbol. During LTO,
+  /// optimizations must preserve this placement constraint.
+  StringRef OutputSectionName;
 };
 
 } // namespace lto

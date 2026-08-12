@@ -1677,6 +1677,8 @@ static uint16_t getBitcodeMachineKind(Ctx &ctx, StringRef path,
     return EM_SPARCV9;
   case Triple::systemz:
     return EM_S390;
+  case Triple::tms9900:
+    return EM_TMS9900;
   case Triple::x86:
     return t.isOSIAMCU() ? EM_IAMCU : EM_386;
   case Triple::x86_64:
@@ -1725,7 +1727,7 @@ BitcodeFile::BitcodeFile(Ctx &ctx, MemoryBufferRef mb, StringRef archiveName,
                                  " at " + utostr(offsetInArchive) + ")");
   MemoryBufferRef mbref(mb.getBuffer(), name);
 
-  obj = CHECK2(lto::InputFile::create(mbref), this);
+  obj = CHECK2(lto::InputFile::create(mbref, ctx.arg.ltoLinkerScripts), this);
 
   Triple t(obj->getTargetTriple());
   ekind = getBitcodeELFKind(t);
@@ -1831,7 +1833,8 @@ void BitcodeFile::parseLazy() {
 void BitcodeFile::postParse() {
   for (auto [i, irSym] : llvm::enumerate(obj->symbols())) {
     const Symbol &sym = *symbols[i];
-    if (sym.file == this || !sym.isDefined() || irSym.isUndefined() ||
+    if (sym.file == this || !sym.isDefined() || !irSym.isGlobal() ||
+        irSym.isUndefined() ||
         irSym.isCommon() || irSym.isWeak())
       continue;
     int c = irSym.getComdatIndex();

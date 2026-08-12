@@ -121,6 +121,7 @@ public:
     SF_Const = 1U << 10,         // Symbol value is constant
     SF_Executable = 1U << 11,    // Symbol points to an executable section
                                  // (IR only)
+    SF_Private = 1U << 12,       // Symbol points to a private IR symbol
   };
 
   BasicSymbolRef() = default;

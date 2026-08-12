@@ -26,7 +26,10 @@
 #include "llvm/CodeGen/Analysis.h"
 #include "llvm/Config/llvm-config.h"
 #include "llvm/IR/AutoUpgrade.h"
+#include "llvm/IR/Attributes.h"
 #include "llvm/IR/DiagnosticPrinter.h"
+#include "llvm/IR/Function.h"
+#include "llvm/IR/GlobalVariable.h"
 #include "llvm/IR/Intrinsics.h"
 #include "llvm/IR/LLVMRemarkStreamer.h"
 #include "llvm/IR/LegacyPassManager.h"
@@ -56,6 +59,7 @@
 #include "llvm/Transforms/IPO/MemProfContextDisambiguation.h"
 #include "llvm/Transforms/IPO/WholeProgramDevirt.h"
 #include "llvm/Transforms/Utils/FunctionImportUtils.h"
+#include "llvm/Transforms/Utils/ModuleUtils.h"
 #include "llvm/Transforms/Utils/SplitModule.h"
 
 #include <optional>
@@ -74,6 +78,22 @@ static cl::opt<bool>
                    cl::desc("Dump the SCCs in the ThinLTO index's callgraph"));
 
 extern cl::opt<bool> CodeGenDataThinLTOTwoRounds;
+
+static void setStringAttribute(Function &F, StringRef Kind, StringRef Value) {
+  if (F.hasFnAttribute(Kind))
+    F.removeFnAttr(Kind);
+  F.addFnAttr(Kind, Value);
+}
+
+static void setStringAttribute(GlobalVariable &GV, StringRef Kind,
+                               StringRef Value) {
+  if (GV.hasAttribute(Kind)) {
+    AttrBuilder Attrs(GV.getContext(), GV.getAttributes());
+    Attrs.removeAttribute(Kind);
+    GV.setAttributes(AttributeSet::get(GV.getContext(), Attrs));
+  }
+  GV.addAttribute(Kind, Value);
+}
 
 namespace llvm {
 /// Enable global value internalization in LTO.
@@ -551,13 +571,15 @@ void llvm::thinLTOInternalizeAndPromoteInIndex(
 // Requires a destructor for std::vector<InputModule>.
 InputFile::~InputFile() = default;
 
-Expected<std::unique_ptr<InputFile>> InputFile::create(MemoryBufferRef Object) {
+Expected<std::unique_ptr<InputFile>>
+InputFile::create(MemoryBufferRef Object, bool IncludeLocalSymbols) {
   std::unique_ptr<InputFile> File(new InputFile);
 
   Expected<IRSymtabFile> FOrErr = readIRSymtab(Object);
   if (!FOrErr)
     return FOrErr.takeError();
 
+  File->IncludeLocalSymbols = IncludeLocalSymbols;
   File->TargetTriple = FOrErr->TheReader.getTargetTriple();
   File->SourceFileName = FOrErr->TheReader.getSourceFileName();
   File->COFFLinkerOpts = FOrErr->TheReader.getCOFFLinkerOpts();
@@ -567,11 +589,17 @@ Expected<std::unique_ptr<InputFile>> InputFile::create(MemoryBufferRef Object) {
   for (unsigned I = 0; I != FOrErr->Mods.size(); ++I) {
     size_t Begin = File->Symbols.size();
     for (const irsymtab::Reader::SymbolRef &Sym :
-         FOrErr->TheReader.module_symbols(I))
+         FOrErr->TheReader.module_symbols(I)) {
       // Skip symbols that are irrelevant to LTO. Note that this condition needs
       // to match the one in Skip() in LTO::addRegularLTO().
-      if (Sym.isGlobal() && !Sym.isFormatSpecific())
-        File->Symbols.push_back(Sym);
+      if (IncludeLocalSymbols) {
+        if (!Sym.isFormatSpecific() || Sym.isPrivate())
+          File->Symbols.push_back(Sym);
+      } else {
+        if (Sym.isGlobal() && !Sym.isFormatSpecific())
+          File->Symbols.push_back(Sym);
+      }
+    }
     File->ModuleSymIndices.push_back({Begin, File->Symbols.size()});
   }
 
@@ -717,6 +745,8 @@ static void writeToResolutionFile(raw_ostream &OS, InputFile *Input,
       OS << 'l';
     if (Res.VisibleToRegularObj)
       OS << 'x';
+    if (Res.LinkerScriptKeep)
+      OS << 'k';
     if (Res.LinkerRedefined)
       OS << 'r';
     OS << '\n';
@@ -787,7 +817,7 @@ Error LTO::addModule(InputFile &Input, unsigned ModI,
 
   RegularLTO.EmptyCombinedModule = false;
   Expected<RegularLTOState::AddedModule> ModOrErr =
-      addRegularLTO(BM, ModSyms, ResI, ResE);
+      addRegularLTO(BM, ModSyms, Input.IncludeLocalSymbols, ResI, ResE);
   if (!ModOrErr)
     return ModOrErr.takeError();
 
@@ -837,9 +867,11 @@ handleNonPrevailingComdat(GlobalValue &GV,
 // linkRegularLTO.
 Expected<LTO::RegularLTOState::AddedModule>
 LTO::addRegularLTO(BitcodeModule BM, ArrayRef<InputFile::Symbol> Syms,
+                   bool IncludeLocalSymbols,
                    const SymbolResolution *&ResI,
                    const SymbolResolution *ResE) {
   RegularLTOState::AddedModule Mod;
+  Mod.IncludeLocalSymbols = IncludeLocalSymbols;
   Expected<std::unique_ptr<Module>> MOrErr =
       BM.getLazyModule(RegularLTO.Ctx, /*ShouldLazyLoadMetadata*/ true,
                        /*IsImporting*/ false);
@@ -884,9 +916,15 @@ LTO::addRegularLTO(BitcodeModule BM, ArrayRef<InputFile::Symbol> Syms,
   auto Skip = [&]() {
     while (MsymI != MsymE) {
       auto Flags = SymTab.getSymbolFlags(*MsymI);
-      if ((Flags & object::BasicSymbolRef::SF_Global) &&
-          !(Flags & object::BasicSymbolRef::SF_FormatSpecific))
-        return;
+      if (Mod.IncludeLocalSymbols) {
+        if (!(Flags & object::BasicSymbolRef::SF_FormatSpecific) ||
+            (Flags & object::BasicSymbolRef::SF_Private))
+          return;
+      } else {
+        if ((Flags & object::BasicSymbolRef::SF_Global) &&
+            !(Flags & object::BasicSymbolRef::SF_FormatSpecific))
+          return;
+      }
       ++MsymI;
     }
   };
@@ -894,6 +932,7 @@ LTO::addRegularLTO(BitcodeModule BM, ArrayRef<InputFile::Symbol> Syms,
 
   std::set<const Comdat *> NonPrevailingComdats;
   SmallSet<StringRef, 2> NonPrevailingAsmSymbols;
+  SmallVector<GlobalValue *, 4> LinkerScriptKeep;
   for (const InputFile::Symbol &Sym : Syms) {
     assert(ResI != ResE);
     SymbolResolution Res = *ResI++;
@@ -940,6 +979,24 @@ LTO::addRegularLTO(BitcodeModule BM, ArrayRef<InputFile::Symbol> Syms,
           GV->setDLLStorageClass(GlobalValue::DLLStorageClassTypes::
                                  DefaultStorageClass);
       }
+
+      if (!Res.OutputSectionName.empty()) {
+        if (auto *F = dyn_cast<Function>(GV))
+          setStringAttribute(*F, "linker_output_section",
+                             Res.OutputSectionName);
+        else if (auto *GVar = dyn_cast<GlobalVariable>(GV))
+          setStringAttribute(*GVar, "linker_output_section",
+                             Res.OutputSectionName);
+      }
+
+      if (Mod.IncludeLocalSymbols)
+        if (auto *GO = dyn_cast<GlobalObject>(GV))
+          if (GO->hasSection() && !M.getModuleIdentifier().empty())
+            GO->setSection((GO->getSection() + "^^" +
+                            M.getModuleIdentifier()).str());
+
+      if (Res.LinkerScriptKeep)
+        LinkerScriptKeep.push_back(GV);
     } else if (auto *AS =
                    dyn_cast_if_present<ModuleSymbolTable::AsmSymbol *>(Msym)) {
       // Collect non-prevailing symbols.
@@ -984,6 +1041,12 @@ LTO::addRegularLTO(BitcodeModule BM, ArrayRef<InputFile::Symbol> Syms,
     }
     NewIA += "\n";
     M.setModuleInlineAsm(NewIA + M.getModuleInlineAsm());
+  }
+
+  if (!LinkerScriptKeep.empty()) {
+    appendToUsed(M, LinkerScriptKeep);
+    if (GlobalVariable *Used = M.getGlobalVariable("llvm.used"))
+      Mod.Keep.push_back(Used);
   }
 
   assert(MsymI == MsymE);

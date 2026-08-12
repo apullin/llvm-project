@@ -376,6 +376,8 @@ public:
   bool needsInterpSection();
 
   bool shouldKeep(InputSectionBase *s);
+  bool shouldKeep(StringRef name, InputFile *file);
+  StringRef mapLTOSectionName(StringRef inputSection, InputFile *file);
   std::pair<const OutputSection *, const Defined *> assignAddresses();
   bool spillSections();
   void erasePotentialSpillSections();
@@ -412,6 +414,9 @@ public:
 
   // SECTIONS command list.
   SmallVector<SectionCommand *, 0> sectionCommands;
+
+  // Maps post-LTO section module IDs back to their original bitcode files.
+  llvm::DenseMap<llvm::StringRef, InputFile *> ltoInputFileMapping;
 
   // PHDRS command list.
   SmallVector<PhdrsCommand, 0> phdrsCommands;

@@ -5457,6 +5457,8 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
           CmdArgs.push_back("-flto-unit");
       }
     }
+    Args.addOptInFlag(CmdArgs, options::OPT_flto_linker_scripts,
+                      options::OPT_fno_lto_linker_scripts);
   }
 
   Args.AddLastArg(CmdArgs, options::OPT_dumpdir);

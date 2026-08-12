@@ -67,6 +67,10 @@ static cl::opt<bool> IgnoreTTIInlineCompatible(
     cl::desc("Ignore TTI attributes compatibility check between callee/caller "
              "during inline cost calculation"));
 
+static cl::opt<bool> InlineOnlyWithinSection(
+    "inline-only-within-section", cl::Hidden, cl::init(true),
+    cl::desc("Only inline functions into call sites within the same section"));
+
 static cl::opt<bool> PrintInstructionComments(
     "print-instruction-comments", cl::Hidden, cl::init(false),
     cl::desc("Prints comments for instruction based on inline cost analysis"));
@@ -2924,6 +2928,23 @@ static bool functionsHaveCompatibleAttributes(
          AttributeFuncs::areInlineCompatible(*Caller, *Callee);
 }
 
+static Attribute getLinkerSectionAttribute(Function *F) {
+  Attribute OutputSection = F->getFnAttribute("linker_output_section");
+  return OutputSection.isValid() ? OutputSection
+                                 : F->getFnAttribute("linker_input_section");
+}
+
+static bool functionsHaveMatchingLinkerSections(Function *Caller,
+                                                Function *Callee) {
+  Attribute CallerSec = getLinkerSectionAttribute(Caller);
+  Attribute CalleeSec = getLinkerSectionAttribute(Callee);
+  if (CallerSec.isValid() != CalleeSec.isValid())
+    return false;
+  if (CallerSec.isValid())
+    return CallerSec.getValueAsString() == CalleeSec.getValueAsString();
+  return true;
+}
+
 int llvm::getCallsiteCost(const TargetTransformInfo &TTI, const CallBase &Call,
                           const DataLayout &DL) {
   int64_t Cost = 0;
@@ -3054,6 +3075,10 @@ std::optional<InlineResult> llvm::getAttributeBasedInliningDecision(
   // Never inline functions with conflicting attributes (unless callee has
   // always-inline attribute).
   Function *Caller = Call.getCaller();
+  if (InlineOnlyWithinSection &&
+      !functionsHaveMatchingLinkerSections(Caller, Callee))
+    return InlineResult::failure("caller and callee in different sections");
+
   if (!functionsHaveCompatibleAttributes(Caller, Callee, CalleeTTI, GetTLI))
     return InlineResult::failure("conflicting attributes");
 

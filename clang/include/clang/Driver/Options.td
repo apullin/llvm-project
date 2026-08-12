@@ -3061,6 +3061,11 @@ defm unified_lto : BoolFOption<"unified-lto",
   PosFlag<SetTrue, [], [ClangOption], "Use the unified LTO pipeline">,
   NegFlag<SetFalse, [], [ClangOption], "Use distinct LTO pipelines">,
   BothFlags<[], [ClangOption, CC1Option], "">>;
+defm lto_linker_scripts : BoolFOption<"lto-linker-scripts",
+  CodeGenOpts<"LTOLinkerScripts">, DefaultFalse,
+  PosFlag<SetTrue, [], [ClangOption, CC1Option],
+          "Emit bitcode annotations to preserve linker script semantics during LTO">,
+  NegFlag<SetFalse, [], [ClangOption]>>;
 def fno_lto : Flag<["-"], "fno-lto">,
   Visibility<[ClangOption, CLOption, DXCOption, CC1Option, FlangOption]>, Group<f_Group>,
   HelpText<"Disable LTO mode (default)">;

@@ -9,6 +9,7 @@
 #include "LTO.h"
 #include "Config.h"
 #include "InputFiles.h"
+#include "LinkerScript.h"
 #include "SymbolTable.h"
 #include "Symbols.h"
 #include "lld/Common/Args.h"
@@ -227,6 +228,9 @@ void BitcodeCompiler::add(BitcodeFile &f) {
   ArrayRef<lto::InputFile::Symbol> objSyms = obj.symbols();
   std::vector<lto::SymbolResolution> resols(syms.size());
 
+  if (ctx.arg.ltoLinkerScripts && ctx.script)
+    ctx.script->ltoInputFileMapping[obj.getName()] = &f;
+
   // Provide a resolution to the LTO API for each symbol.
   for (size_t i = 0, e = syms.size(); i != e; ++i) {
     Symbol *sym = syms[i];
@@ -252,6 +256,14 @@ void BitcodeCompiler::add(BitcodeFile &f) {
                             sym->referencedAfterWrap ||
                             (r.Prevailing && sym->isExported) ||
                             usedStartStop.count(objSym.getSectionName());
+
+    StringRef inputSection = objSym.getSectionName();
+    if (!inputSection.empty() && ctx.arg.ltoLinkerScripts && ctx.script) {
+      r.LinkerScriptKeep = ctx.script->shouldKeep(inputSection, &f);
+      r.VisibleToRegularObj |= r.LinkerScriptKeep;
+      r.OutputSectionName = ctx.script->mapLTOSectionName(inputSection, &f);
+    }
+
     // Identify symbols exported dynamically, and that therefore could be
     // referenced by a shared library not visible to the linker.
     r.ExportDynamic = sym->computeBinding(ctx) != STB_LOCAL &&

@@ -501,6 +501,7 @@ def MOVpim : Format1_AutoIncLoad<0b1100, 0, (outs GR16:$rd, GR16:$rs_wb),
                                  (ins GR16:$rs),
                                  "MOV\t*${rs}+,$rd", []> {
   let mayLoad = 1;
+  let hasSideEffects = 0;
   let Constraints = "$rs_wb = $rs";
 }
 
@@ -510,6 +511,7 @@ def MOVBpim : Format1_AutoIncLoad<0b1100, 1, (outs GR16:$rd, GR16:$rs_wb),
                                   (ins GR16:$rs),
                                   "MOVB\t*${rs}+,$rd", []> {
   let mayLoad = 1;
+  let hasSideEffects = 0;
   let Constraints = "$rs_wb = $rs";
 }
 } // Defs = [ST]
@@ -526,6 +528,7 @@ def MOVmpi : Format1_AutoIncStore<0b1100, 0, (outs GR16:$rd_wb),
                                   (ins GR16:$rd, GR16:$rs),
                                   "MOV\t$rs,*${rd}+", []> {
   let mayStore = 1;
+  let hasSideEffects = 0;
   let Constraints = "$rd_wb = $rd";
 }
 
@@ -535,6 +538,7 @@ def MOVBmpi : Format1_AutoIncStore<0b1100, 1, (outs GR16:$rd_wb),
                                    (ins GR16:$rd, GR16:$rs),
                                    "MOVB\t$rs,*${rd}+", []> {
   let mayStore = 1;
+  let hasSideEffects = 0;
   let Constraints = "$rd_wb = $rd";
 }
 } // Defs = [ST]
@@ -805,6 +809,7 @@ def Axm : Format1_IdxLoad<0b1010, 0, (outs GR16:$rd),
                           "A\t@${offset}(${ri}),$rd", []>;
 def Apim : Format1_AutoIncLoad<0b1010, 0, (outs GR16:$rd), (ins GR16:$rs),
                                "A\t*${rs}+,$rd", []>;
+let mayLoad = 1 in {
 def Ami : Format1_IndStore<0b1010, 0, (outs), (ins GR16:$rd, GR16:$rs),
                            "A\t$rs,*$rd", []>;
 def Ama : Format1_SymStore<0b1010, 0, (outs), (ins symaddr:$addr, GR16:$rs),
@@ -814,6 +819,7 @@ def Amx : Format1_IdxStore<0b1010, 0, (outs),
                            "A\t$rs,@${offset}(${ri})", []>;
 def Ampi : Format1_AutoIncStore<0b1010, 0, (outs), (ins GR16:$rd, GR16:$rs),
                                 "A\t$rs,*${rd}+", []>;
+}
 
 def ABim : Format1_IndLoad<0b1010, 1, (outs GR16:$rd), (ins GR16:$rs),
                            "AB\t*$rs,$rd", []>;
@@ -824,6 +830,7 @@ def ABxm : Format1_IdxLoad<0b1010, 1, (outs GR16:$rd),
                            "AB\t@${offset}(${ri}),$rd", []>;
 def ABpim : Format1_AutoIncLoad<0b1010, 1, (outs GR16:$rd), (ins GR16:$rs),
                                 "AB\t*${rs}+,$rd", []>;
+let mayLoad = 1 in {
 def ABmi : Format1_IndStore<0b1010, 1, (outs), (ins GR16:$rd, GR16:$rs),
                             "AB\t$rs,*$rd", []>;
 def ABma : Format1_SymStore<0b1010, 1, (outs), (ins symaddr:$addr, GR16:$rs),
@@ -833,6 +840,7 @@ def ABmx : Format1_IdxStore<0b1010, 1, (outs),
                             "AB\t$rs,@${offset}(${ri})", []>;
 def ABmpi : Format1_AutoIncStore<0b1010, 1, (outs), (ins GR16:$rd, GR16:$rs),
                                  "AB\t$rs,*${rd}+", []>;
+}
 
 // AI - Add Immediate (subop=2)
 def AI : Format8<0b0010, (outs GR16:$rd), (ins GR16:$rs, i16imm:$imm),
@@ -864,6 +872,7 @@ def Sxm : Format1_IdxLoad<0b0110, 0, (outs GR16:$rd),
                           "S\t@${offset}(${ri}),$rd", []>;
 def Spim : Format1_AutoIncLoad<0b0110, 0, (outs GR16:$rd), (ins GR16:$rs),
                                "S\t*${rs}+,$rd", []>;
+let mayLoad = 1 in {
 def Smi : Format1_IndStore<0b0110, 0, (outs), (ins GR16:$rd, GR16:$rs),
                            "S\t$rs,*$rd", []>;
 def Sma : Format1_SymStore<0b0110, 0, (outs), (ins symaddr:$addr, GR16:$rs),
@@ -873,6 +882,7 @@ def Smx : Format1_IdxStore<0b0110, 0, (outs),
                            "S\t$rs,@${offset}(${ri})", []>;
 def Smpi : Format1_AutoIncStore<0b0110, 0, (outs), (ins GR16:$rd, GR16:$rs),
                                 "S\t$rs,*${rd}+", []>;
+}
 
 def SBim : Format1_IndLoad<0b0110, 1, (outs GR16:$rd), (ins GR16:$rs),
                            "SB\t*$rs,$rd", []>;
@@ -883,6 +893,7 @@ def SBxm : Format1_IdxLoad<0b0110, 1, (outs GR16:$rd),
                            "SB\t@${offset}(${ri}),$rd", []>;
 def SBpim : Format1_AutoIncLoad<0b0110, 1, (outs GR16:$rd), (ins GR16:$rs),
                                 "SB\t*${rs}+,$rd", []>;
+let mayLoad = 1 in {
 def SBmi : Format1_IndStore<0b0110, 1, (outs), (ins GR16:$rd, GR16:$rs),
                             "SB\t$rs,*$rd", []>;
 def SBma : Format1_SymStore<0b0110, 1, (outs), (ins symaddr:$addr, GR16:$rs),
@@ -892,6 +903,7 @@ def SBmx : Format1_IdxStore<0b0110, 1, (outs),
                             "SB\t$rs,@${offset}(${ri})", []>;
 def SBmpi : Format1_AutoIncStore<0b0110, 1, (outs), (ins GR16:$rd, GR16:$rs),
                                  "SB\t$rs,*${rd}+", []>;
+}
 
 let SchedRW = [WriteFast] in {
 // INC - Increment by 1
@@ -1181,6 +1193,7 @@ def SOCxm : Format1_IdxLoad<0b1110, 0, (outs GR16:$rd),
                             "SOC\t@${offset}(${ri}),$rd", []>;
 def SOCpim : Format1_AutoIncLoad<0b1110, 0, (outs GR16:$rd), (ins GR16:$rs),
                                  "SOC\t*${rs}+,$rd", []>;
+let mayLoad = 1 in {
 def SOCmi : Format1_IndStore<0b1110, 0, (outs), (ins GR16:$rd, GR16:$rs),
                              "SOC\t$rs,*$rd", []>;
 def SOCma : Format1_SymStore<0b1110, 0, (outs), (ins symaddr:$addr, GR16:$rs),
@@ -1190,6 +1203,7 @@ def SOCmx : Format1_IdxStore<0b1110, 0, (outs),
                              "SOC\t$rs,@${offset}(${ri})", []>;
 def SOCmpi : Format1_AutoIncStore<0b1110, 0, (outs), (ins GR16:$rd, GR16:$rs),
                                   "SOC\t$rs,*${rd}+", []>;
+}
 
 def SOCBim : Format1_IndLoad<0b1110, 1, (outs GR16:$rd), (ins GR16:$rs),
                              "SOCB\t*$rs,$rd", []>;
@@ -1200,6 +1214,7 @@ def SOCBxm : Format1_IdxLoad<0b1110, 1, (outs GR16:$rd),
                              "SOCB\t@${offset}(${ri}),$rd", []>;
 def SOCBpim : Format1_AutoIncLoad<0b1110, 1, (outs GR16:$rd), (ins GR16:$rs),
                                   "SOCB\t*${rs}+,$rd", []>;
+let mayLoad = 1 in {
 def SOCBmi : Format1_IndStore<0b1110, 1, (outs), (ins GR16:$rd, GR16:$rs),
                               "SOCB\t$rs,*$rd", []>;
 def SOCBma : Format1_SymStore<0b1110, 1, (outs), (ins symaddr:$addr, GR16:$rs),
@@ -1209,6 +1224,7 @@ def SOCBmx : Format1_IdxStore<0b1110, 1, (outs),
                               "SOCB\t$rs,@${offset}(${ri})", []>;
 def SOCBmpi : Format1_AutoIncStore<0b1110, 1, (outs), (ins GR16:$rd, GR16:$rs),
                                    "SOCB\t$rs,*${rd}+", []>;
+}
 
 // ORI - OR Immediate (subop=6)
 def ORI : Format8<0b0110, (outs GR16:$rd), (ins GR16:$rs, i16imm:$imm),
@@ -1241,6 +1257,7 @@ def SZCxm : Format1_IdxLoad<0b0100, 0, (outs GR16:$rd),
                             "SZC\t@${offset}(${ri}),$rd", []>;
 def SZCpim : Format1_AutoIncLoad<0b0100, 0, (outs GR16:$rd), (ins GR16:$rs),
                                  "SZC\t*${rs}+,$rd", []>;
+let mayLoad = 1 in {
 def SZCmi : Format1_IndStore<0b0100, 0, (outs), (ins GR16:$rd, GR16:$rs),
                              "SZC\t$rs,*$rd", []>;
 def SZCma : Format1_SymStore<0b0100, 0, (outs), (ins symaddr:$addr, GR16:$rs),
@@ -1250,6 +1267,7 @@ def SZCmx : Format1_IdxStore<0b0100, 0, (outs),
                              "SZC\t$rs,@${offset}(${ri})", []>;
 def SZCmpi : Format1_AutoIncStore<0b0100, 0, (outs), (ins GR16:$rd, GR16:$rs),
                                   "SZC\t$rs,*${rd}+", []>;
+}
 
 def SZCBim : Format1_IndLoad<0b0100, 1, (outs GR16:$rd), (ins GR16:$rs),
                              "SZCB\t*$rs,$rd", []>;
@@ -1260,6 +1278,7 @@ def SZCBxm : Format1_IdxLoad<0b0100, 1, (outs GR16:$rd),
                              "SZCB\t@${offset}(${ri}),$rd", []>;
 def SZCBpim : Format1_AutoIncLoad<0b0100, 1, (outs GR16:$rd), (ins GR16:$rs),
                                   "SZCB\t*${rs}+,$rd", []>;
+let mayLoad = 1 in {
 def SZCBmi : Format1_IndStore<0b0100, 1, (outs), (ins GR16:$rd, GR16:$rs),
                               "SZCB\t$rs,*$rd", []>;
 def SZCBma : Format1_SymStore<0b0100, 1, (outs), (ins symaddr:$addr, GR16:$rs),
@@ -1269,6 +1288,7 @@ def SZCBmx : Format1_IdxStore<0b0100, 1, (outs),
                               "SZCB\t$rs,@${offset}(${ri})", []>;
 def SZCBmpi : Format1_AutoIncStore<0b0100, 1, (outs), (ins GR16:$rd, GR16:$rs),
                                    "SZCB\t$rs,*${rd}+", []>;
+}
 
 // ANDI - AND Immediate (subop=4)
 def ANDI : Format8<0b0100, (outs GR16:$rd), (ins GR16:$rs, i16imm:$imm),
@@ -1442,6 +1462,7 @@ def Cxm : Format1_IdxLoad<0b1000, 0, (outs),
                           "C\t@${offset}(${ri}),$rd", []>;
 def Cpim : Format1_AutoIncLoad<0b1000, 0, (outs), (ins GR16:$rd, GR16:$rs),
                                "C\t*${rs}+,$rd", []>;
+let mayLoad = 1, mayStore = 0 in {
 def Cmi : Format1_IndStore<0b1000, 0, (outs), (ins GR16:$rd, GR16:$rs),
                            "C\t$rs,*$rd", []>;
 def Cma : Format1_SymStore<0b1000, 0, (outs), (ins symaddr:$addr, GR16:$rs),
@@ -1451,6 +1472,7 @@ def Cmx : Format1_IdxStore<0b1000, 0, (outs),
                            "C\t$rs,@${offset}(${ri})", []>;
 def Cmpi : Format1_AutoIncStore<0b1000, 0, (outs), (ins GR16:$rd, GR16:$rs),
                                 "C\t$rs,*${rd}+", []>;
+}
 
 def CBim : Format1_IndLoad<0b1000, 1, (outs), (ins GR16:$rd, GR16:$rs),
                            "CB\t*$rs,$rd", []>;
@@ -1461,6 +1483,7 @@ def CBxm : Format1_IdxLoad<0b1000, 1, (outs),
                            "CB\t@${offset}(${ri}),$rd", []>;
 def CBpim : Format1_AutoIncLoad<0b1000, 1, (outs), (ins GR16:$rd, GR16:$rs),
                                 "CB\t*${rs}+,$rd", []>;
+let mayLoad = 1, mayStore = 0 in {
 def CBmi : Format1_IndStore<0b1000, 1, (outs), (ins GR16:$rd, GR16:$rs),
                             "CB\t$rs,*$rd", []>;
 def CBma : Format1_SymStore<0b1000, 1, (outs), (ins symaddr:$addr, GR16:$rs),
@@ -1470,6 +1493,7 @@ def CBmx : Format1_IdxStore<0b1000, 1, (outs),
                             "CB\t$rs,@${offset}(${ri})", []>;
 def CBmpi : Format1_AutoIncStore<0b1000, 1, (outs), (ins GR16:$rd, GR16:$rs),
                                  "CB\t$rs,*${rd}+", []>;
+}
 
 // CI - Compare Immediate (subop=8)
 def CI : Format8_Cmp<0b1000, (outs), (ins GR16:$rs, i16imm:$imm),

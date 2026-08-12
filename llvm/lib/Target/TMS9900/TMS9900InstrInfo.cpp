@@ -696,17 +696,18 @@ bool TMS9900InstrInfo::expandPostRAPseudo(MachineInstr &MI) const {
   case TMS9900::CMPBRrr:
   case TMS9900::CMPBRri: {
     bool IsImm = (MI.getOpcode() == TMS9900::CMPBRri);
-    Register LHS = MI.getOperand(0).getReg();
     MachineBasicBlock *Target = MI.getOperand(3).getMBB();
     ISD::CondCode CC =
         static_cast<ISD::CondCode>(MI.getOperand(2).getImm());
 
     if (IsImm) {
-      int64_t Imm = MI.getOperand(1).getImm();
-      BuildMI(MBB, MI, DL, get(TMS9900::CI)).addReg(LHS).addImm(Imm);
+      BuildMI(MBB, MI, DL, get(TMS9900::CI))
+          .add(MI.getOperand(0))
+          .add(MI.getOperand(1));
     } else {
-      Register RHS = MI.getOperand(1).getReg();
-      BuildMI(MBB, MI, DL, get(TMS9900::Crr)).addReg(LHS).addReg(RHS);
+      BuildMI(MBB, MI, DL, get(TMS9900::Crr))
+          .add(MI.getOperand(0))
+          .add(MI.getOperand(1));
     }
 
     if (CC == ISD::SETGE || CC == ISD::SETLE) {
@@ -743,9 +744,9 @@ bool TMS9900InstrInfo::expandPostRAPseudo(MachineInstr &MI) const {
   }
   case TMS9900::TCRETURN_ind: {
     // Expand TCRETURN_ind pseudo to B *Rx (branch indirect through register)
-    Register TargetReg = MI.getOperand(0).getReg();
     MachineInstrBuilder MIB =
-        BuildMI(MBB, MI, DL, get(TMS9900::TAIL_B_IND)).addReg(TargetReg);
+        BuildMI(MBB, MI, DL, get(TMS9900::TAIL_B_IND))
+            .add(MI.getOperand(0));
     CopyImplicitOperands(MIB);
     MBB.erase(MI);
     return true;
@@ -766,7 +767,9 @@ bool TMS9900InstrInfo::expandPostRAPseudo(MachineInstr &MI) const {
     // The pre-emit peephole removes it when ST is dead.
     if (DstReg == SrcReg) {
       MachineInstrBuilder MIB =
-          BuildMI(MBB, MI, DL, get(TMS9900::MOVrr), DstReg).addReg(SrcReg);
+          BuildMI(MBB, MI, DL, get(TMS9900::MOVrr))
+              .add(MI.getOperand(0))
+              .add(MI.getOperand(1));
       const TargetRegisterInfo *TRI =
           MBB.getParent()->getSubtarget().getRegisterInfo();
       if (MI.registerDefIsDead(TMS9900::ST, TRI)) {
@@ -790,10 +793,11 @@ bool TMS9900InstrInfo::expandPostRAPseudo(MachineInstr &MI) const {
 
     // INV rs2
     BuildMI(MBB, MI, DL, get(TMS9900::INVr), SrcReg)
-        .addReg(SrcReg);
+        .add(MI.getOperand(2));
     // SZC rs2, rd
-    BuildMI(MBB, MI, DL, get(TMS9900::SZCrr), DstReg)
-        .addReg(DstReg)
+    BuildMI(MBB, MI, DL, get(TMS9900::SZCrr))
+        .add(MI.getOperand(0))
+        .add(MI.getOperand(1))
         .addReg(SrcReg);
     // INV rs2 (restore) — only needed if rs2 is still live after this AND
     if (!SrcIsKilled) {

@@ -1,0 +1,49 @@
+# RUN: llc -mtriple=tms9900 -run-pass=postrapseudos -verify-machineinstrs %s -o - | FileCheck %s
+# RUN: llc -mtriple=tms9900 -run-pass=postrapseudos,tms9900-peephole -verify-machineinstrs %s -o - | FileCheck %s --check-prefix=PEEP
+
+# Post-RA expansion must preserve register operand flags. In particular,
+# dropping `undef` would turn a valid arbitrary value into an undefined
+# physical-register read and make the expanded instruction fail verification.
+
+--- |
+  define void @cmpbr_ri_undef() { ret void }
+  define void @cmpbr_rr_undef() { ret void }
+...
+---
+name:            cmpbr_ri_undef
+tracksRegLiveness: true
+body:             |
+  bb.0:
+    successors: %bb.1
+    CMPBRri undef $r0, 0, 17, %bb.1
+    JMP %bb.1
+
+  bb.1:
+    RET
+
+# CHECK-LABEL: name: cmpbr_ri_undef
+# CHECK: CI undef $r0, 0, implicit-def $st
+# CHECK-NEXT: JEQ %bb.1, implicit $st
+# PEEP-LABEL: name: cmpbr_ri_undef
+# PEEP: $r0 = MOVrr undef $r0, implicit-def $st
+# PEEP-NEXT: JEQ %bb.1, implicit $st
+...
+---
+name:            cmpbr_rr_undef
+tracksRegLiveness: true
+body:             |
+  bb.0:
+    successors: %bb.1
+    CMPBRrr undef $r0, undef $r1, 17, %bb.1
+    JMP %bb.1
+
+  bb.1:
+    RET
+
+# CHECK-LABEL: name: cmpbr_rr_undef
+# CHECK: Crr undef $r0, undef $r1, implicit-def $st
+# CHECK-NEXT: JEQ %bb.1, implicit $st
+# PEEP-LABEL: name: cmpbr_rr_undef
+# PEEP: Crr undef $r0, undef $r1, implicit-def $st
+# PEEP-NEXT: JEQ %bb.1, implicit $st
+...

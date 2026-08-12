@@ -189,20 +189,16 @@ static bool tryFoldPostInc(MachineInstr &IncMI,
 
   MachineBasicBlock &MBB = *IncMI.getParent();
   DebugLoc DL = Prev->getDebugLoc();
-  bool DeadAddr = IncMI.getOperand(0).isDead();
-  bool KillAddr = IncMI.getOperand(1).isKill();
 
   MachineInstrBuilder MIB = BuildMI(MBB, Prev, DL, TII->get(NewOpc));
   if (IsLoad) {
-    bool DeadValue = Prev->getOperand(0).isDead();
-    MIB.addReg(ValueReg, RegState::Define | (DeadValue ? RegState::Dead : 0));
-    MIB.addReg(AddrReg, RegState::Define | (DeadAddr ? RegState::Dead : 0));
-    MIB.addReg(AddrReg, KillAddr ? RegState::Kill : 0);
+    MIB.add(Prev->getOperand(0));
+    MIB.add(IncMI.getOperand(0));
+    MIB.add(IncMI.getOperand(1));
   } else {
-    MIB.addReg(AddrReg, RegState::Define | (DeadAddr ? RegState::Dead : 0));
-    MIB.addReg(AddrReg, KillAddr ? RegState::Kill : 0);
-    unsigned ValFlags = Prev->getOperand(1).isKill() ? RegState::Kill : 0;
-    MIB.addReg(ValueReg, ValFlags);
+    MIB.add(IncMI.getOperand(0));
+    MIB.add(IncMI.getOperand(1));
+    MIB.add(Prev->getOperand(1));
   }
   MIB.cloneMemRefs(*Prev);
 
@@ -345,13 +341,10 @@ public:
             continue;
           }
 
-          Register Reg = MI.getOperand(0).getReg();
-          bool DeadDef = MI.getOperand(0).isDead();
-          bool KillUse = MI.getOperand(1).isKill();
           DebugLoc DL = MI.getDebugLoc();
           MachineInstrBuilder MIB = BuildMI(MBB, MI, DL, TII->get(NewOpc));
-          MIB.addReg(Reg, RegState::Define | (DeadDef ? RegState::Dead : 0));
-          MIB.addReg(Reg, KillUse ? RegState::Kill : 0);
+          MIB.add(MI.getOperand(0));
+          MIB.add(MI.getOperand(1));
 
           if (int STIdx = MIB->findRegisterDefOperandIdx(TMS9900::ST, TRI);
               STIdx != -1 &&
@@ -384,12 +377,10 @@ public:
           if (!MI.registerDefIsDead(TMS9900::ST, TRI))
             continue;
 
-          Register Reg = MI.getOperand(0).getReg();
-          bool DeadDef = MI.getOperand(0).isDead();
           DebugLoc DL = MI.getDebugLoc();
           MachineInstrBuilder MIB =
               BuildMI(MBB, MI, DL, TII->get(NewOpc));
-          MIB.addReg(Reg, RegState::Define | (DeadDef ? RegState::Dead : 0));
+          MIB.add(MI.getOperand(0));
 
           MI.eraseFromParent();
           Changed = true;
@@ -408,11 +399,10 @@ public:
           if (!MI.registerDefIsDead(TMS9900::ST, TRI))
             continue;
 
-          bool DeadDef = MI.getOperand(0).isDead();
           DebugLoc DL = MI.getDebugLoc();
           MachineInstrBuilder MIB =
               BuildMI(MBB, MI, DL, TII->get(TMS9900::CLRr));
-          MIB.addReg(Dst, RegState::Define | (DeadDef ? RegState::Dead : 0));
+          MIB.add(MI.getOperand(0));
 
           MI.eraseFromParent();
           Changed = true;
@@ -431,6 +421,12 @@ public:
           Register Dst = MI.getOperand(0).getReg();
           Register Src = MI.getOperand(1).getReg();
           if (Dst != Src)
+            continue;
+
+          // An undef self-copy still establishes a reaching definition for
+          // later physical-register uses. Removing it can leave those uses
+          // undefined after register allocation.
+          if (MI.getOperand(1).isUndef())
             continue;
 
           // Case 1: ST dead -- always safe to delete.
@@ -571,13 +567,12 @@ public:
           // MOV Rx,Rx sets EQ/LGT/AGT identically to CI Rx,0 for a
           // zero test; it also writes Rx back to itself (no-op on value).
           {
-            bool KillUse = MI.getOperand(0).isKill();
             DebugLoc DL = MI.getDebugLoc();
 
             MachineInstrBuilder MIB =
                 BuildMI(MBB, MI, DL, TII->get(TMS9900::MOVrr));
             MIB.addReg(TestReg, RegState::Define);
-            MIB.addReg(TestReg, KillUse ? RegState::Kill : 0u);
+            MIB.add(MI.getOperand(0));
 
             // MOVrr implicitly defs ST.  If the original CI had ST as
             // dead, propagate that to the replacement.
@@ -873,8 +868,8 @@ public:
             DebugLoc DL = MI.getDebugLoc();
             MachineInstrBuilder MIB =
                 BuildMI(MBB, MI, DL, TII->get(TMS9900::CBrr));
-            MIB.addReg(Source, RegState::Kill);
-            MIB.addReg(Destination, RegState::Kill);
+            MIB.add(MI.getOperand(0));
+            MIB.add(MI.getOperand(1));
 
             // CBrr implicitly defs ST (live, consumed by the branch).
             // The implicit def is added automatically by BuildMI from
@@ -1045,14 +1040,12 @@ public:
             continue;
 
           // Replace the shift with SWPB, keep the following instruction.
-          bool DeadDef = MI.getOperand(0).isDead();
-          bool KillUse = MI.getOperand(1).isKill();
           DebugLoc DL = MI.getDebugLoc();
 
           MachineInstrBuilder MIB =
               BuildMI(MBB, MI, DL, TII->get(TMS9900::SWPBr));
-          MIB.addReg(Rx, RegState::Define | (DeadDef ? RegState::Dead : 0));
-          MIB.addReg(Rx, KillUse ? RegState::Kill : 0);
+          MIB.add(MI.getOperand(0));
+          MIB.add(MI.getOperand(1));
 
           // SWPB does not affect ST (unlike the SRL/SLA it replaces),
           // so flags set before the shift are preserved across SWPB.

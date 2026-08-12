@@ -51,7 +51,7 @@ body:             |
 
 # CHECK-LABEL: name: and_distinct_regs_live_status
 # CHECK: $r2 = INVr $r2, implicit-def $st
-# CHECK-NEXT: $r3 = SZCrr $r3, $r2, implicit-def $st
+# CHECK-NEXT: $r3 = SZCrr killed $r3, $r2, implicit-def $st
 # CHECK-NEXT: $r2 = INVr $r2, implicit-def $st
 # CHECK-NEXT: $r3 = MOVrr $r3, implicit-def $st
 # CHECK-NEXT: $r4 = STST implicit $st

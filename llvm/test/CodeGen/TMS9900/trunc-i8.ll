@@ -11,8 +11,7 @@ entry:
 }
 
 ; CHECK-LABEL: low:
-; CHECK: MOV R10,[[REG:R[0-9]+]]
-; CHECK: MOV R0,*[[REG]]
-; CHECK: MOVB @1([[REG]]),R0
+; CHECK: MOV R0,@0(R10)
+; CHECK: MOVB @1(R10),R0
 
 attributes #0 = { noinline nounwind optnone }

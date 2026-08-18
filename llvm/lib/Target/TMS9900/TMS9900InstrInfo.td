@@ -414,6 +414,24 @@ def MOV_FI_Store : TMS9900Inst<(outs), (ins IdxRegs:$base, i16imm:$offset, GR16:
   let Size = 4;  // instruction word + offset word
 }
 
+// Byte equivalents used for ordinary i8 stack locals. The selected register
+// value is already in the TMS9900 high-byte lane used by MOVB.
+let Defs = [ST], mayLoad = 1, isCodeGenOnly = 1, isPseudo = 1 in
+def MOVB_FI_Load : TMS9900Inst<(outs GR16:$rd),
+                               (ins IdxRegs:$base, i16imm:$offset),
+                               "MOVB\t@${offset}(${base}),$rd",
+                               []> {
+  let Size = 4;
+}
+
+let Defs = [ST], mayStore = 1, isCodeGenOnly = 1, isPseudo = 1 in
+def MOVB_FI_Store : TMS9900Inst<(outs),
+                                (ins IdxRegs:$base, i16imm:$offset, GR16:$rs),
+                                "MOVB\t$rs,@${offset}(${base})",
+                                []> {
+  let Size = 4;
+}
+
 // LEAfi - Load Effective Address of frame index
 // Computes the address of a stack slot into a register.
 // This is expanded during frame index elimination to:

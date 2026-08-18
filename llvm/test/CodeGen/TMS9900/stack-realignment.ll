@@ -58,8 +58,7 @@ define i16 @aligned16_nonleaf() noinline {
 ; CHECK:      MOV R10,R13
 ; CHECK:      ANDI R10,-8
 ; CHECK-NEXT: MOV R10,R14
-; CHECK:      MOV R13,R0
-; CHECK-NEXT: AI R0,6
+; CHECK:      MOV @6(R13),R{{[0-9]+}}
 ; CHECK:      MOV R14,R0
 ; CHECK:      BL @consume
 ; CHECK:      MOV R13,R10

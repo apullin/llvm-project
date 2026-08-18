@@ -118,6 +118,20 @@ void TMS9900MCInstLower::Lower(const MachineInstr *MI, MCInst &OutMI) const {
     OutMI.addOperand(LowerOperand(MI->getOperand(1))); // base/ri
     return;
   }
+  case TMS9900::MOVB_FI_Store: {
+    OutMI.setOpcode(TMS9900::MOVBmx);
+    OutMI.addOperand(LowerOperand(MI->getOperand(1))); // offset
+    OutMI.addOperand(LowerOperand(MI->getOperand(0))); // base/ri
+    OutMI.addOperand(LowerOperand(MI->getOperand(2))); // rs
+    return;
+  }
+  case TMS9900::MOVB_FI_Load: {
+    OutMI.setOpcode(TMS9900::MOVBxm);
+    OutMI.addOperand(LowerOperand(MI->getOperand(0))); // rd
+    OutMI.addOperand(LowerOperand(MI->getOperand(2))); // offset
+    OutMI.addOperand(LowerOperand(MI->getOperand(1))); // base/ri
+    return;
+  }
   default:
     break;
   }

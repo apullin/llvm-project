@@ -193,10 +193,11 @@ bool TMS9900RegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator MI,
     return true;
   }
 
-  // Handle MOV_FI_Load and MOV_FI_Store with indexed addressing
+  // Handle frame-indexed word and byte moves with indexed addressing.
   // These instructions have a memri operand: (register, immediate)
   // The frame index is in operand FIOperandNum, and the offset is in FIOperandNum+1
-  if (Opc == TMS9900::MOV_FI_Load || Opc == TMS9900::MOV_FI_Store) {
+  if (Opc == TMS9900::MOV_FI_Load || Opc == TMS9900::MOV_FI_Store ||
+      Opc == TMS9900::MOVB_FI_Load || Opc == TMS9900::MOVB_FI_Store) {
     MI_ref.getOperand(FIOperandNum).ChangeToRegister(FrameReg, false);
 
     // Add the computed offset to the existing immediate offset

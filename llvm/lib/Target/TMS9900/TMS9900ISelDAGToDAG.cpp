@@ -92,6 +92,40 @@ static unsigned getJumpOpcodeForCC(ISD::CondCode CC) {
   }
 }
 
+static bool getFrameIndexAddress(SDValue Addr, int &FrameIndex,
+                                 int64_t &Offset) {
+  if (auto *FI = dyn_cast<FrameIndexSDNode>(Addr)) {
+    FrameIndex = FI->getIndex();
+    Offset = 0;
+    return true;
+  }
+
+  if (Addr.getOpcode() != ISD::ADD)
+    return false;
+
+  SDValue Base = Addr.getOperand(0);
+  SDValue Disp = Addr.getOperand(1);
+  if (!isa<FrameIndexSDNode>(Base))
+    std::swap(Base, Disp);
+
+  auto *FI = dyn_cast<FrameIndexSDNode>(Base);
+  auto *C = dyn_cast<ConstantSDNode>(Disp);
+  if (!FI || !C)
+    return false;
+
+  FrameIndex = FI->getIndex();
+  Offset = C->getSExtValue();
+  return true;
+}
+
+static bool getSingleUseFrameIndexAddress(SDValue Addr, int &FrameIndex,
+                                          int64_t &Offset) {
+  // Indexed memory operands cost 4 bytes, while an indirect access through a
+  // materialized address costs 2. Fold single-use addresses, but preserve a
+  // shared LEA when several accesses can amortize its setup cost.
+  return Addr.hasOneUse() && getFrameIndexAddress(Addr, FrameIndex, Offset);
+}
+
 void TMS9900DAGToDAGISel::SelectBR_CC(SDNode *N) {
   SDLoc DL(N);
   SDValue Chain = N->getOperand(0);
@@ -195,6 +229,43 @@ void TMS9900DAGToDAGISel::Select(SDNode *N) {
   case TMS9900ISD::BR_CC:
     SelectBR_CC(N);
     return;
+  case TMS9900ISD::BYTE_LOAD: {
+    int FrameIndex;
+    int64_t Offset;
+    if (getSingleUseFrameIndexAddress(N->getOperand(1), FrameIndex, Offset)) {
+      SDLoc DL(N);
+      SDValue TFI = CurDAG->getTargetFrameIndex(FrameIndex, MVT::i16);
+      SDValue Disp = CurDAG->getTargetConstant(Offset, DL, MVT::i16);
+      SDValue Ops[] = {TFI, Disp, N->getOperand(0)};
+      SDNode *Load = CurDAG->getMachineNode(
+          TMS9900::MOVB_FI_Load, DL, MVT::i16, MVT::Other, Ops);
+      CurDAG->setNodeMemRefs(cast<MachineSDNode>(Load),
+                             {cast<MemSDNode>(N)->getMemOperand()});
+      ReplaceUses(SDValue(N, 0), SDValue(Load, 0));
+      ReplaceUses(SDValue(N, 1), SDValue(Load, 1));
+      CurDAG->RemoveDeadNode(N);
+      return;
+    }
+    break;
+  }
+  case TMS9900ISD::BYTE_STORE: {
+    int FrameIndex;
+    int64_t Offset;
+    if (getSingleUseFrameIndexAddress(N->getOperand(2), FrameIndex, Offset)) {
+      SDLoc DL(N);
+      SDValue TFI = CurDAG->getTargetFrameIndex(FrameIndex, MVT::i16);
+      SDValue Disp = CurDAG->getTargetConstant(Offset, DL, MVT::i16);
+      SDValue Ops[] = {TFI, Disp, N->getOperand(1), N->getOperand(0)};
+      SDNode *Store = CurDAG->getMachineNode(TMS9900::MOVB_FI_Store, DL,
+                                             MVT::Other, Ops);
+      CurDAG->setNodeMemRefs(cast<MachineSDNode>(Store),
+                             {cast<MemSDNode>(N)->getMemOperand()});
+      ReplaceUses(SDValue(N, 0), SDValue(Store, 0));
+      CurDAG->RemoveDeadNode(N);
+      return;
+    }
+    break;
+  }
   case ISD::FrameIndex: {
     // When a FrameIndex is used as a value (not just as a memory operand),
     // we need to materialize the actual address into a register.
@@ -243,6 +314,27 @@ void TMS9900DAGToDAGISel::Select(SDNode *N) {
       CurDAG->RemoveDeadNode(N);
       return;
     }
+
+    if (LD->getAddressingMode() == ISD::UNINDEXED &&
+        LD->getMemoryVT() == MVT::i16) {
+      int FrameIndex;
+      int64_t Offset;
+      if (getSingleUseFrameIndexAddress(LD->getBasePtr(), FrameIndex,
+                                        Offset)) {
+        SDLoc DL(N);
+        SDValue TFI = CurDAG->getTargetFrameIndex(FrameIndex, MVT::i16);
+        SDValue Disp = CurDAG->getTargetConstant(Offset, DL, MVT::i16);
+        SDValue Ops[] = {TFI, Disp, LD->getChain()};
+        SDNode *Load = CurDAG->getMachineNode(
+            TMS9900::MOV_FI_Load, DL, MVT::i16, MVT::Other, Ops);
+        CurDAG->setNodeMemRefs(cast<MachineSDNode>(Load),
+                               {LD->getMemOperand()});
+        ReplaceUses(SDValue(N, 0), SDValue(Load, 0));
+        ReplaceUses(SDValue(N, 1), SDValue(Load, 1));
+        CurDAG->RemoveDeadNode(N);
+        return;
+      }
+    }
     break;
   }
   case ISD::STORE: {
@@ -273,6 +365,26 @@ void TMS9900DAGToDAGISel::Select(SDNode *N) {
       ReplaceUses(SDValue(N, 1), SDValue(ResNode, 1));  // chain
       CurDAG->RemoveDeadNode(N);
       return;
+    }
+
+    if (ST->getAddressingMode() == ISD::UNINDEXED &&
+        ST->getMemoryVT() == MVT::i16 && !ST->isTruncatingStore()) {
+      int FrameIndex;
+      int64_t Offset;
+      if (getSingleUseFrameIndexAddress(ST->getBasePtr(), FrameIndex,
+                                        Offset)) {
+        SDLoc DL(N);
+        SDValue TFI = CurDAG->getTargetFrameIndex(FrameIndex, MVT::i16);
+        SDValue Disp = CurDAG->getTargetConstant(Offset, DL, MVT::i16);
+        SDValue Ops[] = {TFI, Disp, ST->getValue(), ST->getChain()};
+        SDNode *Store = CurDAG->getMachineNode(TMS9900::MOV_FI_Store, DL,
+                                               MVT::Other, Ops);
+        CurDAG->setNodeMemRefs(cast<MachineSDNode>(Store),
+                               {ST->getMemOperand()});
+        ReplaceUses(SDValue(N, 0), SDValue(Store, 0));
+        CurDAG->RemoveDeadNode(N);
+        return;
+      }
     }
     break;
   }

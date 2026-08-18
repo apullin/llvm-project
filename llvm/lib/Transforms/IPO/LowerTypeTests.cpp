@@ -1187,10 +1187,6 @@ void LowerTypeTestsModule::verifyTypeMDNode(GlobalObject *GO, MDNode *Type) {
 
   if (GO->isThreadLocal())
     report_fatal_error("Bit set element may not be thread-local");
-  if (isa<GlobalVariable>(GO) && GO->hasSection())
-    report_fatal_error(
-        "A member of a type identifier may not have an explicit section");
-
   // FIXME: We previously checked that global var member of a type identifier
   // must be a definition, but the IR linker may leave type metadata on
   // declarations. We should restore this check after fixing PR31759.
@@ -2241,9 +2237,14 @@ bool LowerTypeTestsModule::lower() {
       GlobalClassesTy::member_iterator CurSet = GlobalClasses.findLeader(GCI);
 
       // Add the referenced globals to the type identifier's equivalence class.
-      for (GlobalTypeMember *GTM : TypeIdInfo[TypeId].RefGlobals)
+      for (GlobalTypeMember *GTM : TypeIdInfo[TypeId].RefGlobals) {
+        if (auto *GV = dyn_cast<GlobalVariable>(GTM->getGlobal());
+            GV && GV->hasSection())
+          report_fatal_error(
+              "A member of a type identifier may not have an explicit section");
         CurSet = GlobalClasses.unionSets(
             CurSet, GlobalClasses.findLeader(GlobalClasses.insert(GTM)));
+      }
     }
 
     return Ins.first->second;

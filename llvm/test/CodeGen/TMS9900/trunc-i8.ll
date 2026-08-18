@@ -12,6 +12,7 @@ entry:
 
 ; CHECK-LABEL: low:
 ; CHECK: MOV R0,@0(R10)
-; CHECK: MOVB @1(R10),R0
+; CHECK-NEXT: MOVB @1(R10),R0
+; CHECK-NEXT: SRL R0,8
 
 attributes #0 = { noinline nounwind optnone }

@@ -234,7 +234,7 @@ createTargetMachine(const Config &Conf, const Target *TheTarget, Module &M) {
 }
 
 static void runNewPMPasses(const Config &Conf, Module &Mod, TargetMachine *TM,
-                           unsigned OptLevel, bool IsThinLTO,
+                           bool IsThinLTO,
                            ModuleSummaryIndex *ExportSummary,
                            const ModuleSummaryIndex *ImportSummary) {
   auto FS = vfs::getRealFileSystem();
@@ -306,7 +306,7 @@ static void runNewPMPasses(const Config &Conf, Module &Mod, TargetMachine *TM,
 
   OptimizationLevel OL;
 
-  switch (OptLevel) {
+  switch (Conf.OptLevel) {
   default:
     llvm_unreachable("Invalid optimization level");
   case 0:
@@ -316,7 +316,19 @@ static void runNewPMPasses(const Config &Conf, Module &Mod, TargetMachine *TM,
     OL = OptimizationLevel::O1;
     break;
   case 2:
-    OL = OptimizationLevel::O2;
+    switch (Conf.OptimizeSize) {
+    default:
+      llvm_unreachable("Invalid size optimization level");
+    case 0:
+      OL = OptimizationLevel::O2;
+      break;
+    case 1:
+      OL = OptimizationLevel::Os;
+      break;
+    case 2:
+      OL = OptimizationLevel::Oz;
+      break;
+    }
     break;
   case 3:
     OL = OptimizationLevel::O3;
@@ -387,8 +399,7 @@ bool lto::opt(const Config &Conf, TargetMachine *TM, unsigned Task, Module &Mod,
   // regular LTO combined module, with a large combined index from ThinLTO.
   if (!isEmptyModule(Mod)) {
     // FIXME: Plumb the combined index into the new pass manager.
-    runNewPMPasses(Conf, Mod, TM, Conf.OptLevel, IsThinLTO, ExportSummary,
-                   ImportSummary);
+    runNewPMPasses(Conf, Mod, TM, IsThinLTO, ExportSummary, ImportSummary);
   }
   return !Conf.PostOptModuleHook || Conf.PostOptModuleHook(Task, Mod);
 }

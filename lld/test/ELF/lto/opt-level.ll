@@ -10,6 +10,10 @@
 ; RUN: llvm-nm %t2a | FileCheck --check-prefix=CHECK-O2 %s
 ; RUN: ld.lld -o %t2 -e main %t.o --plugin-opt O2
 ; RUN: llvm-nm %t2 | FileCheck --check-prefix=CHECK-O2 %s
+; RUN: ld.lld -o %ts -e main --lto-Os %t.o
+; RUN: llvm-nm %ts | FileCheck --check-prefix=CHECK-O2 %s
+; RUN: ld.lld -o %tz -e main --plugin-opt=Oz %t.o
+; RUN: llvm-nm %tz | FileCheck --check-prefix=CHECK-O2 %s
 
 ; Reject invalid optimization levels.
 ; RUN: not ld.lld -o /dev/null -e main --lto-O6 %t.o 2>&1 | \

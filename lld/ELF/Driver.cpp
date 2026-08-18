@@ -1352,7 +1352,17 @@ static void readConfigs(Ctx &ctx, opt::InputArgList &args) {
   ctx.arg.ltoValidateAllVtablesHaveTypeInfos =
       args.hasFlag(OPT_lto_validate_all_vtables_have_type_infos,
                    OPT_no_lto_validate_all_vtables_have_type_infos, false);
-  ctx.arg.ltoo = args::getInteger(args, OPT_lto_O, 2);
+  StringRef ltoO = args.getLastArgValue(OPT_lto_O, "2");
+  ctx.arg.ltoOptimizeSize = 0;
+  if (ltoO == "s") {
+    ctx.arg.ltoo = 2;
+    ctx.arg.ltoOptimizeSize = 1;
+  } else if (ltoO == "z") {
+    ctx.arg.ltoo = 2;
+    ctx.arg.ltoOptimizeSize = 2;
+  } else {
+    ctx.arg.ltoo = args::getInteger(args, OPT_lto_O, 2);
+  }
   if (ctx.arg.ltoo > 3)
     ErrAlways(ctx) << "invalid optimization level for LTO: " << ctx.arg.ltoo;
   unsigned ltoCgo =

@@ -178,6 +178,7 @@ std::string llvm::computeLTOCacheKey(
   AddUnsigned(static_cast<int>(Conf.CGOptLevel));
   AddUnsigned(static_cast<int>(Conf.CGFileType));
   AddUnsigned(Conf.OptLevel);
+  AddUnsigned(Conf.OptimizeSize);
   AddUnsigned(Conf.Freestanding);
   AddString(Conf.OptPipeline);
   AddString(Conf.AAPipeline);

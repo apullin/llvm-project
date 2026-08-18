@@ -625,7 +625,7 @@ defm lto_linker_scripts: BB<"lto-linker-scripts",
 def lto_newpm_passes: JJ<"lto-newpm-passes=">,
   HelpText<"Passes to run during LTO">;
 def lto_O: JJ<"lto-O">, MetaVarName<"<opt-level>">,
-  HelpText<"Optimization level for LTO">;
+  HelpText<"Optimization level for LTO (0, 1, 2, 3, s, or z)">;
 def lto_CGO: JJ<"lto-CGO">, MetaVarName<"<cgopt-level>">,
   HelpText<"Codegen optimization level for LTO">;
 def lto_partitions: JJ<"lto-partitions=">,

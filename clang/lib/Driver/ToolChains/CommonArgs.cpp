@@ -862,11 +862,12 @@ void tools::addLTOOptions(const ToolChain &ToolChain, const ArgList &Args,
   const bool IsOSAIX = Triple.isOSAIX();
   const bool IsAMDGCN = Triple.isAMDGCN();
   const char *Linker = Args.MakeArgString(ToolChain.GetLinkerPath());
+  const bool IsLLD = llvm::sys::path::filename(Linker) == "ld.lld" ||
+                     llvm::sys::path::stem(Linker) == "ld.lld";
   const Driver &D = ToolChain.getDriver();
   const bool IsFatLTO = Args.hasArg(options::OPT_ffat_lto_objects);
   const bool IsUnifiedLTO = Args.hasArg(options::OPT_funified_lto);
-  if (llvm::sys::path::filename(Linker) != "ld.lld" &&
-      llvm::sys::path::stem(Linker) != "ld.lld" && !Triple.isOSOpenBSD()) {
+  if (!IsLLD && !Triple.isOSOpenBSD()) {
     // Tell the linker to load the plugin. This has to come before
     // AddLinkerInputs as gold requires -plugin and AIX ld requires -bplugin to
     // come before any -plugin-opt/-bplugin_opt that -Wl might forward.
@@ -951,15 +952,17 @@ void tools::addLTOOptions(const ToolChain &ToolChain, const ArgList &Args,
       OOpt = A->getValue();
       if (OOpt == "g")
         OOpt = "1";
-      else if (OOpt == "s" || OOpt == "z")
+      else if ((OOpt == "s" || OOpt == "z") && !IsLLD)
         OOpt = "2";
     } else if (A->getOption().matches(options::OPT_O0))
       OOpt = "0";
     if (!OOpt.empty()) {
       CmdArgs.push_back(
           Args.MakeArgString(Twine(PluginOptPrefix) + ExtraDash + "O" + OOpt));
-      if (IsAMDGCN)
-        CmdArgs.push_back(Args.MakeArgString(Twine("--lto-CGO") + OOpt));
+      if (IsAMDGCN) {
+        StringRef CGOOpt = OOpt == "s" || OOpt == "z" ? "2" : OOpt;
+        CmdArgs.push_back(Args.MakeArgString(Twine("--lto-CGO") + CGOOpt));
+      }
     }
   }
 

@@ -107,11 +107,12 @@ static lto::Config createConfig(Ctx &ctx) {
   c.DisableVerify = ctx.arg.disableVerify;
   c.DiagHandler = diagnosticHandler;
   c.OptLevel = ctx.arg.ltoo;
+  c.OptimizeSize = ctx.arg.ltoOptimizeSize;
   c.CPU = getCPUStr();
   c.MAttrs = getMAttrs();
   c.CGOptLevel = ctx.arg.ltoCgo;
 
-  c.PTO.LoopVectorization = c.OptLevel > 1;
+  c.PTO.LoopVectorization = c.OptLevel > 1 && c.OptimizeSize != 2;
   c.PTO.SLPVectorization = c.OptLevel > 1;
 
   // Set up a custom pipeline if we've been asked to.

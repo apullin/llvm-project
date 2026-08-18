@@ -57,6 +57,9 @@ struct Config {
   CodeGenOptLevel CGOptLevel = CodeGenOptLevel::Default;
   CodeGenFileType CGFileType = CodeGenFileType::ObjectFile;
   unsigned OptLevel = 2;
+  /// Size optimization level: 0 for none, 1 for -Os, and 2 for -Oz.
+  /// This is meaningful when OptLevel is 2.
+  unsigned OptimizeSize = 0;
   bool VerifyEach = false;
   bool DisableVerify = false;
 

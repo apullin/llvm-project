@@ -57,9 +57,13 @@
 // RUN: %clang --target=x86_64-unknown-linux-gnu --sysroot=%S/Inputs/basic_cross_linux_tree %s \
 // RUN:   -fuse-ld=lld -flto -O2 -### 2>&1 | FileCheck --check-prefix=O2 %s
 // RUN: %clang --target=x86_64-unknown-linux-gnu --sysroot=%S/Inputs/basic_cross_linux_tree %s \
-// RUN:   -fuse-ld=lld -flto -Os -### 2>&1 | FileCheck --check-prefix=O2 %s
+// RUN:   -fuse-ld=lld -flto -Os -### 2>&1 | FileCheck --check-prefix=OS %s
 // RUN: %clang --target=x86_64-unknown-linux-gnu --sysroot=%S/Inputs/basic_cross_linux_tree %s \
-// RUN:   -fuse-ld=lld -flto -Oz -### 2>&1 | FileCheck --check-prefix=O2 %s
+// RUN:   -fuse-ld=lld -flto -Oz -### 2>&1 | FileCheck --check-prefix=OZ %s
+// RUN: %clang --target=x86_64-unknown-linux-gnu --sysroot=%S/Inputs/basic_cross_linux_tree %s \
+// RUN:   -fuse-ld=gold -flto -Os -### 2>&1 | FileCheck --check-prefix=O2 %s
+// RUN: %clang --target=x86_64-unknown-linux-gnu --sysroot=%S/Inputs/basic_cross_linux_tree %s \
+// RUN:   -fuse-ld=gold -flto -Oz -### 2>&1 | FileCheck --check-prefix=O2 %s
 // RUN: %clang --target=x86_64-unknown-linux-gnu --sysroot=%S/Inputs/basic_cross_linux_tree %s \
 // RUN:   -fuse-ld=lld -flto -O3 -### 2>&1 | FileCheck --check-prefix=O3 %s
 // RUN: %clang --target=x86_64-unknown-linux-gnu --sysroot=%S/Inputs/basic_cross_linux_tree %s \
@@ -67,6 +71,8 @@
 
 // O1: -plugin-opt=O1
 // O2: -plugin-opt=O2
+// OS: -plugin-opt=Os
+// OZ: -plugin-opt=Oz
 // O3: -plugin-opt=O3
 
 // -flto passes along an explicit debugger tuning argument.

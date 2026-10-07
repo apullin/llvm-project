@@ -100,6 +100,44 @@ static bool setsWordResultComparisonFlags(unsigned Opcode) {
   }
 }
 
+/// Prove that the comparison flags have only one observable use. Moving a
+/// zero-extended byte into the high lane preserves equality and unsigned
+/// ordering, but not signed ordering. Other consumers may also observe status
+/// bits which a byte operation changes or a removed shift used to define.
+static bool hasSingleComparisonBranchUse(const MachineInstr &MI,
+                                        const TargetRegisterInfo *TRI,
+                                        bool AllowSigned) {
+  const MachineInstr *Next = MI.getNextNode();
+  while (Next && Next->isDebugInstr())
+    Next = Next->getNextNode();
+  if (!Next)
+    return false;
+
+  switch (Next->getOpcode()) {
+  case TMS9900::JGT:
+  case TMS9900::JLT:
+    if (!AllowSigned)
+      return false;
+    break;
+  case TMS9900::JEQ:
+  case TMS9900::JNE:
+  case TMS9900::JH:
+  case TMS9900::JHE:
+  case TMS9900::JL:
+  case TMS9900::JLE:
+    break;
+  default:
+    return false;
+  }
+
+  const MachineBasicBlock &MBB = *MI.getParent();
+  return MBB.getParent()->getRegInfo().tracksLiveness() &&
+         MBB.computeRegisterLiveness(
+             TRI, TMS9900::ST,
+             std::next(MachineBasicBlock::const_iterator(Next)), MBB.size()) ==
+             MachineBasicBlock::LQR_Dead;
+}
+
 static bool tryFoldPostInc(MachineInstr &IncMI,
                            const TargetInstrInfo *TII,
                            const TargetRegisterInfo *TRI) {
@@ -743,9 +781,8 @@ public:
           //   CBrr Rx, Ry             ; compare HIGH bytes directly
           //   Jcc target
           //
-          // CB compares the high bytes of both operands and sets EQ/LGT/AGT
-          // identically to how C would compare the full words when those
-          // words contain zero-extended byte values in the low position.
+          // CB compares the high bytes directly. EQ and unsigned ordering
+          // match C on zero-extended words; signed ordering does not.
           //
           // Safety:
           //  - Both Crr operands must be killed (dead after compare), since
@@ -766,21 +803,7 @@ public:
             // signed and unsigned comparisons on bytes and also updates OP.
             // Equality and unsigned branches are equivalent.  Require OP to
             // be dead after that branch so the extra parity update is hidden.
-            MachineInstr *Next = MI.getNextNode();
-            while (Next && Next->isDebugInstr())
-              Next = Next->getNextNode();
-            if (!Next)
-              break;
-            unsigned NextOpc = Next->getOpcode();
-            if (NextOpc != TMS9900::JEQ && NextOpc != TMS9900::JNE &&
-                NextOpc != TMS9900::JH && NextOpc != TMS9900::JHE &&
-                NextOpc != TMS9900::JL && NextOpc != TMS9900::JLE)
-              break;
-            if (!MF.getRegInfo().tracksLiveness() ||
-                MBB.computeRegisterLiveness(
-                    TRI, TMS9900::ST,
-                    std::next(MachineBasicBlock::const_iterator(Next)),
-                    MBB.size()) != MachineBasicBlock::LQR_Dead)
+            if (!hasSingleComparisonBranchUse(MI, TRI, /*AllowSigned=*/false))
               break;
 
             // Source and destination must be different registers.
@@ -975,6 +998,9 @@ public:
           //  - No instruction between SRL and CI reads ST (SRL sets
           //    flags; we're removing it, so the flags must not be
           //    consumed).  Since they are adjacent, this is satisfied.
+          //  - CI flags may only feed one equality or unsigned branch.
+          //    Signed ordering changes when bit 7 becomes the word sign bit,
+          //    and a later flag consumer could observe that difference.
           //
           // Saves 2 bytes (SRL is 2 bytes) and ~28 cycles per instance.
           if (!CanReplace && Opc == TMS9900::SRLri &&
@@ -983,7 +1009,9 @@ public:
               Next->getOperand(1).isImm()) {
             int64_t CIImm = Next->getOperand(1).getImm();
             uint16_t N = static_cast<uint16_t>(CIImm);
-            if (N <= 0xFF && Next->getOperand(0).isKill()) {
+            if (N <= 0xFF && Next->getOperand(0).isKill() &&
+                hasSingleComparisonBranchUse(*Next, TRI,
+                                             /*AllowSigned=*/false)) {
               // Verify the low byte of Rx is zero before the SRL.
               // Walk backward to the immediately preceding non-debug
               // instruction that defines Rx.

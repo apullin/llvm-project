@@ -1,4 +1,4 @@
-# RUN: llc -mtriple=tms9900 -run-pass=tms9900-peephole %s -o - | FileCheck %s
+# RUN: llc -mtriple=tms9900 -run-pass=tms9900-peephole -verify-machineinstrs %s -o - | FileCheck %s
 #
 # Tests for SRL Rx,8 + CI Rx,N -> CI Rx,(N<<8) peephole optimization.
 #
@@ -20,6 +20,7 @@
 #   - Rx must be killed at the CI (no later use expects shifted value)
 #   - Low byte of Rx must be zero before SRL (verified by checking the
 #     immediately preceding instruction)
+#   - Flags may only feed an equality or unsigned branch, with no later use
 
 --- |
   define void @srl8_ci_after_andi() { ret void }
@@ -28,6 +29,11 @@
   define void @srl8_ci_after_clr() { ret void }
   define void @srl8_ci_max_byte() { ret void }
   define void @neg_srl8_ci_after_movb() { ret void }
+  define void @neg_srl8_ci_signed_gt() { ret void }
+  define void @neg_srl8_ci_signed_lt() { ret void }
+  define void @neg_srl8_ci_eq_then_signed() { ret void }
+  define void @neg_srl8_ci_flags_live_out() { ret void }
+  define void @neg_srl8_ci_untracked_liveness() { ret void }
   define void @neg_srl8_ci_no_prev() { ret void }
   define void @neg_srl8_ci_n_too_large() { ret void }
   define void @neg_srl8_ci_rx_not_killed() { ret void }
@@ -155,7 +161,7 @@ body: |
     renamable $r2 = ANDI killed $r2, -256, implicit-def dead $st
     renamable $r2 = SRLri killed $r2, 8, implicit-def dead $st
     CI killed $r2, 255, implicit-def $st
-    JGT %bb.1, implicit $st
+    JH %bb.1, implicit $st
 
   bb.2:
     RET
@@ -169,7 +175,7 @@ body: |
 # CHECK: ANDI
 # CHECK-NOT: SRLri
 # CHECK: CI killed $r2, 65280, implicit-def $st
-# CHECK: JGT
+# CHECK: JH
 
 # Negative: After MOVB (low byte is indeterminate, NOT safe)
 ---
@@ -197,6 +203,130 @@ body: |
 # CHECK: SRLri
 # CHECK: CI killed $r5, 42
 # CHECK: JEQ
+
+# Signed comparison must keep zero extension. For input 0x8000, 128 > 1,
+# whereas comparing the unshifted word would test -32768 > 256.
+---
+name: neg_srl8_ci_signed_gt
+tracksRegLiveness: true
+body: |
+  bb.0:
+    successors: %bb.1, %bb.2
+    liveins: $r5
+    $r5 = ANDI killed $r5, -256, implicit-def dead $st
+    $r5 = SRLri killed $r5, 8, implicit-def dead $st
+    CI killed $r5, 1, implicit-def $st
+    JGT %bb.1, implicit $st
+  bb.2:
+    RET
+  bb.1:
+    RET
+...
+
+# CHECK-LABEL: name: neg_srl8_ci_signed_gt
+# CHECK: SRLri
+# CHECK-NEXT: CI killed $r5, 1, implicit-def $st
+# CHECK-NEXT: JGT
+
+# Input 0 is less than 128 as a zero-extended word, but not less than 0x8000
+# interpreted as a signed word.
+---
+name: neg_srl8_ci_signed_lt
+tracksRegLiveness: true
+body: |
+  bb.0:
+    successors: %bb.1, %bb.2
+    liveins: $r5
+    $r5 = ANDI killed $r5, -256, implicit-def dead $st
+    $r5 = SRLri killed $r5, 8, implicit-def dead $st
+    CI killed $r5, 128, implicit-def $st
+    JLT %bb.1, implicit $st
+  bb.2:
+    RET
+  bb.1:
+    RET
+...
+
+# CHECK-LABEL: name: neg_srl8_ci_signed_lt
+# CHECK: SRLri
+# CHECK-NEXT: CI killed $r5, 128, implicit-def $st
+# CHECK-NEXT: JLT
+
+# The first branch is safe, but a later signed branch observes the same flags.
+---
+name: neg_srl8_ci_eq_then_signed
+tracksRegLiveness: true
+body: |
+  bb.0:
+    successors: %bb.1, %bb.2
+    liveins: $r5
+    $r5 = ANDI killed $r5, -256, implicit-def dead $st
+    $r5 = SRLri killed $r5, 8, implicit-def dead $st
+    CI killed $r5, 1, implicit-def $st
+    JEQ %bb.1, implicit $st
+    JGT %bb.1, implicit $st
+  bb.2:
+    RET
+  bb.1:
+    RET
+...
+
+# CHECK-LABEL: name: neg_srl8_ci_eq_then_signed
+# CHECK: SRLri
+# CHECK-NEXT: CI killed $r5, 1, implicit-def $st
+# CHECK-NEXT: JEQ
+# CHECK-NEXT: JGT
+
+# The signed consumer can also be in a successor rather than this block.
+---
+name: neg_srl8_ci_flags_live_out
+tracksRegLiveness: true
+body: |
+  bb.0:
+    successors: %bb.1, %bb.2
+    liveins: $r5
+    $r5 = ANDI killed $r5, -256, implicit-def dead $st
+    $r5 = SRLri killed $r5, 8, implicit-def dead $st
+    CI killed $r5, 1, implicit-def $st
+    JEQ %bb.1, implicit $st
+  bb.2:
+    successors: %bb.1, %bb.3
+    liveins: $st
+    JGT %bb.1, implicit killed $st
+  bb.3:
+    RET
+  bb.1:
+    RET
+...
+
+# CHECK-LABEL: name: neg_srl8_ci_flags_live_out
+# CHECK: SRLri
+# CHECK-NEXT: CI killed $r5, 1, implicit-def $st
+# CHECK-NEXT: JEQ
+# CHECK: JGT
+
+# Without tracked liveness, the pass cannot prove there are no later flag uses.
+---
+name: neg_srl8_ci_untracked_liveness
+tracksRegLiveness: false
+body: |
+  bb.0:
+    successors: %bb.1, %bb.2
+    liveins: $r5
+    $r5 = ANDI killed $r5, -256, implicit-def dead $st
+    $r5 = SRLri killed $r5, 8, implicit-def dead $st
+    CI killed $r5, 1, implicit-def $st
+    JH %bb.1, implicit $st
+  bb.2:
+    RET
+  bb.1:
+    RET
+...
+
+# CHECK-LABEL: name: neg_srl8_ci_untracked_liveness
+# CHECK: SRLri
+# CHECK-NEXT: CI killed $r5, 1, implicit-def $st
+# CHECK-NEXT: JH
 
 # Negative: No preceding instruction (livein only)
 ---

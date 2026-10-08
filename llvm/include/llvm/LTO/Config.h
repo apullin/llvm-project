@@ -218,6 +218,13 @@ struct Config {
   /// called for ThinLTO tasks.
   using ModuleHookFn = std::function<bool(unsigned Task, const Module &)>;
 
+  /// A full-LTO input hook runs on each module before IR linking, while local
+  /// values still have an unambiguous source owner. It may add metadata or
+  /// section attributes, but must not rename/add/remove external symbols.
+  /// Summarized/ThinLTO inputs are rejected when this hook is set: their index
+  /// and cache keys do not describe these transformations.
+  std::function<Error(StringRef, Module &)> PreLinkModuleHook;
+
   /// This module hook is called after linking (regular LTO) or loading
   /// (ThinLTO) the module, before modifying it.
   ModuleHookFn PreOptModuleHook;

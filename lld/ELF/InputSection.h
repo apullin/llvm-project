@@ -461,6 +461,12 @@ public:
 
 static_assert(sizeof(InputSection) <= 160, "InputSection is too big");
 
+// When --lto-linker-scripts is enabled, LLD may recover an original bitcode
+// input filename for a full-LTO generated section. Linker-script file patterns
+// should use this instead of the temporary LTO object filename.
+void setLtoScriptFileForLinkerScript(InputSectionBase *sec, StringRef file);
+StringRef getLtoScriptFileForLinkerScript(const InputSectionBase *sec);
+
 class SyntheticSection : public InputSection {
 public:
   SyntheticSection(uint64_t flags, uint32_t type, uint32_t addralign,

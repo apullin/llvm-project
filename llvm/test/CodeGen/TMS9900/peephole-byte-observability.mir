@@ -1,0 +1,198 @@
+# RUN: llc -mtriple=tms9900 -run-pass=tms9900-peephole -verify-machineinstrs %s -o - | FileCheck %s
+
+# MOVB observes only its source high byte, but its address operands and any
+# later word uses still observe the entire register. Shift/mask removal must
+# also preserve carry and overflow left untouched by MOVB and ANDI.
+
+---
+name: sla8_movb_dead_word
+tracksRegLiveness: true
+body: |
+  bb.0:
+    liveins: $r5, $r6
+    $r5 = SLAri killed $r5, 8, implicit-def dead $st
+    MOVBmi killed $r6, killed $r5, implicit-def dead $st
+    RET
+
+# CHECK-LABEL: name: sla8_movb_dead_word
+# CHECK: $r5 = SWPBr killed $r5
+# CHECK-NEXT: MOVBmi killed $r6, killed $r5
+...
+---
+name: sla8_movb_live_word
+tracksRegLiveness: true
+body: |
+  bb.0:
+    liveins: $r5, $r6
+    $r5 = SLAri killed $r5, 8, implicit-def dead $st
+    MOVBmi killed $r6, $r5, implicit-def dead $st
+    $r0 = MOVrr killed $r5, implicit-def dead $st
+    RET
+
+# CHECK-LABEL: name: sla8_movb_live_word
+# CHECK: $r5 = SLAri killed $r5, 8
+# CHECK-NEXT: MOVBmi killed $r6, $r5
+# CHECK-NEXT: $r0 = MOVrr killed $r5
+...
+---
+name: sla8_movb_indirect_alias
+tracksRegLiveness: true
+body: |
+  bb.0:
+    liveins: $r5
+    $r5 = SLAri killed $r5, 8, implicit-def dead $st
+    MOVBmi $r5, killed $r5, implicit-def dead $st
+    RET
+
+# CHECK-LABEL: name: sla8_movb_indirect_alias
+# CHECK: $r5 = SLAri killed $r5, 8
+# CHECK-NEXT: MOVBmi $r5, killed $r5
+...
+---
+name: sla8_movb_indexed_alias
+tracksRegLiveness: true
+body: |
+  bb.0:
+    liveins: $r5
+    $r5 = SLAri killed $r5, 8, implicit-def dead $st
+    MOVBmx 16, $r5, killed $r5, implicit-def dead $st
+    RET
+
+# CHECK-LABEL: name: sla8_movb_indexed_alias
+# CHECK: $r5 = SLAri killed $r5, 8
+# CHECK-NEXT: MOVBmx 16, $r5, killed $r5
+...
+---
+name: sla8_movb_postinc_alias
+tracksRegLiveness: true
+body: |
+  bb.0:
+    liveins: $r5
+    $r5 = SLAri killed $r5, 8, implicit-def dead $st
+    dead $r5 = MOVBmpi $r5, killed $r5, implicit-def dead $st
+    RET
+
+# CHECK-LABEL: name: sla8_movb_postinc_alias
+# CHECK: $r5 = SLAri killed $r5, 8
+# CHECK-NEXT: dead $r5 = MOVBmpi $r5, killed $r5
+...
+---
+name: sla8_movb_self_alias
+tracksRegLiveness: true
+body: |
+  bb.0:
+    liveins: $r5
+    $r5 = SLAri killed $r5, 8, implicit-def dead $st
+    $r5 = MOVBrr killed $r5, implicit-def dead $st
+    $r0 = MOVrr killed $r5, implicit-def dead $st
+    RET
+
+# CHECK-LABEL: name: sla8_movb_self_alias
+# CHECK: $r5 = SLAri killed $r5, 8
+# CHECK-NEXT: $r5 = MOVBrr killed $r5
+# CHECK-NEXT: $r0 = MOVrr killed $r5
+...
+---
+name: andi_movb_indirect_alias
+tracksRegLiveness: true
+body: |
+  bb.0:
+    liveins: $r5
+    $r5 = ANDI killed $r5, -256, implicit-def dead $st
+    MOVBmi $r5, killed $r5, implicit-def dead $st
+    RET
+
+# CHECK-LABEL: name: andi_movb_indirect_alias
+# CHECK: $r5 = ANDI killed $r5, -256
+# CHECK-NEXT: MOVBmi $r5, killed $r5
+...
+---
+name: andi_movb_indexed_alias
+tracksRegLiveness: true
+body: |
+  bb.0:
+    liveins: $r5
+    $r5 = ANDI killed $r5, -256, implicit-def dead $st
+    MOVBmx 16, $r5, killed $r5, implicit-def dead $st
+    RET
+
+# CHECK-LABEL: name: andi_movb_indexed_alias
+# CHECK: $r5 = ANDI killed $r5, -256
+# CHECK-NEXT: MOVBmx 16, $r5, killed $r5
+...
+---
+name: andi_ai_movb_indirect_alias
+tracksRegLiveness: true
+body: |
+  bb.0:
+    liveins: $r5
+    $r5 = ANDI killed $r5, -256, implicit-def dead $st
+    $r5 = AI killed $r5, 256, implicit-def dead $st
+    MOVBmi $r5, killed $r5, implicit-def dead $st
+    RET
+
+# CHECK-LABEL: name: andi_ai_movb_indirect_alias
+# CHECK: $r5 = ANDI killed $r5, -256
+# CHECK-NEXT: $r5 = AI killed $r5, 256
+# CHECK-NEXT: MOVBmi $r5, killed $r5
+...
+---
+name: srl8_andi_carry_live
+tracksRegLiveness: true
+body: |
+  bb.0:
+    successors: %bb.1, %bb.2
+    liveins: $r5
+    $r5 = SRLri killed $r5, 8, implicit-def dead $st
+    $r5 = ANDI killed $r5, 255, implicit-def $st
+    JOC %bb.1, implicit $st
+  bb.2:
+    RET
+  bb.1:
+    RET
+
+# CHECK-LABEL: name: srl8_andi_carry_live
+# CHECK: $r5 = SRLri killed $r5, 8
+# CHECK-NEXT: $r5 = ANDI killed $r5, 255
+# CHECK-NEXT: JOC
+...
+---
+name: sla8_movb_overflow_live
+tracksRegLiveness: true
+body: |
+  bb.0:
+    successors: %bb.1, %bb.2
+    liveins: $r5, $r6
+    $r5 = SLAri killed $r5, 8, implicit-def dead $st
+    MOVBmi killed $r6, killed $r5, implicit-def $st
+    JNO %bb.1, implicit $st
+  bb.2:
+    RET
+  bb.1:
+    RET
+
+# CHECK-LABEL: name: sla8_movb_overflow_live
+# CHECK: $r5 = SLAri killed $r5, 8
+# CHECK-NEXT: MOVBmi killed $r6, killed $r5
+# CHECK-NEXT: JNO
+...
+---
+name: sla8_movb_comparison_live
+tracksRegLiveness: true
+body: |
+  bb.0:
+    successors: %bb.1, %bb.2
+    liveins: $r5, $r6
+    $r5 = SLAri killed $r5, 8, implicit-def dead $st
+    MOVBmi killed $r6, killed $r5, implicit-def $st
+    JGT %bb.1, implicit $st
+  bb.2:
+    RET
+  bb.1:
+    RET
+
+# CHECK-LABEL: name: sla8_movb_comparison_live
+# CHECK: $r5 = SWPBr killed $r5
+# CHECK-NEXT: MOVBmi killed $r6, killed $r5
+# CHECK-NEXT: JGT
+...

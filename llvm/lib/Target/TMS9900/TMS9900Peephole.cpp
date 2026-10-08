@@ -267,6 +267,28 @@ static int getMovbSrcOpIdx(const MachineInstr &MI) {
   }
 }
 
+/// A byte-only source use does not make other uses of the same word
+/// unobservable. In particular, MOVB may also use it as an indirect/indexed
+/// address, a post-increment operand, or a partial destination definition.
+static bool isOnlyKilledMovbSource(const MachineInstr &MI, Register Reg,
+                                   const TargetRegisterInfo *TRI) {
+  int SrcIdx = getMovbSrcOpIdx(MI);
+  if (SrcIdx < 0 || !MI.getMF()->getRegInfo().tracksLiveness())
+    return false;
+  const MachineOperand &Src = MI.getOperand(SrcIdx);
+  if (!Src.isReg() || Src.getReg() != Reg || !Src.isKill())
+    return false;
+
+  for (unsigned I = 0, E = MI.getNumOperands(); I != E; ++I) {
+    if (I == static_cast<unsigned>(SrcIdx))
+      continue;
+    const MachineOperand &Op = MI.getOperand(I);
+    if (Op.isReg() && Op.getReg() && TRI->regsOverlap(Reg, Op.getReg()))
+      return false;
+  }
+  return true;
+}
+
 class TMS9900PeepholePass : public MachineFunctionPass {
 public:
   static char ID;
@@ -913,8 +935,8 @@ public:
         // SLA Rx,8 + ANDI Rx,0xFF00 -> SWPB Rx + ANDI Rx,0xFF00
         // SLA Rx,8 + MOVB Rx,dst   -> SWPB Rx + MOVB Rx,dst
         //
-        // SWPB exchanges high and low bytes (10 cycles, 2 bytes) vs
-        // SRL/SLA by 8 (36 cycles, 4 bytes).  The subsequent ANDI
+        // SWPB exchanges high and low bytes (10 clocks, 2 bytes) vs
+        // SRL/SLA by 8 (28 clocks, 2 bytes). The subsequent ANDI
         // masks off the unwanted byte, producing the same result.
         //   SRL Rx,8:  0xABCD -> 0x00AB
         //   SWPB Rx:   0xABCD -> 0xCDAB, then ANDI 0x00FF -> 0x00AB
@@ -924,8 +946,9 @@ public:
         // For SLA Rx,8 + MOVB: MOVB only reads the HIGH byte of Rx.
         // Both SLA 8 and SWPB put the original low byte into the high
         // byte position. The low byte differs (SLA zeros it, SWPB puts
-        // old high byte there) but MOVB ignores it.
-        // Savings: 2 bytes, 26 cycles per instance.
+        // old high byte there), so the complete word must be dead after
+        // the MOVB and must not also supply an address or destination.
+        // Savings: 18 clocks; both instructions occupy one word.
         if (Opc == TMS9900::SRLri || Opc == TMS9900::SLAri) {
           if (!MI.getOperand(2).isImm() || MI.getOperand(2).getImm() != 8)
             continue;
@@ -952,17 +975,15 @@ public:
           }
 
           // Case 2: SLA Rx,8 + MOVB that reads Rx as source.
-          // MOVB only uses the high byte, so SWPB produces the same
-          // observable result as SLA 8.
-          if (!CanReplace && Opc == TMS9900::SLAri) {
-            int SrcIdx = getMovbSrcOpIdx(*Next);
-            if (SrcIdx >= 0 &&
-                SrcIdx < (int)Next->getNumOperands() &&
-                Next->getOperand(SrcIdx).isReg() &&
-                Next->getOperand(SrcIdx).getReg() == Rx) {
-              CanReplace = true;
-            }
-          }
+          // This is safe only when no observer needs the differing low byte.
+          if (!CanReplace && Opc == TMS9900::SLAri)
+            CanReplace = isOnlyKilledMovbSource(*Next, Rx, TRI);
+
+          // ANDI/MOVB establish their comparison flags but preserve C/OV.
+          // Removing the shift must not change a later carry/overflow test.
+          if (CanReplace && !Next->registerDefIsDead(TMS9900::ST, TRI) &&
+              !hasSingleComparisonBranchUse(*Next, TRI, /*AllowSigned=*/true))
+            CanReplace = false;
 
           // Case 3: SRL Rx,8 + CI Rx,N -> CI Rx,(N<<8)
           //
@@ -1149,19 +1170,11 @@ public:
             }
           }
 
-          // Consumer must be a MOVB that reads Rx as source (high byte).
+          // No later word use, address operand, or partial destination may
+          // observe the low byte whose clearing we are about to remove.
+          if (!isOnlyKilledMovbSource(*Consumer, Rx, TRI))
+            continue;
           int SrcOpIdx = getMovbSrcOpIdx(*Consumer);
-
-          if (SrcOpIdx < 0 ||
-              SrcOpIdx >= (int)Consumer->getNumOperands() ||
-              !Consumer->getOperand(SrcOpIdx).isReg() ||
-              Consumer->getOperand(SrcOpIdx).getReg() != Rx)
-            continue;
-
-          // Rx must be killed by the MOVB (no later reader of the low
-          // byte) -- or at least no other operand of Consumer reads Rx.
-          if (!Consumer->getOperand(SrcOpIdx).isKill())
-            continue;
 
           // Safe to delete.  Propagate liveness: the ANDI's source
           // operand (operand 1, the tied input) carries the kill flag

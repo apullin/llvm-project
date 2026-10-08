@@ -138,6 +138,9 @@ public:
                   CanElim = false;
               }
               if (CanElim) {
+                // Removing the second definition keeps Src's original value
+                // live. A kill on the first copy would now contradict that.
+                MI->getOperand(1).setIsKill(false);
                 auto NextAfter = std::next(Next);
                 Next->eraseFromParent();
                 Changed = true;

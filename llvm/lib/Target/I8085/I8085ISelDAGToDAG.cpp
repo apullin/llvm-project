@@ -944,12 +944,17 @@ template <> bool I8085DAGToDAGISel::select<ISD::LOAD>(SDNode *N) {
           BaseOpc == ISD::JumpTable) {
         SDLoc DL(N);
         SDValue Chain = LD->getChain();
-        if (BaseOpc == ISD::GlobalAddress) {
+        if (BaseOpc == ISD::GlobalAddress ||
+            BaseOpc == ISD::TargetGlobalAddress) {
           const auto *GA = cast<GlobalAddressSDNode>(Base);
           Base = CurDAG->getTargetGlobalAddress(
               GA->getGlobal(), DL,
               getTargetLowering()->getPointerTy(CurDAG->getDataLayout()),
-              GA->getOffset() + Off);
+              GA->getOffset() + Off, GA->getTargetFlags());
+        } else if (Off != 0) {
+          // Do not discard the base or addend for symbolic kinds without
+          // an encodable offset. The address-in-register path keeps the ADD.
+          return false;
         } else if (BaseOpc == ISD::JumpTable) {
           const auto *JT = cast<JumpTableSDNode>(Base);
           Base = CurDAG->getTargetJumpTable(
@@ -960,23 +965,6 @@ template <> bool I8085DAGToDAGISel::select<ISD::LOAD>(SDNode *N) {
           Base = CurDAG->getTargetExternalSymbol(
               ES->getSymbol(),
               getTargetLowering()->getPointerTy(CurDAG->getDataLayout()));
-          // Apply constant offset to external symbols via an immediate add.
-          if (Off != 0) {
-            SDValue AddrImm =
-                CurDAG->getTargetConstant(static_cast<uint16_t>(Off), DL,
-                                          MVT::i16);
-            unsigned Opc = (MemVT == MVT::i8) ? I8085::LOAD_8_WITH_IMM_ADDR
-                                              : I8085::LOAD_16_WITH_IMM_ADDR;
-            SDValue Ops[] = {AddrImm, Chain};
-            SDNode *ResNode =
-                CurDAG->getMachineNode(Opc, DL, MemVT, MVT::Other, Ops);
-            CurDAG->setNodeMemRefs(cast<MachineSDNode>(ResNode),
-                                   {LD->getMemOperand()});
-            ReplaceUses(SDValue(N, 0), SDValue(ResNode, 0));
-            ReplaceUses(SDValue(N, 1), SDValue(ResNode, 1));
-            CurDAG->RemoveDeadNode(N);
-            return true;
-          }
         }
 
         if (MemVT == MVT::i32)

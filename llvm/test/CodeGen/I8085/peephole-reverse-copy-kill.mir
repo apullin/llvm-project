@@ -1,0 +1,18 @@
+# RUN: llc -run-pass=i8085-peephole -verify-machineinstrs %s -o - | FileCheck %s
+--- |
+  target triple = "i8085-unknown-elf"
+  define void @reverse_copy() { ret void }
+...
+---
+name: reverse_copy
+body: |
+  bb.0:
+    liveins: $a, $sp
+    ; CHECK-LABEL: name: reverse_copy
+    ; CHECK: $b = MOV $a
+    ; CHECK-NEXT: XRI 1
+    $b = MOV killed $a
+    $a = MOV killed $b
+    XRI 1, implicit-def $sreg, implicit-def $a, implicit $a
+    RET implicit $sp, implicit-def $sp
+...

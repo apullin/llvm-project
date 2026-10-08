@@ -1783,8 +1783,20 @@ bool I8085ExpandPseudo::expand<I8085::FRMIDX_REALIGNED>(Block &MBB, BlockIt MBBI
   if (!getPairRegs(Dest, Low, High))
     llvm_unreachable("realigned frame address requires BC or DE");
 
-  buildMI(MBB, MBBI, I8085::PUSH).addReg(I8085::PSW);
-  if (Base == I8085::SP)
+  const bool PreserveA = isPhysRegLive(MBB, MBBI, I8085::A);
+  const bool PreserveFlags = isPhysRegLive(MBB, MBBI, I8085::SREG);
+  const bool PreservePSW = PreserveA || PreserveFlags;
+  if (PreservePSW) {
+    auto Push = buildMI(MBB, MBBI, I8085::PUSH);
+    if (PreserveA && PreserveFlags) {
+      Push.addReg(I8085::PSW);
+    } else {
+      // The unused half of PSW need not have a defined incoming value.
+      Push.addReg(I8085::PSW, RegState::Undef);
+      Push.addReg(PreserveA ? I8085::A : I8085::SREG, RegState::Implicit);
+    }
+  }
+  if (PreservePSW && Base == I8085::SP)
     SavedOffset += 2;
   buildMI(MBB, MBBI, I8085::LOAD_16_WITH_ADDR)
       .addReg(Dest, RegState::Define).addReg(Base).addImm(SavedOffset);
@@ -1795,7 +1807,8 @@ bool I8085ExpandPseudo::expand<I8085::FRMIDX_REALIGNED>(Block &MBB, BlockIt MBBI
   buildMI(MBB, MBBI, I8085::MOV).addReg(I8085::A, RegState::Define).addReg(High);
   buildMI(MBB, MBBI, I8085::ACI).addImm(Delta >> 8);
   buildMI(MBB, MBBI, I8085::MOV).addReg(High, RegState::Define).addReg(I8085::A);
-  buildMI(MBB, MBBI, I8085::POP).addReg(I8085::PSW, RegState::Define);
+  if (PreservePSW)
+    buildMI(MBB, MBBI, I8085::POP).addReg(I8085::PSW, RegState::Define);
   MI.eraseFromParent();
   return true;
 }

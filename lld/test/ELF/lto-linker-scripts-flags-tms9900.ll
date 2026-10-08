@@ -23,8 +23,7 @@
 ; DATA-NEXT: 6000 {{33440000|00003344}}
 ; NAMES: writable_value
 ; METADATA: Name: .metadata
-; METADATA: Flags [ (0x200000)
-; METADATA-NEXT: SHF_GNU_RETAIN
+; METADATA: Flags [ (0x0)
 ; METADATA-NEXT: ]
 
 ;--- readonly.ll

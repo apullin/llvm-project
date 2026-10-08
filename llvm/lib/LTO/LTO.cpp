@@ -639,6 +639,19 @@ InputFile::getELFSectionFlags(const Config &Conf) {
   return Flags;
 }
 
+std::string lto::getLinkerScriptModuleId(StringRef Name) {
+  std::string Id;
+  for (char C : Name) {
+    if (C == '^')
+      Id += "%5E";
+    else if (C == '%')
+      Id += "%25";
+    else
+      Id += C;
+  }
+  return Id;
+}
+
 LTO::RegularLTOState::RegularLTOState(unsigned ParallelCodeGenParallelismLevel,
                                       const Config &Conf)
     : ParallelCodeGenParallelismLevel(ParallelCodeGenParallelismLevel),
@@ -1026,7 +1039,8 @@ LTO::addRegularLTO(BitcodeModule BM, ArrayRef<InputFile::Symbol> Syms,
                 MDNode::get(M.getContext(),
                             MDString::get(M.getContext(), GO->getSection())));
             GO->setSection((GO->getSection() + "^^" +
-                            M.getModuleIdentifier()).str());
+                            getLinkerScriptModuleId(M.getModuleIdentifier()))
+                               .str());
           }
 
       if (Res.LinkerScriptKeep)
@@ -1078,8 +1092,13 @@ LTO::addRegularLTO(BitcodeModule BM, ArrayRef<InputFile::Symbol> Syms,
   }
 
   if (!LinkerScriptKeep.empty()) {
-    appendToUsed(M, LinkerScriptKeep);
-    if (GlobalVariable *Used = M.getGlobalVariable("llvm.used"))
+    // KEEP protects IR from optimization, but native KEEP must decide ELF
+    // liveness. llvm.used would manufacture SHF_GNU_RETAIN and thereby change
+    // INPUT_SECTION_FLAGS matching. Appending to an existing used list also
+    // replaces its GlobalVariable; discard the old pointer before IRMover.
+    llvm::erase(Mod.Keep, M.getGlobalVariable("llvm.compiler.used"));
+    appendToCompilerUsed(M, LinkerScriptKeep);
+    if (GlobalVariable *Used = M.getGlobalVariable("llvm.compiler.used"))
       Mod.Keep.push_back(Used);
   }
 

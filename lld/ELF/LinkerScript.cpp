@@ -431,15 +431,22 @@ bool SectionPattern::excludesFile(const InputFile &file) const {
   return excludesFileCache->second;
 }
 
+std::pair<StringRef, InputFile *>
+LinkerScript::getInputSectionOrigin(const InputSectionBase *s) const {
+  if (ctx.arg.ltoLinkerScripts && s->file && s->file->ltoGenerated) {
+    auto [name, moduleId] = s->name.rsplit("^^");
+    if (!moduleId.empty())
+      if (InputFile *file = ltoInputFileMapping.lookup(moduleId))
+        return {name, file};
+  }
+  // A user section containing ^^ is unchanged unless the suffix identifies
+  // an actual LTO input, rather than merely resembling our transport spelling.
+  return {s->name, s->file};
+}
+
 bool LinkerScript::shouldKeep(InputSectionBase *s) {
-  for (InputSectionDescription *id : keptSections)
-    if (id->matchesFile(*s->file))
-      for (SectionPattern &p : id->sectionPatterns)
-        if (p.sectionPat.match(s->name) &&
-            (s->flags & id->withFlags) == id->withFlags &&
-            (s->flags & id->withoutFlags) == 0)
-          return true;
-  return false;
+  auto [name, file] = getInputSectionOrigin(s);
+  return shouldKeep(name, file, s->flags);
 }
 
 bool LinkerScript::shouldKeep(StringRef name, InputFile *file, uint64_t flags) {
@@ -589,15 +596,7 @@ LinkerScript::computeInputSections(const InputSectionDescription *cmd,
             cast<InputSection>(sec)->getRelocatedSection())
           continue;
 
-        StringRef sectionName = sec->name;
-        InputFile *sectionFile = sec->file;
-        if (ctx.arg.ltoLinkerScripts) {
-          StringRef moduleId;
-          std::tie(sectionName, moduleId) = sec->name.split("^^");
-          if (!moduleId.empty())
-            if (InputFile *file = ltoInputFileMapping.lookup(moduleId))
-              sectionFile = file;
-        }
+        auto [sectionName, sectionFile] = getInputSectionOrigin(sec);
 
         // Check the name early to improve performance in the common case.
         if (!pat.sectionPat.match(sectionName))

@@ -244,7 +244,8 @@ void BitcodeCompiler::add(BitcodeFile &f) {
   std::vector<lto::SymbolResolution> resols(syms.size());
 
   if (ctx.arg.ltoLinkerScripts && ctx.script)
-    ctx.script->ltoInputFileMapping[obj.getName()] = &f;
+    ctx.script->ltoInputFileMapping[ctx.saver.save(
+        lto::getLinkerScriptModuleId(obj.getName()))] = &f;
 
   // Provide a resolution to the LTO API for each symbol.
   for (size_t i = 0, e = syms.size(); i != e; ++i) {
@@ -443,8 +444,11 @@ SmallVector<std::unique_ptr<InputFile>, 0> BitcodeCompiler::compile() {
     }
     if (savePrelink || ctx.arg.ltoEmitAsm)
       saveBuffer(buf[i].second, ltoObjName);
-    if (!ctx.arg.ltoEmitAsm)
-      ret.push_back(createObjFile(ctx, MemoryBufferRef(objBuf, ltoObjName)));
+    if (!ctx.arg.ltoEmitAsm) {
+      auto file = createObjFile(ctx, MemoryBufferRef(objBuf, ltoObjName));
+      file->ltoGenerated = true;
+      ret.push_back(std::move(file));
+    }
   }
   return ret;
 }

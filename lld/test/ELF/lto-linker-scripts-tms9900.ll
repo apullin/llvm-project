@@ -8,7 +8,7 @@
 
 ; RES: -r=main.o,keepme,plxk
 
-; OPT: @llvm.used = appending global {{.*}} @keepme
+; OPT: @llvm.compiler.used = appending global {{.*}} @keepme
 ; OPT: define internal {{.*}} @fast{{.*}} section ".text.fast^^main.o"
 ; OPT: define internal {{.*}} @keepme{{.*}} section ".text.keepme^^main.o"
 ; OPT: define dso_local {{.*}} @_start{{.*}} section ".text^^main.o"
@@ -20,7 +20,6 @@
 ; ELF:      Name: .fast
 ; ELF:      Address: 0x6000
 ; ELF:      Name: .keep
-; ELF:      SHF_GNU_RETAIN
 ; ELF:      Address: 0x6100
 ; ELF:      Name: .text
 ; ELF:      Address: 0x6200

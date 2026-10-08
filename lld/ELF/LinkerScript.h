@@ -377,6 +377,8 @@ public:
 
   bool shouldKeep(InputSectionBase *s);
   bool shouldKeep(StringRef name, InputFile *file, uint64_t flags);
+  std::pair<StringRef, InputFile *>
+  getInputSectionOrigin(const InputSectionBase *s) const;
   StringRef mapLTOSectionName(StringRef inputSection, InputFile *file,
                             uint64_t flags);
   std::pair<const OutputSection *, const Defined *> assignAddresses();

@@ -80,6 +80,10 @@ std::string recomputeLTOCacheKey(const std::string &Key, StringRef ExtraID);
 
 namespace lto {
 
+/// Escape a TU identifier used in the ELF section-name transport. Keep the
+/// ^^ separator unambiguous even for input paths containing ^ or percent signs.
+std::string getLinkerScriptModuleId(StringRef Name);
+
 StringLiteral getThinLTODefaultCPU(const Triple &TheTriple);
 
 /// Given the original \p Path to an output file, replace any path

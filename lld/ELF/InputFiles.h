@@ -78,6 +78,10 @@ public:
   StringRef getName() const { return mb.getBufferIdentifier(); }
   MemoryBufferRef mb;
 
+  // Only LTO-generated objects carry the TU section-name transport. Native
+  // objects may legitimately use identical-looking literal section names.
+  bool ltoGenerated = false;
+
   // Returns sections. It is a runtime error to call this function
   // on files that don't have the notion of sections.
   ArrayRef<InputSectionBase *> getSections() const {

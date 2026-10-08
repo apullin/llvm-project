@@ -2,6 +2,11 @@
 ; RUN: rm -rf %t && split-file %s %t && cd %t
 ; RUN: llvm-as included.ll -o included.o
 ; RUN: llvm-as excluded.ll -o excluded.o
+; RUN: llc -filetype=obj included.ll -o included-native.o
+; RUN: llc -filetype=obj excluded.ll -o excluded-native.o
+; RUN: ld.lld --gc-sections -T native.ld included-native.o excluded-native.o -o native
+; RUN: llvm-objdump -s -j .kept native | FileCheck %s --check-prefix=DATA
+; RUN: llvm-nm native | FileCheck %s --check-prefix=NAMES --implicit-check-not=excluded_value
 ; RUN: ld.lld --lto-linker-scripts --lto-O2 --gc-sections -T script.ld included.o excluded.o -o out
 ; RUN: llvm-objdump -s -j .kept out | FileCheck %s --check-prefix=DATA
 ; RUN: llvm-nm out | FileCheck %s --check-prefix=NAMES --implicit-check-not=excluded_value
@@ -13,7 +18,7 @@
 ; RUN: llvm-nm archive-out | FileCheck %s --check-prefix=NAMES --implicit-check-not=excluded_value
 ;
 ; An unused local matched by KEEP must survive unless its original input file
-; is excluded. EXCLUDE_FILE must apply before LTO's llvm.used preservation.
+; is excluded. EXCLUDE_FILE must apply before LTO's compiler preservation.
 ;
 ; DATA: Contents of section .kept:
 ; DATA-NEXT: 6000 1122
@@ -42,5 +47,12 @@ SECTIONS {
 ENTRY(_start)
 SECTIONS {
   .kept 0x6000 : { KEEP(*(EXCLUDE_FILE(libexcluded.a:excluded.o) .data.keep)) }
+  .text 0x6100 : { *(.text*) }
+}
+
+;--- native.ld
+ENTRY(_start)
+SECTIONS {
+  .kept 0x6000 : { KEEP(*(EXCLUDE_FILE(excluded-native.o) .data.keep)) }
   .text 0x6100 : { *(.text*) }
 }

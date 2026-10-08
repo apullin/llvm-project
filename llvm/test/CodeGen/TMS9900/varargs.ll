@@ -13,11 +13,11 @@ declare void @llvm.va_end(ptr)
 ; --- Simple varargs function: read two variadic args ---
 ; The function allocates stack space for the va_list, calls va_start,
 ; reads two i16 arguments, then returns their sum. The named argument is also
-; stack-passed, so after the 2-byte local the first variadic value is at +4.
+; stack-passed, so after the 4-byte frame the first variadic value is at +6.
 ; CHECK-LABEL: va_func:
-; CHECK: DECT{{[ \t]+}}R10
+; CHECK: AI{{[ \t]+}}R10,-4
 ; CHECK: MOV{{[ \t]+}}R10,[[AP:R[0-9]+]]
-; CHECK-NEXT: AI{{[ \t]+}}[[AP]],4
+; CHECK-NEXT: AI{{[ \t]+}}[[AP]],6
 ; CHECK: MOV{{[ \t]+}}*[[AP]],R0
 ; CHECK: MOV{{[ \t]+}}*[[AP]],R1
 ; CHECK: A{{[ \t]+}}R1,R0

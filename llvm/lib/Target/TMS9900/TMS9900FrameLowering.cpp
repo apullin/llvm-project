@@ -49,13 +49,16 @@ static constexpr uint64_t TMS9900AddressSpaceSize = uint64_t{1} << 16;
 TMS9900FrameLowering::TMS9900FrameLowering(const TMS9900Subtarget &STI)
     : TargetFrameLowering(StackGrowsDown,
                           /*StackAlignment=*/Align(4),
-                          /*LocalAreaOffset=*/0) {}
+                          /*LocalAreaOffset=*/0,
+                          /*TransientStackAlignment=*/Align(4)) {}
 // NOTE: Stack alignment is 4 bytes (not 2) to match LLVM's type legalizer
 // assumptions. When splitting i32 loads/stores, LLVM uses OR-instead-of-ADD
 // to compute the low-word address (e.g., ORI Rx,2 instead of AI Rx,2).
 // This optimization assumes bit 1 of the base address is zero, which requires
 // 4-byte stack alignment. With 2-byte alignment, non-4-byte-aligned stack
 // addresses cause ORI to be a no-op, reading the high word twice.
+// The same boundary applies to leaf frames: PEI otherwise uses the default
+// one-byte transient alignment when the function makes no calls.
 
 bool TMS9900FrameLowering::hasFPImpl(const MachineFunction &MF) const {
   const MachineFrameInfo &MFI = MF.getFrameInfo();

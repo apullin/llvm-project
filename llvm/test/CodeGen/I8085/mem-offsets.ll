@@ -22,7 +22,7 @@ define i8 @stack_large_i8() {
 ; CHECK-NEXT:    LXI H, 512
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    SPHL
-; CHECK-NEXT:    .cfi_adjust_cfa_offset 4294966784
+; CHECK-NEXT:    .cfi_adjust_cfa_offset -512
 ; CHECK-NEXT:    RET
 entry:
   %buf = alloca [512 x i8], align 1
@@ -53,7 +53,7 @@ define i16 @stack_large_i16() {
 ; CHECK-NEXT:    LXI H, 512
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    SPHL
-; CHECK-NEXT:    .cfi_adjust_cfa_offset 4294966784
+; CHECK-NEXT:    .cfi_adjust_cfa_offset -512
 ; CHECK-NEXT:    RET
 entry:
   %buf = alloca [256 x i16], align 1
@@ -89,7 +89,7 @@ define i8 @stack_global_mix(i8 %x) {
 ; CHECK-NEXT:    LXI H, 400
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    SPHL
-; CHECK-NEXT:    .cfi_adjust_cfa_offset 4294966896
+; CHECK-NEXT:    .cfi_adjust_cfa_offset -400
 ; CHECK-NEXT:    RET
 entry:
   %buf = alloca [400 x i8], align 1

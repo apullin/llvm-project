@@ -137,8 +137,9 @@ bool I8085RegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
   Offset += MFI.getStackSize() - TFI->getOffsetOfLocalArea();
   // Fold incoming offset.
   Offset += MI.getOperand(FIOperandNum + 1).getImm();
-  // Account for any mid-function stack pointer adjustment (e.g., outgoing args).
-  Offset += SPAdj;
+  // DE remains anchored at the fixed frame while outgoing arguments move SP.
+  if (!needsBasePointer(MF))
+    Offset += SPAdj;
 
   
 
@@ -149,8 +150,9 @@ bool I8085RegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
 
   unsigned BaseReg = needsBasePointer(MF) ? I8085::DE : I8085::SP;
   MI.getOperand(FIOperandNum).ChangeToRegister(BaseReg, false);
-  assert(isInt<16>(Offset) && "Offset is out of range");
-  MI.getOperand(FIOperandNum + 1).ChangeToImmediate(Offset);
+  if (!isInt<16>(Offset) && !isUInt<16>(Offset))
+    report_fatal_error("I8085 frame offset exceeds the 16-bit address space");
+  MI.getOperand(FIOperandNum + 1).ChangeToImmediate(static_cast<int16_t>(Offset));
 
   return false;
 }

@@ -53,7 +53,7 @@ define i32 @retthirtytwo() {
 ; CHECK-NEXT:    LXI B, 772
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    SPHL
-; CHECK-NEXT:    .cfi_adjust_cfa_offset 4294967292
+; CHECK-NEXT:    .cfi_adjust_cfa_offset -4
 ; CHECK-NEXT:    RET
   ret i32 16909060
 }
@@ -149,7 +149,7 @@ define i64 @retsixtyfour() {
 ; CHECK-NEXT:    LXI H, 4
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    SPHL
-; CHECK-NEXT:    .cfi_adjust_cfa_offset 4294967292
+; CHECK-NEXT:    .cfi_adjust_cfa_offset -4
 ; CHECK-NEXT:    RET
   ret i64 72623859790382856
 }

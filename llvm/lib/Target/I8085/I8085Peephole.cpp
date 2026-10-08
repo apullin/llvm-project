@@ -220,18 +220,16 @@ public:
           continue;
         }
 
-        // Redundant flag-test elimination: ANI/ORI/XRI/ANA/ORA/XRA (and
-        // their memory-indirect variants) all set Z, S, P flags and clear CY
-        // exactly like ORA A would, so ORA A immediately after is redundant.
+        // OR/XOR produce the same documented flags as ORA A. AND does not:
+        // it sets AC, which a following ORA A clears (observable by DAA/PSW).
         if (MI->getOpcode() == I8085::ORA && MI->getNumOperands() >= 1 &&
             MI->getOperand(0).isReg() && MI->getOperand(0).getReg() == I8085::A &&
             MI != MBB.begin()) {
           auto Prev = std::prev(MI);
           unsigned PrevOpc = Prev->getOpcode();
-          if (PrevOpc == I8085::ANI || PrevOpc == I8085::ORI ||
-              PrevOpc == I8085::XRI || PrevOpc == I8085::ANA ||
+          if (PrevOpc == I8085::ORI || PrevOpc == I8085::XRI ||
               PrevOpc == I8085::ORA || PrevOpc == I8085::XRA ||
-              PrevOpc == I8085::ANA_M || PrevOpc == I8085::ORA_M ||
+              PrevOpc == I8085::ORA_M ||
               PrevOpc == I8085::XRA_M) {
             MI = MBB.erase(MI);
             Changed = true;

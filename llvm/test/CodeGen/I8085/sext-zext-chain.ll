@@ -63,7 +63,7 @@ define i32 @sext_i8_to_i32(i8 %a) {
 ; CHECK-NEXT:    MOV D, M
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    SPHL
-; CHECK-NEXT:    .cfi_adjust_cfa_offset 4294967292
+; CHECK-NEXT:    .cfi_adjust_cfa_offset -4
 ; CHECK-NEXT:    RET
 entry:
   %r = sext i8 %a to i32
@@ -101,7 +101,7 @@ define i32 @zext_i8_to_i32(i8 %a) {
 ; CHECK-NEXT:    MOV D, M
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    SPHL
-; CHECK-NEXT:    .cfi_adjust_cfa_offset 4294967292
+; CHECK-NEXT:    .cfi_adjust_cfa_offset -4
 ; CHECK-NEXT:    RET
 entry:
   %r = zext i8 %a to i32
@@ -141,7 +141,7 @@ define i32 @sext_i16_to_i32(i16 %a) {
 ; CHECK-NEXT:    MOV D, M
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    SPHL
-; CHECK-NEXT:    .cfi_adjust_cfa_offset 4294967292
+; CHECK-NEXT:    .cfi_adjust_cfa_offset -4
 ; CHECK-NEXT:    RET
 entry:
   %r = sext i16 %a to i32
@@ -178,7 +178,7 @@ define i32 @zext_i16_to_i32(i16 %a) {
 ; CHECK-NEXT:    MOV D, M
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    SPHL
-; CHECK-NEXT:    .cfi_adjust_cfa_offset 4294967292
+; CHECK-NEXT:    .cfi_adjust_cfa_offset -4
 ; CHECK-NEXT:    RET
 entry:
   %r = zext i16 %a to i32

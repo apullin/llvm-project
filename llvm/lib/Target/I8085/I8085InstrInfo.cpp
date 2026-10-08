@@ -246,21 +246,8 @@ void I8085InstrInfo::storeRegToStackSlot(MachineBasicBlock &MBB,
     llvm_unreachable("Cannot store this register into a stack slot!");
   }
 
-  MachineRegisterInfo &MRI = MF.getRegInfo();
-  if (Opcode == I8085::STORE_8 && RC != &I8085::GR8NoHLRegClass) {
-    // STORE_8 uses HL as the address register, so H/L cannot be the source.
-    if (SrcReg.isVirtual() &&
-        MRI.constrainRegClass(SrcReg, &I8085::GR8NoHLRegClass)) {
-      // Narrowed to a safe register class.
-    } else if (!I8085::GR8NoHLRegClass.contains(SrcReg)) {
-      Register Tmp = MRI.createVirtualRegister(&I8085::GR8NoHLRegClass);
-      BuildMI(MBB, MI, DL, get(TargetOpcode::COPY), Tmp)
-          .addReg(SrcReg, getKillRegState(isKill));
-      SrcReg = Tmp;
-      isKill = true;
-    }
-  }
-
+  // Spilling must accept every register in RC, including H/L. Expansion
+  // captures their value before using HL to compute the stack address.
   MachineInstrBuilder Spill =
       BuildMI(MBB, MI, DL, get(Opcode))
           .addFrameIndex(FrameIndex)
@@ -300,15 +287,6 @@ void I8085InstrInfo::loadRegFromStackSlot(MachineBasicBlock &MBB,
     Opcode = I8085::LOAD_32_WITH_ADDR;
   } else {
     llvm_unreachable("Cannot load this register from a stack slot!");
-  }
-
-  // LOAD_8_WITH_ADDR uses HL internally as the address register, so loading
-  // directly into H or L is unsafe: the loaded value would be clobbered when
-  // the expansion writes to HL for address computation.  Constrain the
-  // destination to GR8NoHL when possible.
-  if (Opcode == I8085::LOAD_8_WITH_ADDR && DestReg.isVirtual()) {
-    MachineRegisterInfo &MRI = MF.getRegInfo();
-    MRI.constrainRegClass(DestReg, &I8085::GR8NoHLRegClass);
   }
 
   MachineInstrBuilder Reload = BuildMI(MBB, MI, DL, get(Opcode), DestReg)

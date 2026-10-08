@@ -1,4 +1,6 @@
-let Constraints = "$src = $rd", Defs=[SREG, A, H, L]  in {
+// Non-branch GR32 operations save live HL around their scratch accesses.
+// Advertising an HL clobber lets post-RA cleanup delete live-through copies.
+let Constraints = "$src = $rd", Defs=[SREG, A] in {
 
   def SUB_32
       : I8085Pseudo<(outs GR32: $rd),
@@ -88,23 +90,23 @@ def SELECT_32
             []>;
 
 
-let Constraints = "$rs = $rd", Defs=[SREG, A, H, L]  in {
-  let Defs=[SREG, A, H, L] in def RL_32 : I8085Pseudo<(outs GR32: $rd), (ins GR32: $rs), "RL_32 $rs", []>;
-  let Defs=[SREG, A, H, L] in def RR_32 : I8085Pseudo<(outs GR32: $rd), (ins GR32: $rs), "RR_32 $rs", []>;
-  let Defs=[SREG, A, H, L] in def ASR_32 : I8085Pseudo<(outs GR32: $rd), (ins GR32: $rs), "ASR_32 $rs", []>;
+let Constraints = "$rs = $rd", Defs=[SREG, A] in {
+  def RL_32 : I8085Pseudo<(outs GR32: $rd), (ins GR32: $rs), "RL_32 $rs", []>;
+  def RR_32 : I8085Pseudo<(outs GR32: $rd), (ins GR32: $rs), "RR_32 $rs", []>;
+  def ASR_32 : I8085Pseudo<(outs GR32: $rd), (ins GR32: $rs), "ASR_32 $rs", []>;
 
   // Byte-shuffle shift pseudos: shift by 8/16/24 via byte moves instead of
   // bit-level rotate loops.  Each reads from source byte offsets and writes
   // to destination byte offsets in the GR32 scratch area.
   // These use B, C, D as temporaries, so BC and DE must be in Defs.
-  let Defs=[SREG, A, H, L, BC, DE, B, C, D, E] in def SHL_32_BY_8  : I8085Pseudo<(outs GR32: $rd), (ins GR32: $rs), "SHL_32_BY_8 $rs", []>;
-  let Defs=[SREG, A, H, L, BC, B, C] in def SHL_32_BY_16 : I8085Pseudo<(outs GR32: $rd), (ins GR32: $rs), "SHL_32_BY_16 $rs", []>;
-  let Defs=[SREG, A, H, L, BC, B, C] in def SHL_32_BY_24 : I8085Pseudo<(outs GR32: $rd), (ins GR32: $rs), "SHL_32_BY_24 $rs", []>;
-  let Defs=[SREG, A, H, L, BC, DE, B, C, D, E] in def SRL_32_BY_8  : I8085Pseudo<(outs GR32: $rd), (ins GR32: $rs), "SRL_32_BY_8 $rs", []>;
-  let Defs=[SREG, A, H, L, BC, B, C] in def SRL_32_BY_16 : I8085Pseudo<(outs GR32: $rd), (ins GR32: $rs), "SRL_32_BY_16 $rs", []>;
-  let Defs=[SREG, A, H, L, BC, B, C] in def SRL_32_BY_24 : I8085Pseudo<(outs GR32: $rd), (ins GR32: $rs), "SRL_32_BY_24 $rs", []>;
-  let Defs=[SREG, A, H, L, BC, DE, B, C, D, E] in def ASR_32_BY_8  : I8085Pseudo<(outs GR32: $rd), (ins GR32: $rs), "ASR_32_BY_8 $rs", []>;
-  let Defs=[SREG, A, H, L, BC, B, C] in def ASR_32_BY_16 : I8085Pseudo<(outs GR32: $rd), (ins GR32: $rs), "ASR_32_BY_16 $rs", []>;
+  let Defs=[SREG, A, BC, DE, B, C, D, E] in def SHL_32_BY_8  : I8085Pseudo<(outs GR32: $rd), (ins GR32: $rs), "SHL_32_BY_8 $rs", []>;
+  let Defs=[SREG, A, BC, B, C] in def SHL_32_BY_16 : I8085Pseudo<(outs GR32: $rd), (ins GR32: $rs), "SHL_32_BY_16 $rs", []>;
+  let Defs=[SREG, A, BC, B, C] in def SHL_32_BY_24 : I8085Pseudo<(outs GR32: $rd), (ins GR32: $rs), "SHL_32_BY_24 $rs", []>;
+  let Defs=[SREG, A, BC, DE, B, C, D, E] in def SRL_32_BY_8  : I8085Pseudo<(outs GR32: $rd), (ins GR32: $rs), "SRL_32_BY_8 $rs", []>;
+  let Defs=[SREG, A, BC, B, C] in def SRL_32_BY_16 : I8085Pseudo<(outs GR32: $rd), (ins GR32: $rs), "SRL_32_BY_16 $rs", []>;
+  let Defs=[SREG, A, BC, B, C] in def SRL_32_BY_24 : I8085Pseudo<(outs GR32: $rd), (ins GR32: $rs), "SRL_32_BY_24 $rs", []>;
+  let Defs=[SREG, A, BC, DE, B, C, D, E] in def ASR_32_BY_8  : I8085Pseudo<(outs GR32: $rd), (ins GR32: $rs), "ASR_32_BY_8 $rs", []>;
+  let Defs=[SREG, A, BC, B, C] in def ASR_32_BY_16 : I8085Pseudo<(outs GR32: $rd), (ins GR32: $rs), "ASR_32_BY_16 $rs", []>;
 }
 
 // LOAD_32_WITH_ADDR, LOAD_32_OFFSET_WITH_SP, LOAD_32_WITH_IMM_ADDR, LOAD_32:
@@ -114,7 +116,7 @@ let Constraints = "$rs = $rd", Defs=[SREG, A, H, L]  in {
 // allocator to freely insert spill reloads at points where $a was live,
 // because it believed the clobber was "expected", but the reload would then
 // destroy a live flag value used by a subsequent JMP_8_IF.
-let Uses=[SP], Defs=[H, L] in {
+let Uses=[SP] in {
 def LOAD_32 : I8085Pseudo<(outs GR32: $dst),
                        (ins i32imm: $src),
                        "LOAD_32 $dst, $src", [(set i32
@@ -138,7 +140,7 @@ def LOAD_32_WITH_IMM_ADDR : I8085Pseudo<(outs GR32: $dst),
 // temporary, and preserve SREG around address-forming DAD instructions.  Do
 // not model A as an unconditional clobber: the fast paths do not touch it, and
 // doing so can kill a value needed by a later store.
-let Uses=[SP], Defs=[H, L] in {
+let Uses=[SP] in {
 def STORE_32 : I8085Pseudo<(outs),
                             (ins mspibdsp: $dst, GR32: $src),
                             "STORE_32 $dst, $src", [(store i32: $src, addr: $dst)]>;
@@ -150,19 +152,19 @@ def STORE_32_AT_OFFSET_WITH_SP : I8085Pseudo<(outs),
 }
 // LOAD_32_ADDR_CONTENT may clobber BC when the source address is in HL,
 // since BC is used to preserve the address during scratch store operations.
-let Uses=[SP], Defs=[A, H, L, BC, B, C] in {
+let Uses=[SP], Defs=[BC, B, C] in {
 def LOAD_32_ADDR_CONTENT : I8085Pseudo<(outs GR32: $dst),
                        (ins GR16: $src),
                        "LOAD_32_ADDR_CONTENT $dst, $src", [(set i32: $dst, (load addr: $src))]>;
 }
-let Uses=[SP], Defs=[H, L] in {
+let Uses=[SP] in {
 def STORE_32_ADDR_CONTENT : I8085Pseudo<(outs),
                        (ins GR16: $addr, GR32: $src),
                        "STORE_32_ADDR_CONTENT $addr, $src",
                        [(store i32: $src, i16: $addr)]>;
 }
 
-let Uses=[SP], Defs=[A, H, L] in {
+let Uses=[SP], Defs=[A] in {
 def PACK_16_TO_32 : I8085Pseudo<(outs GR32: $dst),
                        (ins GR16: $lo, GR16: $hi),
                        "PACK_16_TO_32 $dst, $lo, $hi", []>;
@@ -177,7 +179,7 @@ def PACK_BCDE_TO_32 : I8085Pseudo<(outs GR32: $dst),
 
 // BSWAP32 reverses all 4 bytes of an i32 value.  Its expansion holds the
 // source bytes in BC and DE before writing the destination.
-let Defs = [A, H, L, BC, DE, B, C, D, E] in
+let Defs = [A, BC, DE, B, C, D, E] in
 def BSWAP32 : I8085Pseudo<(outs GR32: $dst),
                           (ins GR32: $src),
                           "BSWAP32 $dst, $src",
@@ -191,7 +193,7 @@ let Uses = [SP], Defs = [SP, DE, H, L] in
 def RESTORE_VLA_BASE_AFTER_PACK : I8085Pseudo<(outs), (ins),
                        "RESTORE_VLA_BASE_AFTER_PACK", []>;
 
-let Defs=[A, H, L] in {
+let Defs=[A] in {
 def MVI_32 : I8085Pseudo<(outs GR32: $rd),
                     (ins i32imm: $k),
                     "MVI_32 $rd, $k", [(set i32: $rd, imm: $k)]>;
@@ -265,7 +267,7 @@ def TRUNC32TO8
 }
 
 
-let Constraints = "$src = $dst", Defs=[SREG, A, H, L]  in {
+let Constraints = "$src = $dst", Defs=[SREG, A] in {
         def SEXT32_INREG_8
             : I8085Pseudo<(outs GR32: $dst),
                             (ins GR32: $src),
@@ -280,7 +282,9 @@ let Constraints = "$src = $dst", Defs=[SREG, A, H, L]  in {
 
 }
 
-let Defs=[A, H, L] in def MOV_32 : I8085Pseudo<(outs GR32: $rd),
+// Post-RA COPY lowering must preserve every live physical register and flags.
+// The expander saves PSW/HL when needed; nominal clobbers hide that liveness.
+def MOV_32 : I8085Pseudo<(outs GR32: $rd),
                     (ins GR32: $rs),
                     "MOV_32 $rd, $rs", []>;
 

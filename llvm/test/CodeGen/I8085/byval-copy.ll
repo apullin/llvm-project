@@ -8,10 +8,10 @@ declare void @callee(ptr byval(%S) align 1)
 define void @caller(ptr %p) {
 ; CHECK-LABEL: caller:
 ; CHECK:         .cfi_startproc
-; CHECK:         LXI H, 65524
+; CHECK:         LXI H, 65520
 ; CHECK:         SPHL
 ; CHECK:         CALL callee
-; CHECK:         LXI H, 12
+; CHECK:         LXI H, 16
 ; CHECK:         SPHL
 ; CHECK:         RET
 entry:

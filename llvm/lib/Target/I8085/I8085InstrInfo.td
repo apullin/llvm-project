@@ -517,7 +517,7 @@ def STORE_16 : I8085Pseudo<(outs),
 
 def STORE_8 : I8085Pseudo<(outs),
                         (ins mspibdsp: $memri,
-                         GR8NoHL: $reg),
+                         GR8: $reg),
                         "STORE $memri, $reg", [(store i8: $reg, addr: $memri)]>;
 
 // LOAD_16_WITH_ADDR: A is NOT declared as clobbered because most expansion
@@ -600,7 +600,7 @@ let Defs=[HL], mayStore = 1 in def STORE_8_WITH_IMM_ADDR : I8085Pseudo<(outs),
                        "STORE_8_ADDR $addr, $src", []>;
 
 let mayStore = 1 in def STORE_8_STATIC_ADDR : I8085Pseudo<(outs),
-                       (ins imm16Addr: $addr, GR8NoHL: $src),
+                       (ins imm16Addr: $addr, GR8: $src),
                        "STORE_8_STATIC_ADDR $addr, $src", []>;
 
 let mayStore = 1 in def STORE_16_STATIC_ADDR : I8085Pseudo<(outs),
@@ -781,6 +781,11 @@ let Defs = [SREG, H, L],
     hasSideEffects = 0 in  def FRMIDX : I8085Pseudo<(outs GR16: $dst),
                                                     (ins mspi: $memri),
                                                     "FRMIDX\t$dst, $memri", []>;
+
+let Defs = [SREG, A, H, L], mayLoad = 1, hasSideEffects = 0 in
+def FRMIDX_REALIGNED : I8085Pseudo<(outs GR16BD:$dst),
+    (ins mspi:$savedsp, i16imm:$incomingoffset),
+    "FRMIDX_REALIGNED $dst, $savedsp, $incomingoffset", []>;
 
 // Byte swap pseudo-instructions
 // BSWAP16 swaps the two bytes of an i16 value

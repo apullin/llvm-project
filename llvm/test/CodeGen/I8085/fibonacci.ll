@@ -3,7 +3,9 @@
 define signext i16 @fibonacci(i16 noundef signext %0) #0 {
 
 ; CHECK-LABEL: fibonacci:
-; CHECK: LXI H, 65518
+; CHECK: ANI 254
+; CHECK: SPHL
+; CHECK: LXI H, {{65[0-9]+}}
 ; CHECK: DAD	SP
 ; CHECK: SPHL
 ; CHECK: ADI 128

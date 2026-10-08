@@ -82,7 +82,7 @@ define i16 @umul_ov_i16(i16 %a, i16 %b) {
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    SPHL
-; CHECK-NEXT:    .cfi_adjust_cfa_offset 4294967288
+; CHECK-NEXT:    .cfi_adjust_cfa_offset -8
 ; CHECK-NEXT:    RET
 entry:
   %res = call { i16, i1 } @llvm.umul.with.overflow.i16(i16 %a, i16 %b)
@@ -197,7 +197,7 @@ define i1 @umul_ov_flag(i16 %a, i16 %b) {
 ; CHECK-NEXT:    LXI H, 8
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    SPHL
-; CHECK-NEXT:    .cfi_adjust_cfa_offset 4294967288
+; CHECK-NEXT:    .cfi_adjust_cfa_offset -8
 ; CHECK-NEXT:    RET
 entry:
   %res = call { i16, i1 } @llvm.umul.with.overflow.i16(i16 %a, i16 %b)
@@ -228,7 +228,7 @@ define i8 @smul_ov_i8(i8 %a, i8 %b) {
 ; CHECK-NEXT:    LXI H, 2
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    SPHL
-; CHECK-NEXT:    .cfi_adjust_cfa_offset 4294967294
+; CHECK-NEXT:    .cfi_adjust_cfa_offset -2
 ; CHECK-NEXT:    RET
 entry:
   %res = call { i8, i1 } @llvm.smul.with.overflow.i8(i8 %a, i8 %b)
@@ -278,7 +278,7 @@ define i1 @smul_ov_flag(i8 %a, i8 %b) {
 ; CHECK-NEXT:    LXI H, 2
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    SPHL
-; CHECK-NEXT:    .cfi_adjust_cfa_offset 4294967294
+; CHECK-NEXT:    .cfi_adjust_cfa_offset -2
 ; CHECK-NEXT:    RET
 entry:
   %res = call { i8, i1 } @llvm.smul.with.overflow.i8(i8 %a, i8 %b)

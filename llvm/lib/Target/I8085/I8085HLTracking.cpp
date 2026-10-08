@@ -22,6 +22,7 @@
 #include "MCTargetDesc/I8085MCTargetDesc.h"
 
 #include "llvm/ADT/StringRef.h"
+#include "llvm/CodeGen/LivePhysRegs.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
 #include "llvm/CodeGen/MachineInstr.h"
 #include "llvm/CodeGen/MachineOperand.h"
@@ -329,6 +330,15 @@ private:
     int64_t Delta = Target.Offset - Current.Offset;
     if (Delta < -MaxDelta || Delta > MaxDelta)
       return false;
+
+    if (LastToErase->getOpcode() == I8085::DAD) {
+      LivePhysRegs Live(*MBB.getParent()->getSubtarget().getRegisterInfo());
+      Live.addLiveOuts(MBB);
+      for (auto I = MBB.end(); I != std::next(LastToErase);)
+        Live.stepBackward(*--I);
+      if (Live.contains(I8085::SREG))
+        return false;
+    }
 
     if (Delta != 0)
       emitHLDelta(MBB, MI, MI->getDebugLoc(), Delta, TII);

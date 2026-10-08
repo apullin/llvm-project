@@ -280,7 +280,7 @@ define i64 @mul64(i64 %a, i64 %b) {
 ; CHECK-NEXT:    LXI H, 30
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    SPHL
-; CHECK-NEXT:    .cfi_adjust_cfa_offset 4294967266
+; CHECK-NEXT:    .cfi_adjust_cfa_offset -30
 ; CHECK-NEXT:    RET
 entry:
   %r = mul i64 %a, %b
@@ -566,7 +566,7 @@ define i64 @sdiv64(i64 %a, i64 %b) {
 ; CHECK-NEXT:    LXI H, 30
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    SPHL
-; CHECK-NEXT:    .cfi_adjust_cfa_offset 4294967266
+; CHECK-NEXT:    .cfi_adjust_cfa_offset -30
 ; CHECK-NEXT:    RET
 entry:
   %r = sdiv i64 %a, %b
@@ -852,7 +852,7 @@ define i64 @udiv64(i64 %a, i64 %b) {
 ; CHECK-NEXT:    LXI H, 30
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    SPHL
-; CHECK-NEXT:    .cfi_adjust_cfa_offset 4294967266
+; CHECK-NEXT:    .cfi_adjust_cfa_offset -30
 ; CHECK-NEXT:    RET
 entry:
   %r = udiv i64 %a, %b
@@ -1138,7 +1138,7 @@ define i64 @srem64(i64 %a, i64 %b) {
 ; CHECK-NEXT:    LXI H, 30
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    SPHL
-; CHECK-NEXT:    .cfi_adjust_cfa_offset 4294967266
+; CHECK-NEXT:    .cfi_adjust_cfa_offset -30
 ; CHECK-NEXT:    RET
 entry:
   %r = srem i64 %a, %b
@@ -1424,7 +1424,7 @@ define i64 @urem64(i64 %a, i64 %b) {
 ; CHECK-NEXT:    LXI H, 30
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    SPHL
-; CHECK-NEXT:    .cfi_adjust_cfa_offset 4294967266
+; CHECK-NEXT:    .cfi_adjust_cfa_offset -30
 ; CHECK-NEXT:    RET
 entry:
   %r = urem i64 %a, %b
@@ -1667,7 +1667,7 @@ define i64 @shl64(i64 %a, i8 %b) {
 ; CHECK-NEXT:    LXI H, 26
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    SPHL
-; CHECK-NEXT:    .cfi_adjust_cfa_offset 4294967270
+; CHECK-NEXT:    .cfi_adjust_cfa_offset -26
 ; CHECK-NEXT:    RET
 entry:
   %bb = zext i8 %b to i64
@@ -1911,7 +1911,7 @@ define i64 @lshr64(i64 %a, i8 %b) {
 ; CHECK-NEXT:    LXI H, 26
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    SPHL
-; CHECK-NEXT:    .cfi_adjust_cfa_offset 4294967270
+; CHECK-NEXT:    .cfi_adjust_cfa_offset -26
 ; CHECK-NEXT:    RET
 entry:
   %bb = zext i8 %b to i64
@@ -2155,7 +2155,7 @@ define i64 @ashr64(i64 %a, i8 %b) {
 ; CHECK-NEXT:    LXI H, 26
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    SPHL
-; CHECK-NEXT:    .cfi_adjust_cfa_offset 4294967270
+; CHECK-NEXT:    .cfi_adjust_cfa_offset -26
 ; CHECK-NEXT:    RET
 entry:
   %bb = zext i8 %b to i64
@@ -2351,7 +2351,7 @@ define i64 @clz64(i64 %a) {
 ; CHECK-NEXT:    LXI H, 14
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    SPHL
-; CHECK-NEXT:    .cfi_adjust_cfa_offset 4294967282
+; CHECK-NEXT:    .cfi_adjust_cfa_offset -14
 ; CHECK-NEXT:    RET
 entry:
   %r = call i64 @llvm.ctlz.i64(i64 %a, i1 false)

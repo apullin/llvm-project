@@ -36,10 +36,10 @@ define i32 @realign_dynamic_i32(i16 %n) #0 {
 ; CHECK-LABEL: realign_dynamic_i32:
 ; CHECK: PUSH D
 ; CHECK: LXI B, 4660
-; CHECK: MOV E, M
-; CHECK: MOV D, M
+; CHECK-NEXT: MOV D, H
+; CHECK-NEXT: MOV E, L
 ; CHECK: POP H
-; CHECK: ADI 4
+; CHECK: ADI 6
 ; CHECK: SPHL
 ; CHECK: RET
 entry:

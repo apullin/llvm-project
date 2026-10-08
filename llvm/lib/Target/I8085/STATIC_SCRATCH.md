@@ -19,9 +19,16 @@ script can still place `.bss.i8085.scratch` explicitly.
 
 ## Safety model
 
-The default mode is conservative. It converts only supported spill slots whose
-values are not live across a call. These slots behave like temporary scratch
-inside one activation and do not require a special source-level contract.
+Enabling this option promises exclusive access to each function's scratch while
+its converted slots are live. In particular, an ISR or another task must not
+enter that function in that interval. The compiler cannot prove asynchronous
+exclusivity. Single-threaded foreground code with no interrupt re-entry satisfies
+this execution-model requirement; `norecurse` alone does not.
+
+Within that execution model, the default mode is synchronous-call-safe. It
+converts only supported spill slots whose values are not live across a call,
+so ordinary recursive calls cannot overwrite a live converted slot. There is no
+default-on scratch conversion and no implicit interrupt-safety guarantee.
 
 Slots that are live across a call can be converted only when the function has an
 explicit nonreentrant contract:

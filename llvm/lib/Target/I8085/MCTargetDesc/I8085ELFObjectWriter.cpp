@@ -11,6 +11,7 @@
 #include "MCTargetDesc/I8085MCTargetDesc.h"
 
 #include "llvm/MC/MCAssembler.h"
+#include "llvm/MC/MCContext.h"
 #include "llvm/MC/MCELFObjectWriter.h"
 #include "llvm/MC/MCExpr.h"
 #include "llvm/MC/MCObjectWriter.h"
@@ -40,12 +41,17 @@ unsigned I8085ELFObjectWriter::getRelocType(MCContext &Ctx, const MCValue &Targe
   (void)Target;
   switch (Fixup.getTargetKind()) {
   case FK_Data_1:
-    return ELF::R_I8085_8;
+  case FK_PCRel_1:
+    return IsPCRel ? ELF::R_I8085_PC8 : ELF::R_I8085_8;
   case FK_Data_2:
+  case FK_PCRel_2:
+    return IsPCRel ? ELF::R_I8085_PC16 : ELF::R_I8085_16;
   case FK_Data_4:
+  case FK_PCRel_4:
+    return IsPCRel ? ELF::R_I8085_PC32 : ELF::R_I8085_32;
   case FK_Data_8:
-    // I8085 uses 16-bit addresses; map wider data fixups to 16-bit relocs.
-    return ELF::R_I8085_16;
+  case FK_PCRel_8:
+    return IsPCRel ? ELF::R_I8085_PC64 : ELF::R_I8085_64;
   case I8085::fixup_16:
     return ELF::R_I8085_16;
   case I8085::fixup_lo8:
@@ -71,7 +77,8 @@ unsigned I8085ELFObjectWriter::getRelocType(MCContext &Ctx, const MCValue &Targe
   case I8085::fixup_gs:
     return ELF::R_I8085_GS;
   default:
-    llvm_unreachable("invalid fixup kind!");
+    Ctx.reportError(Fixup.getLoc(), "unsupported I8085 relocation fixup");
+    return ELF::R_I8085_NONE;
   }
 }
 

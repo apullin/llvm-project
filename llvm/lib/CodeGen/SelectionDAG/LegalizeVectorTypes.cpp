@@ -63,6 +63,12 @@ void DAGTypeLegalizer::ScalarizeVectorResult(SDNode *N, unsigned ResNo) {
   case ISD::LOAD:           R = ScalarizeVecRes_LOAD(cast<LoadSDNode>(N));break;
   case ISD::SCALAR_TO_VECTOR:  R = ScalarizeVecRes_SCALAR_TO_VECTOR(N); break;
   case ISD::SIGN_EXTEND_INREG: R = ScalarizeVecRes_InregOp(N); break;
+  case ISD::AssertSext:
+  case ISD::AssertZext:
+    R = DAG.getNode(N->getOpcode(), SDLoc(N),
+                    N->getValueType(0).getVectorElementType(),
+                    GetScalarizedVector(N->getOperand(0)), N->getOperand(1));
+    break;
   case ISD::VSELECT:           R = ScalarizeVecRes_VSELECT(N); break;
   case ISD::SELECT:            R = ScalarizeVecRes_SELECT(N); break;
   case ISD::SELECT_CC:         R = ScalarizeVecRes_SELECT_CC(N); break;

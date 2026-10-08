@@ -14,6 +14,7 @@
 
 #include "I8085.h"
 #include "I8085InstrInfo.h"
+#include "I8085MachineFunctionInfo.h"
 #include "I8085TargetMachine.h"
 #include "MCTargetDesc/I8085MCTargetDesc.h"
 
@@ -248,6 +249,8 @@ bool I8085ExpandPseudo::tryExpandAdjacentLoad16Pair(Block &MBB, BlockIt MBBI) {
     return false;
 
   MachineInstr &NextMI = *NextIt;
+  if (MI.hasOrderedMemoryRef() || NextMI.hasOrderedMemoryRef())
+    return false;
   unsigned DestA = MI.getOperand(0).getReg();
   unsigned BaseA = MI.getOperand(1).getReg();
   int64_t OffA = MI.getOperand(2).getImm();
@@ -307,6 +310,8 @@ bool I8085ExpandPseudo::tryExpandAdjacentStore16Pair(Block &MBB, BlockIt MBBI) {
     return false;
 
   MachineInstr &NextMI = *NextIt;
+  if (MI.hasOrderedMemoryRef() || NextMI.hasOrderedMemoryRef())
+    return false;
   unsigned BaseA = MI.getOperand(0).getReg();
   int64_t OffA = MI.getOperand(1).getImm();
   unsigned SrcA = MI.getOperand(2).getReg();
@@ -860,6 +865,10 @@ bool I8085ExpandPseudo::expand<I8085::CALL_INDIRECT>(Block &MBB, BlockIt MBBI) {
 
   const BasicBlock *LLVMBB = MBB.getBasicBlock();
   MachineBasicBlock *ReturnMBB = MF->CreateMachineBasicBlock(LLVMBB);
+  // LXI materializes this continuation's address for the callee's RET.
+  // It is not merely a fallthrough block that branch folding may erase.
+  ReturnMBB->setMachineBlockAddressTaken();
+  ReturnMBB->setLabelMustBeEmitted();
   auto InsertPos = std::next(MBB.getIterator());
   MF->insert(InsertPos, ReturnMBB);
 
@@ -898,12 +907,9 @@ bool I8085ExpandPseudo::expand<I8085::STORE_8>(Block &MBB, BlockIt MBBI) {
   const bool UseDAD = (baseReg != I8085::HL);
   const bool PreservePSW = UseDAD && isPhysRegLive(MBB, MBBI, I8085::SREG);
 
-  // If srcReg is H or L and we're going to clobber HL with LXI+DAD, we must
-  // copy the source value to A before the LXI destroys it.  The register
-  // allocator's coalescer can widen GR8NoHL to GR8 and assign H/L despite
-  // the operand constraint.
+  // Capture an H/L source before address computation changes that pair.
   const bool SrcIsHL = (srcReg == I8085::H || srcReg == I8085::L) &&
-                       (baseReg != I8085::HL);
+                       (baseReg != I8085::HL || offsetToStore != 0);
   // When SrcIsHL, we need A as a temporary.  If A is live (or SREG is live),
   // we must preserve PSW.  Subsumes the existing PreservePSW logic.
   const bool NeedPSWSave = SrcIsHL
@@ -1184,6 +1190,21 @@ bool I8085ExpandPseudo::expand<I8085::STORE_8_STATIC_ADDR>(Block &MBB, BlockIt M
   unsigned SrcReg = MI.getOperand(1).getReg();
   const MachineOperand &AddrMO = MI.getOperand(0);
   const bool PreserveHL = isHLOrSubRegLive(MBB, MBBI);
+
+  if (SrcReg == I8085::H || SrcReg == I8085::L) {
+    const bool PreservePSW = shouldPreservePSW(MBB, MBBI);
+    if (PreservePSW)
+      buildMI(MBB, MBBI, I8085::PUSH).addReg(I8085::PSW);
+    buildMI(MBB, MBBI, I8085::MOV)
+        .addReg(I8085::A, RegState::Define)
+        .addReg(SrcReg);
+    MachineInstrBuilder Store = buildMI(MBB, MBBI, I8085::STA);
+    addAddrOperand(Store, AddrMO);
+    if (PreservePSW)
+      buildMI(MBB, MBBI, I8085::POP).addReg(I8085::PSW, RegState::Define);
+    MI.eraseFromParent();
+    return true;
+  }
 
   if (SrcReg == I8085::A || (PreserveHL && !isPhysRegLive(MBB, MBBI, I8085::A))) {
     if (SrcReg != I8085::A)
@@ -1745,6 +1766,36 @@ bool I8085ExpandPseudo::expand<I8085::LOAD_16_WITH_ADDR>(Block &MBB, BlockIt MBB
   buildINX(MBB, MBBI, I8085::HL);
   buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(highReg, RegState::Define);
   
+  MI.eraseFromParent();
+  return true;
+}
+
+template <>
+bool I8085ExpandPseudo::expand<I8085::FRMIDX_REALIGNED>(Block &MBB, BlockIt MBBI) {
+  MachineInstr &MI = *MBBI;
+  unsigned Dest = MI.getOperand(0).getReg();
+  unsigned Base = MI.getOperand(1).getReg();
+  int64_t SavedOffset = MI.getOperand(2).getImm();
+  int64_t IncomingOffset = MI.getOperand(3).getImm();
+  const auto *AFI = MBB.getParent()->getInfo<I8085MachineFunctionInfo>();
+  IncomingOffset += AFI->getCalleeSavedFrameSize() + 2;
+  unsigned Low = 0, High = 0;
+  if (!getPairRegs(Dest, Low, High))
+    llvm_unreachable("realigned frame address requires BC or DE");
+
+  buildMI(MBB, MBBI, I8085::PUSH).addReg(I8085::PSW);
+  if (Base == I8085::SP)
+    SavedOffset += 2;
+  buildMI(MBB, MBBI, I8085::LOAD_16_WITH_ADDR)
+      .addReg(Dest, RegState::Define).addReg(Base).addImm(SavedOffset);
+  uint16_t Delta = static_cast<uint16_t>(IncomingOffset);
+  buildMI(MBB, MBBI, I8085::MOV).addReg(I8085::A, RegState::Define).addReg(Low);
+  buildMI(MBB, MBBI, I8085::ADI).addImm(Delta & 0xff);
+  buildMI(MBB, MBBI, I8085::MOV).addReg(Low, RegState::Define).addReg(I8085::A);
+  buildMI(MBB, MBBI, I8085::MOV).addReg(I8085::A, RegState::Define).addReg(High);
+  buildMI(MBB, MBBI, I8085::ACI).addImm(Delta >> 8);
+  buildMI(MBB, MBBI, I8085::MOV).addReg(High, RegState::Define).addReg(I8085::A);
+  buildMI(MBB, MBBI, I8085::POP).addReg(I8085::PSW, RegState::Define);
   MI.eraseFromParent();
   return true;
 }
@@ -3690,6 +3741,7 @@ bool I8085ExpandPseudo::expandMI(Block &MBB, BlockIt MBBI) {
     EXPAND(I8085::LOAD_16_WITH_IMM_ADDR);
     EXPAND(I8085::LOAD_16);
     EXPAND(I8085::FRMIDX);
+    EXPAND(I8085::FRMIDX_REALIGNED);
     EXPAND(I8085::STORE_8_WITH_IMM_ADDR);
     EXPAND(I8085::STORE_8_STATIC_ADDR);
     EXPAND(I8085::STORE_16_STATIC_ADDR);

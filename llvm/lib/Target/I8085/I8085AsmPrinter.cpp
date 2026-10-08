@@ -87,10 +87,17 @@ void I8085AsmPrinter::printOperand(const MachineInstr *MI, unsigned OpNo,
     O << MO.getImm();
     break;
   case MachineOperand::MO_GlobalAddress:
-    O << getSymbol(MO.getGlobal());
+    O << *getSymbol(MO.getGlobal());
+    if (MO.getOffset())
+      O << (MO.getOffset() > 0 ? "+" : "") << MO.getOffset();
     break;
   case MachineOperand::MO_ExternalSymbol:
     O << *GetExternalSymbolSymbol(MO.getSymbolName());
+    if (MO.getOffset())
+      O << (MO.getOffset() > 0 ? "+" : "") << MO.getOffset();
+    break;
+  case MachineOperand::MO_MCSymbol:
+    O << *MO.getMCSymbol();
     break;
   case MachineOperand::MO_MachineBasicBlock:
     O << *MO.getMBB()->getSymbol();
@@ -157,19 +164,9 @@ bool I8085AsmPrinter::PrintAsmMemoryOperand(const MachineInstr *MI,
     return true; // Unknown modifier
 
   const MachineOperand &MO = MI->getOperand(OpNum);
-  (void)MO;
-  assert(MO.isReg() && "Unexpected inline asm memory operand");
-
-
-  // If NumOpRegs == 2, then we assume it is product of a FrameIndex expansion
-  // and the second operand is an Imm.
-  const InlineAsm::Flag OpFlags(MI->getOperand(OpNum - 1).getImm());
-  const unsigned NumOpRegs = OpFlags.getNumOperandRegisters();
-
-  if (NumOpRegs == 2) {
-    O << '+' << MI->getOperand(OpNum + 1).getImm();
-  }
-
+  if (!MO.isGlobal() && !MO.isSymbol() && !MO.isMCSymbol() && !MO.isImm())
+    return true; // 8085 has no printable register+offset memory operand.
+  printOperand(MI, OpNum, O);
   return false;
 }
 

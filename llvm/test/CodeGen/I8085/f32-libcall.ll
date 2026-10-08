@@ -118,7 +118,7 @@ define float @fadd_f32(float %a, float %b) {
 ; CHECK-NEXT:    MOV D, M
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    SPHL
-; CHECK-NEXT:    .cfi_adjust_cfa_offset 4294967284
+; CHECK-NEXT:    .cfi_adjust_cfa_offset -12
 ; CHECK-NEXT:    RET
   %r = fadd float %a, %b
   ret float %r
@@ -241,7 +241,7 @@ define float @fsub_f32(float %a, float %b) {
 ; CHECK-NEXT:    MOV D, M
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    SPHL
-; CHECK-NEXT:    .cfi_adjust_cfa_offset 4294967284
+; CHECK-NEXT:    .cfi_adjust_cfa_offset -12
 ; CHECK-NEXT:    RET
   %r = fsub float %a, %b
   ret float %r
@@ -364,7 +364,7 @@ define float @fmul_f32(float %a, float %b) {
 ; CHECK-NEXT:    MOV D, M
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    SPHL
-; CHECK-NEXT:    .cfi_adjust_cfa_offset 4294967284
+; CHECK-NEXT:    .cfi_adjust_cfa_offset -12
 ; CHECK-NEXT:    RET
   %r = fmul float %a, %b
   ret float %r
@@ -487,7 +487,7 @@ define float @fdiv_f32(float %a, float %b) {
 ; CHECK-NEXT:    MOV D, M
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    SPHL
-; CHECK-NEXT:    .cfi_adjust_cfa_offset 4294967284
+; CHECK-NEXT:    .cfi_adjust_cfa_offset -12
 ; CHECK-NEXT:    RET
   %r = fdiv float %a, %b
   ret float %r
@@ -649,7 +649,7 @@ define i1 @fcmp_eq_f32(float %a, float %b) {
 ; CHECK-NEXT:    LXI H, 16
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    SPHL
-; CHECK-NEXT:    .cfi_adjust_cfa_offset 4294967280
+; CHECK-NEXT:    .cfi_adjust_cfa_offset -16
 ; CHECK-NEXT:    RET
   %r = fcmp oeq float %a, %b
   ret i1 %r
@@ -781,7 +781,7 @@ define i1 @fcmp_lt_f32(float %a, float %b) {
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    CMP M
 ; CHECK-NEXT:    JC LBB5_8
-; CHECK-NEXT:    JNZ LBB5_10
+; CHECK-NEXT:    JNZ LBB5_11
 ; CHECK-NEXT:  ; %bb.2:
 ; CHECK-NEXT:    LXI H, 10
 ; CHECK-NEXT:    DAD SP
@@ -790,7 +790,7 @@ define i1 @fcmp_lt_f32(float %a, float %b) {
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    CMP M
 ; CHECK-NEXT:    JC LBB5_8
-; CHECK-NEXT:    JNZ LBB5_10
+; CHECK-NEXT:    JNZ LBB5_11
 ; CHECK-NEXT:  ; %bb.3:
 ; CHECK-NEXT:    LXI H, 9
 ; CHECK-NEXT:    DAD SP
@@ -799,7 +799,7 @@ define i1 @fcmp_lt_f32(float %a, float %b) {
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    CMP M
 ; CHECK-NEXT:    JC LBB5_8
-; CHECK-NEXT:    JNZ LBB5_10
+; CHECK-NEXT:    JNZ LBB5_11
 ; CHECK-NEXT:  ; %bb.4:
 ; CHECK-NEXT:    LXI H, 8
 ; CHECK-NEXT:    DAD SP
@@ -808,21 +808,21 @@ define i1 @fcmp_lt_f32(float %a, float %b) {
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    CMP M
 ; CHECK-NEXT:    JC LBB5_8
-; CHECK-NEXT:    JNZ LBB5_10
-; CHECK-NEXT:  LBB5_10:
+; CHECK-NEXT:    JNZ LBB5_11
+; CHECK-NEXT:  LBB5_11:
 ; CHECK-NEXT:    MVI A, 0
-; CHECK-NEXT:    JMP LBB5_11
+; CHECK-NEXT:    JMP LBB5_9
 ; CHECK-NEXT:  LBB5_6:
 ; CHECK-NEXT:    MOV A, M
 ; CHECK-NEXT:    ANI 128
-; CHECK-NEXT:    JZ LBB5_10
+; CHECK-NEXT:    JZ LBB5_11
 ; CHECK-NEXT:  LBB5_8:
 ; CHECK-NEXT:    MVI A, 1
-; CHECK-NEXT:  LBB5_11:
+; CHECK-NEXT:  LBB5_9:
 ; CHECK-NEXT:    LXI H, 16
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    SPHL
-; CHECK-NEXT:    .cfi_adjust_cfa_offset 4294967280
+; CHECK-NEXT:    .cfi_adjust_cfa_offset -16
 ; CHECK-NEXT:    RET
   %r = fcmp olt float %a, %b
   ret i1 %r
@@ -956,7 +956,7 @@ define i1 @fcmp_gt_f32(float %a, float %b) {
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    CMP M
 ; CHECK-NEXT:    JC LBB6_7
-; CHECK-NEXT:    JNZ LBB6_10
+; CHECK-NEXT:    JNZ LBB6_11
 ; CHECK-NEXT:  ; %bb.2:
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    INX H
@@ -966,7 +966,7 @@ define i1 @fcmp_gt_f32(float %a, float %b) {
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    CMP M
 ; CHECK-NEXT:    JC LBB6_7
-; CHECK-NEXT:    JNZ LBB6_10
+; CHECK-NEXT:    JNZ LBB6_11
 ; CHECK-NEXT:  ; %bb.3:
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    INX H
@@ -976,7 +976,7 @@ define i1 @fcmp_gt_f32(float %a, float %b) {
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    CMP M
 ; CHECK-NEXT:    JC LBB6_7
-; CHECK-NEXT:    JNZ LBB6_10
+; CHECK-NEXT:    JNZ LBB6_11
 ; CHECK-NEXT:  ; %bb.4:
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    INX H
@@ -986,21 +986,21 @@ define i1 @fcmp_gt_f32(float %a, float %b) {
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    CMP M
 ; CHECK-NEXT:    JC LBB6_7
-; CHECK-NEXT:    JNZ LBB6_10
-; CHECK-NEXT:  LBB6_10:
+; CHECK-NEXT:    JNZ LBB6_11
+; CHECK-NEXT:  LBB6_11:
 ; CHECK-NEXT:    MVI A, 0
-; CHECK-NEXT:    JMP LBB6_11
+; CHECK-NEXT:    JMP LBB6_8
 ; CHECK-NEXT:  LBB6_6:
 ; CHECK-NEXT:    MOV A, M
 ; CHECK-NEXT:    ANI 128
-; CHECK-NEXT:    JNZ LBB6_10
+; CHECK-NEXT:    JNZ LBB6_11
 ; CHECK-NEXT:  LBB6_7:
 ; CHECK-NEXT:    MVI A, 1
-; CHECK-NEXT:  LBB6_11:
+; CHECK-NEXT:  LBB6_8:
 ; CHECK-NEXT:    LXI H, 16
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    SPHL
-; CHECK-NEXT:    .cfi_adjust_cfa_offset 4294967280
+; CHECK-NEXT:    .cfi_adjust_cfa_offset -16
 ; CHECK-NEXT:    RET
   %r = fcmp ogt float %a, %b
   ret i1 %r
@@ -1086,7 +1086,7 @@ define float @sitofp_i32(i32 %a) {
 ; CHECK-NEXT:    MOV D, M
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    SPHL
-; CHECK-NEXT:    .cfi_adjust_cfa_offset 4294967288
+; CHECK-NEXT:    .cfi_adjust_cfa_offset -8
 ; CHECK-NEXT:    RET
   %r = sitofp i32 %a to float
   ret float %r
@@ -1172,7 +1172,7 @@ define float @uitofp_i32(i32 %a) {
 ; CHECK-NEXT:    MOV D, M
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    SPHL
-; CHECK-NEXT:    .cfi_adjust_cfa_offset 4294967288
+; CHECK-NEXT:    .cfi_adjust_cfa_offset -8
 ; CHECK-NEXT:    RET
   %r = uitofp i32 %a to float
   ret float %r
@@ -1258,7 +1258,7 @@ define i32 @fptosi_i32(float %a) {
 ; CHECK-NEXT:    MOV D, M
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    SPHL
-; CHECK-NEXT:    .cfi_adjust_cfa_offset 4294967288
+; CHECK-NEXT:    .cfi_adjust_cfa_offset -8
 ; CHECK-NEXT:    RET
   %r = fptosi float %a to i32
   ret i32 %r
@@ -1344,7 +1344,7 @@ define i32 @fptoui_i32(float %a) {
 ; CHECK-NEXT:    MOV D, M
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    SPHL
-; CHECK-NEXT:    .cfi_adjust_cfa_offset 4294967288
+; CHECK-NEXT:    .cfi_adjust_cfa_offset -8
 ; CHECK-NEXT:    RET
   %r = fptoui float %a to i32
   ret i32 %r

@@ -160,8 +160,8 @@ body:             |
     ; CHECK-NEXT: $e = MOV_FROM_M
     ; CHECK-NEXT: $hl = INX
     ; CHECK-NEXT: $d = MOV_FROM_M
-    $de = LOAD_16_WITH_ADDR $sp, 35, implicit-def $a, implicit-def $hl, implicit $sp
-    $bc = LOAD_16_WITH_ADDR $sp, 33, implicit-def $a, implicit-def $hl, implicit $sp
+    $de = LOAD_16_WITH_ADDR $sp, 35, implicit-def $a, implicit-def $hl, implicit $sp :: (load (s16))
+    $bc = LOAD_16_WITH_ADDR $sp, 33, implicit-def $a, implicit-def $hl, implicit $sp :: (load (s16))
     RET implicit $sp, implicit-def $sp
 ...
 
@@ -197,8 +197,8 @@ body:             |
     ; CHECK-NEXT: MOV_M $e
     ; CHECK-NEXT: $hl = INX
     ; CHECK-NEXT: MOV_M $d
-    STORE_16 $sp, 45, $de, implicit-def $hl, implicit $sp
-    STORE_16 $sp, 41, $bc, implicit-def $hl, implicit $sp
+    STORE_16 $sp, 45, $de, implicit-def $hl, implicit $sp :: (store (s16))
+    STORE_16 $sp, 41, $bc, implicit-def $hl, implicit $sp :: (store (s16))
     RET implicit $sp, implicit-def $sp
 ...
 

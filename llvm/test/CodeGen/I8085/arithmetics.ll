@@ -159,7 +159,7 @@ define i8 @add_sub_4(i8,i8) {
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    SPHL
-; CHECK-NEXT:    .cfi_adjust_cfa_offset 4294967294
+; CHECK-NEXT:    .cfi_adjust_cfa_offset -2
 ; CHECK-NEXT:    RET
 
   %3 = alloca i8, align 1

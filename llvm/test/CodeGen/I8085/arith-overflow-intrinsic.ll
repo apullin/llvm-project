@@ -19,7 +19,7 @@ define i8 @uadd_overflow_i16(i16 %a, i16 %b, i16* %out) {
 ; CHECK: SBB D
 ; CHECK: JNC
 ; CHECK: MVI A, 1
-; CHECK: JMP
+; CHECK: RET
 ; CHECK: MVI A, 0
 ; CHECK: RET
 entry:

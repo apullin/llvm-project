@@ -50,7 +50,7 @@ define i8 @caller(i8 %x, i16 %y) {
 ; CHECK-NEXT:    LXI H, 3
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    SPHL
-; CHECK-NEXT:    .cfi_adjust_cfa_offset 4294967293
+; CHECK-NEXT:    .cfi_adjust_cfa_offset -3
 ; CHECK-NEXT:    RET
 entry:
   %call = call i8 @callee(i8 %x, i16 %y)

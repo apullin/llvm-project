@@ -22,7 +22,7 @@ define i16 @loadtest16() #0  {
 ; CHECK-NEXT:    MOV M, D
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    SPHL
-; CHECK-NEXT:    .cfi_adjust_cfa_offset 4294967292
+; CHECK-NEXT:    .cfi_adjust_cfa_offset -4
 ; CHECK-NEXT:    RET
 
   %1 = alloca i16, align 1
@@ -54,7 +54,7 @@ define i8 @loadtest8()  {
 ; CHECK-NEXT:    MOV M, B
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    SPHL
-; CHECK-NEXT:    .cfi_adjust_cfa_offset 4294967294
+; CHECK-NEXT:    .cfi_adjust_cfa_offset -2
 ; CHECK-NEXT:    RET
 
   %1 = alloca i8, align 1

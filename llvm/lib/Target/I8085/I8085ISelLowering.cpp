@@ -26,6 +26,8 @@
 #include "llvm/CodeGen/TargetLoweringObjectFileImpl.h"
 #include "llvm/IR/DiagnosticInfo.h"
 #include "llvm/IR/Function.h"
+#include "llvm/IR/InstIterator.h"
+#include "llvm/IR/Instructions.h"
 #include "llvm/Support/Alignment.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/KnownBits.h"
@@ -599,9 +601,10 @@ void I8085TargetLowering::LowerAsmOperandForConstraint(
   TargetLowering::LowerAsmOperandForConstraint(Op, Constraint, Ops, DAG);
 }
 
-EVT I8085TargetLowering::getSetCCResultType(const DataLayout &DL, LLVMContext &,
+EVT I8085TargetLowering::getSetCCResultType(const DataLayout &DL, LLVMContext &Ctx,
                                           EVT VT) const {
-  assert(!VT.isVector() && "No I8085 SetCC type for vectors!");
+  if (VT.isVector())
+    return EVT::getVectorVT(Ctx, MVT::i8, VT.getVectorElementCount());
   return MVT::i8;
 }
 
@@ -3365,6 +3368,16 @@ SDValue I8085TargetLowering::LowerFormalArguments(
   auto DL = DAG.getDataLayout();
 
   // Assign locations to all of the incoming arguments.
+  auto *AFI = MF.getInfo<I8085MachineFunctionInfo>();
+  bool CaptureRegArgs = MF.getFunction().hasFnAttribute("stackrealign");
+  for (const Instruction &I : instructions(MF.getFunction())) {
+    if (const auto *AI = dyn_cast<AllocaInst>(&I)) {
+      CaptureRegArgs |= !AI->isStaticAlloca();
+      MFI.ensureMaxAlignment(AI->getAlign());
+      CaptureRegArgs |= AI->getAlign() > Subtarget.getFrameLowering()->getStackAlign();
+    }
+  }
+
   SmallVector<CCValAssign, 16> ArgLocs;
   CCState CCInfo(CallConv, isVarArg, DAG.getMachineFunction(), ArgLocs,
                  *DAG.getContext());
@@ -3382,6 +3395,19 @@ SDValue I8085TargetLowering::LowerFormalArguments(
 
     // Arguments stored on registers.
     if (VA.isRegLoc()) {
+      if (CaptureRegArgs) {
+        // The prologue needs BC for realignment and DE for a VLA base. Save
+        // incoming values before either is reused, then load ordinary vregs.
+        int FI = MFI.CreateStackObject(VA.getLocVT().getStoreSize(), Align(1),
+                                       false);
+        AFI->addIncomingRegSaveSlot(VA.getLocReg(), FI);
+        AFI->setHasSpills(true);
+        MF.getRegInfo().addLiveIn(VA.getLocReg());
+        SDValue Addr = DAG.getFrameIndex(FI, getPointerTy(DL));
+        InVals.push_back(DAG.getLoad(VA.getLocVT(), dl, Chain, Addr,
+                                    MachinePointerInfo::getFixedStack(MF, FI)));
+        continue;
+      }
       const TargetRegisterClass *RC;
       if (VA.getLocVT() == MVT::i8)
         RC = &I8085::GR8RegClass;
@@ -3449,6 +3475,12 @@ static bool isEligibleForTailCallOptimization(
   if (!CLI.IsTailCall)
     return false;
 
+  // TCRETURN only has direct-symbol patterns. Indirect calls use the ordinary
+  // CALL_INDIRECT path unless a dedicated indirect tail jump is implemented.
+  if (!isa<GlobalAddressSDNode>(CLI.Callee) &&
+      !isa<ExternalSymbolSDNode>(CLI.Callee))
+    return false;
+
   const Function &Caller = MF.getFunction();
   if (Caller.getFnAttribute("disable-tail-calls").getValueAsString() == "true")
     return false;
@@ -3500,6 +3532,8 @@ SDValue I8085TargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
     CCInfo.AnalyzeCallOperands(Outs, ArgCC_I8085_Vararg);
 
   isTailCall = isEligibleForTailCallOptimization(CLI, CCInfo, MF);
+  if (CLI.CB && CLI.CB->isMustTailCall() && !isTailCall)
+    report_fatal_error("I8085 cannot lower this musttail call");
 
   // If the callee is a GlobalAddress/ExternalSymbol node (quite common, every
   // direct call is) turn it into a TargetGlobalAddress/TargetExternalSymbol
@@ -3555,13 +3589,22 @@ SDValue I8085TargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
           DAG.getIntPtrConstant(VA.getLocMemOffset(), DL));
 
       if (Flags.isByVal() && Flags.getByValSize()) {
+        // A memcpy can expose PtrOff as a general ADD with a tied physical SP
+        // operand. Materialize a normal pointer instead of modifying SP.
+        SDValue AddrOps[] = {
+            DAG.getRegister(I8085::SP, getPointerTy(DAG.getDataLayout())),
+            DAG.getTargetConstant(VA.getLocMemOffset(), DL, MVT::i16)};
+        PtrOff = SDValue(DAG.getMachineNode(I8085::FRMIDX, DL, MVT::i16,
+                                           AddrOps), 0);
         unsigned Size = Flags.getByValSize();
         Align Alignment =
             std::max(Align(1), Flags.getNonZeroByValAlign());
         SDValue SizeVal = DAG.getConstant(Size, DL, getPointerTy(DAG.getDataLayout()));
         MemOpChains.push_back(DAG.getMemcpy(
             Chain, DL, PtrOff, Arg, SizeVal, Alignment,
-            /*isVolatile=*/false, /*AlwaysInline=*/false, /*CI=*/nullptr,
+            // The outgoing call frame is already active. A memcpy libcall
+            // would nest call frames and invalidate SP-relative arguments.
+            /*isVolatile=*/false, /*AlwaysInline=*/true, /*CI=*/nullptr,
             std::nullopt, MachinePointerInfo(), MachinePointerInfo()));
       } else {
         MemOpChains.push_back(DAG.getStore(
@@ -3805,7 +3848,9 @@ I8085TargetLowering::LowerReturn(SDValue Chain, CallingConv::ID CallConv,
     return Chain;
   }
 
-  if (MF.getFunction().getReturnType()->isIntegerTy(8) && !OutVals.empty()) {
+  Type *ReturnTy = MF.getFunction().getReturnType();
+  if (ReturnTy->isIntegerTy() && ReturnTy->getIntegerBitWidth() <= 8 &&
+      !OutVals.empty()) {
     SDValue Val = OutVals[0];
     if (Val.getValueType() != MVT::i8)
       Val = DAG.getNode(ISD::TRUNCATE, dl, MVT::i8, Val);

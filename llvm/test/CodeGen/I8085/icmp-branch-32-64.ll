@@ -99,7 +99,7 @@ define i8 @br_eq_i32(i32 %a, i32 %b) {
 ; CHECK-NEXT:    LXI H, 8
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    SPHL
-; CHECK-NEXT:    .cfi_adjust_cfa_offset 4294967288
+; CHECK-NEXT:    .cfi_adjust_cfa_offset -8
 ; CHECK-NEXT:    RET
 entry:
   %cmp = icmp eq i32 %a, %b
@@ -212,7 +212,7 @@ define i8 @br_ult_i32(i32 %a, i32 %b) {
 ; CHECK-NEXT:    LXI H, 8
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    SPHL
-; CHECK-NEXT:    .cfi_adjust_cfa_offset 4294967288
+; CHECK-NEXT:    .cfi_adjust_cfa_offset -8
 ; CHECK-NEXT:    RET
 entry:
   %cmp = icmp ult i32 %a, %b
@@ -339,7 +339,7 @@ define i8 @br_slt_i32(i32 %a, i32 %b) {
 ; CHECK-NEXT:    LXI H, 8
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    SPHL
-; CHECK-NEXT:    .cfi_adjust_cfa_offset 4294967288
+; CHECK-NEXT:    .cfi_adjust_cfa_offset -8
 ; CHECK-NEXT:    RET
 entry:
   %cmp = icmp slt i32 %a, %b
@@ -651,7 +651,7 @@ define i8 @br_eq_i64(i64 %a, i64 %b) {
 ; CHECK-NEXT:    LXI H, 16
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    SPHL
-; CHECK-NEXT:    .cfi_adjust_cfa_offset 4294967280
+; CHECK-NEXT:    .cfi_adjust_cfa_offset -16
 ; CHECK-NEXT:    RET
 entry:
   %cmp = icmp eq i64 %a, %b
@@ -985,7 +985,7 @@ define i8 @br_ult_i64(i64 %a, i64 %b) {
 ; CHECK-NEXT:    LXI H, 16
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    SPHL
-; CHECK-NEXT:    .cfi_adjust_cfa_offset 4294967280
+; CHECK-NEXT:    .cfi_adjust_cfa_offset -16
 ; CHECK-NEXT:    RET
 entry:
   %cmp = icmp ult i64 %a, %b
@@ -1343,7 +1343,7 @@ define i8 @br_slt_i64(i64 %a, i64 %b) {
 ; CHECK-NEXT:    LXI H, 16
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    SPHL
-; CHECK-NEXT:    .cfi_adjust_cfa_offset 4294967280
+; CHECK-NEXT:    .cfi_adjust_cfa_offset -16
 ; CHECK-NEXT:    RET
 entry:
   %cmp = icmp slt i64 %a, %b

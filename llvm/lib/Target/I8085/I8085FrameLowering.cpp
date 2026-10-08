@@ -40,9 +40,6 @@ I8085FrameLowering::I8085FrameLowering()
     : TargetFrameLowering(TargetFrameLowering::StackGrowsDown, Align(1), -2) {}
 
 static Align getStackRealignAlignment(const MachineFunction &MF) {
-  if (!MF.getFunction().hasFnAttribute("stackrealign"))
-    return Align(1);
-
   const MachineFrameInfo &MFI = MF.getFrameInfo();
   Align MaxAlign = MFI.getMaxAlign();
   Align StackAlign = MF.getSubtarget<I8085Subtarget>()
@@ -156,6 +153,11 @@ void I8085FrameLowering::emitPrologue(MachineFunction &MF,
 
   const MachineFrameInfo &MFI = MF.getFrameInfo();
   unsigned FrameSize = MFI.getStackSize() - AFI->getCalleeSavedFrameSize();
+  // Realignment establishes an aligned CFA origin, not the entry SP (which
+  // is two bytes below its CFA). Keep frame-index offsets relative to that
+  // origin, including the local-area and callee-save portions of the layout.
+  if (AFI->hasStackRealign())
+    FrameSize = MFI.getStackSize() - getOffsetOfLocalArea();
 
   // Skip the callee-saved push instructions.
   while (
@@ -165,6 +167,12 @@ void I8085FrameLowering::emitPrologue(MachineFunction &MF,
   
   /*Prologue sequence for 8085 processor */ 
   bool NeedsBasePtr = MFI.hasVarSizedObjects();
+  bool SaveIncomingBC = AFI->hasStackRealign() &&
+      llvm::any_of(AFI->getIncomingRegSaveSlots(), [](auto Slot) {
+        return Slot.first == I8085::BC || Slot.first == I8085::C;
+      });
+  if (SaveIncomingBC)
+    BuildMI(MBB, MBBI, DL, TII.get(I8085::PUSH)).addReg(I8085::BC);
   if (AFI->hasStackRealign()) {
     Align Realign = getStackRealignAlignment(MF);
     unsigned AlignBytes = Realign.value();
@@ -183,6 +191,10 @@ void I8085FrameLowering::emitPrologue(MachineFunction &MF,
         .addReg(I8085::H);
     BuildMI(MBB, MBBI, DL, TII.get(I8085::MOV), ScratchLow)
         .addReg(I8085::L);
+    if (SaveIncomingBC) {
+      BuildMI(MBB, MBBI, DL, TII.get(I8085::INX), I8085::BC);
+      BuildMI(MBB, MBBI, DL, TII.get(I8085::INX), I8085::BC);
+    }
     BuildMI(MBB, MBBI, DL, TII.get(I8085::MOV), I8085::A)
         .addReg(I8085::L);
     BuildMI(MBB, MBBI, DL, TII.get(I8085::ANI)).addImm(Mask);
@@ -203,6 +215,32 @@ void I8085FrameLowering::emitPrologue(MachineFunction &MF,
 
   }
 
+  auto FrameOffset = [&](int FI) {
+    return MFI.getObjectOffset(FI) + MFI.getStackSize() - getOffsetOfLocalArea();
+  };
+  if (AFI->hasStackRealignSaveFI()) {
+    BuildMI(MBB, MBBI, DL, TII.get(I8085::STORE_16))
+        .addReg(I8085::SP)
+        .addImm(FrameOffset(AFI->getStackRealignSaveFI()))
+        .addReg(I8085::BC);
+  }
+  if (SaveIncomingBC) {
+    BuildMI(MBB, MBBI, DL, TII.get(I8085::MOV), I8085::H).addReg(I8085::B);
+    BuildMI(MBB, MBBI, DL, TII.get(I8085::MOV), I8085::L).addReg(I8085::C);
+    BuildMI(MBB, MBBI, DL, TII.get(I8085::DCX), I8085::HL);
+    BuildMI(MBB, MBBI, DL, TII.get(I8085::DCX), I8085::HL);
+    BuildMI(MBB, MBBI, DL, TII.get(I8085::MOV_FROM_M), I8085::A);
+    BuildMI(MBB, MBBI, DL, TII.get(I8085::INX), I8085::HL);
+    BuildMI(MBB, MBBI, DL, TII.get(I8085::MOV_FROM_M), I8085::B);
+    BuildMI(MBB, MBBI, DL, TII.get(I8085::MOV), I8085::C).addReg(I8085::A);
+  }
+  for (auto [Reg, FI] : AFI->getIncomingRegSaveSlots()) {
+    MBB.addLiveIn(Reg);
+    unsigned Opc = MFI.getObjectSize(FI) == 1 ? I8085::STORE_8 : I8085::STORE_16;
+    BuildMI(MBB, MBBI, DL, TII.get(Opc))
+        .addReg(I8085::SP).addImm(FrameOffset(FI)).addReg(Reg);
+  }
+
   if (NeedsBasePtr) {
     BuildMI(MBB, MBBI, DL, TII.get(I8085::LXI), I8085::HL).addImm(0);
     BuildMI(MBB, MBBI, DL, TII.get(I8085::DAD)).addReg(I8085::SP);
@@ -210,13 +248,6 @@ void I8085FrameLowering::emitPrologue(MachineFunction &MF,
         .addReg(I8085::H);
     BuildMI(MBB, MBBI, DL, TII.get(I8085::MOV), I8085::E)
         .addReg(I8085::L);
-  }
-
-  if (AFI->hasStackRealignSaveFI()) {
-    BuildMI(MBB, MBBI, DL, TII.get(I8085::STORE_16))
-        .addFrameIndex(AFI->getStackRealignSaveFI())
-        .addImm(0)
-        .addReg(I8085::BC);
   }
 
   if (EmitCFI) {
@@ -360,7 +391,8 @@ void I8085FrameLowering::emitEpilogue(MachineFunction &MF,
         .setMIFlag(MachineInstr::FrameDestroy);
     if (EmitCFI) {
       buildCFI(MBB, MBBI, DL,
-               MCCFIInstruction::createAdjustCfaOffset(nullptr, -FrameSize),
+               MCCFIInstruction::createAdjustCfaOffset(
+                   nullptr, -static_cast<int64_t>(FrameSize)),
                MachineInstr::FrameDestroy, TII);
     }
   }
@@ -391,8 +423,8 @@ void I8085FrameLowering::processFunctionBeforeFrameFinalized(
   MachineFrameInfo &MFI = MF.getFrameInfo();
 
   if (needsStackRealign(MF)) {
-    int FI = MFI.CreateStackObject(2, Align(1), false);
-    FuncInfo->setStackRealignSaveFI(FI);
+    if (!FuncInfo->hasStackRealignSaveFI())
+      FuncInfo->setStackRealignSaveFI(MFI.CreateStackObject(2, Align(1), false));
     FuncInfo->setHasStackRealign(true);
     FuncInfo->setHasSpills(true);
   }
@@ -445,63 +477,16 @@ void I8085FrameLowering::processFunctionBeforeFrameFinalized(
   FuncInfo->setHasSpills(true);
 }
 
-// Return true if the specified function should have a dedicated frame
-// pointer register. This is true if the function meets any of the following
-// conditions:
-//  - a register has been spilled
-//  - has allocas
-//  - input arguments are passed using the stack
-//  - stack realignment is required
-//  - variable sized objects exist
-//
-// However, if the user explicitly requests -fomit-frame-pointer (via the
-// "frame-pointer" attribute set to "none"), we can eliminate the frame pointer
-// for leaf functions with small frames that don't need dynamic stack access.
-//
-// Notice that strictly this is not a frame pointer because it contains SP after
-// frame allocation instead of having the original SP in function entry.
+// This target addresses fixed frames through SP, not a dedicated FP register.
+// hasFP also controls frame allocation, so frame-pointer=none must never
+// suppress storage for spills, allocas, or GR32 pseudo registers.
 bool I8085FrameLowering::hasFP(const MachineFunction &MF) const {
   const MachineFrameInfo &MFI = MF.getFrameInfo();
-  const I8085MachineFunctionInfo *FuncInfo = MF.getInfo<I8085MachineFunctionInfo>();
-  const Function &F = MF.getFunction();
-
-  // Always need FP for stack realignment or variable-sized objects
-  if (FuncInfo->hasStackRealign() || MFI.hasVarSizedObjects())
-    return true;
-
-  // Check if the user requested frame pointer omission
-  // The "frame-pointer" attribute can be "all", "non-leaf", or "none"
-  Attribute FPAttr = F.getFnAttribute("frame-pointer");
-  StringRef FPKind = FPAttr.isValid() ? FPAttr.getValueAsString() : "";
-
-  // If frame-pointer=none, try to eliminate the frame pointer when possible
-  if (FPKind == "none") {
-    // We can omit the frame pointer if:
-    // 1. No spills are needed (or only callee-saved register saves via PUSH)
-    // 2. No allocas
-    // 3. No stack arguments are accessed
-    // 4. The frame is small enough that SP-relative addressing works
-
-    // For leaf functions with no local variables, we can definitely omit FP
-    if (!FuncInfo->getHasAllocas() && !FuncInfo->getHasStackArgs() &&
-        MFI.getStackSize() == 0 && !FuncInfo->getHasSpills()) {
-      return false;
-    }
-
-    // For functions with a small fixed frame (up to 255 bytes for efficient
-    // SP-relative addressing via LXI+DAD SP), we can also potentially omit FP
-    // if there are no allocas or stack args that need frame-relative access
-    if (!FuncInfo->getHasAllocas() && !FuncInfo->getHasStackArgs() &&
-        MFI.getStackSize() <= 255) {
-      // The i8085 uses SP-relative addressing (LXI H, offset; DAD SP)
-      // which works well without a dedicated frame pointer
-      return false;
-    }
-  }
-
-  // Default: need FP if there are spills, allocas, or stack args
-  return (FuncInfo->getHasSpills() || FuncInfo->getHasAllocas() ||
-          FuncInfo->getHasStackArgs());
+  const auto *FuncInfo = MF.getInfo<I8085MachineFunctionInfo>();
+  return FuncInfo->hasStackRealign() || MFI.hasVarSizedObjects() ||
+         FuncInfo->getHasSpills() || FuncInfo->getHasAllocas() ||
+         FuncInfo->getHasStackArgs() ||
+         MFI.getStackSize() > FuncInfo->getCalleeSavedFrameSize();
 }
 
 bool I8085FrameLowering::spillCalleeSavedRegisters(

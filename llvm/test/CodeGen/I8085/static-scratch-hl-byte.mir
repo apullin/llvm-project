@@ -1,0 +1,20 @@
+# RUN: llc -O2 -mtriple=i8085-unknown-elf -run-pass=i8085-static-scratch -i8085-static-scratch-bytes=8 -verify-machineinstrs %s -o - | FileCheck %s
+--- |
+  target triple = "i8085-unknown-elf"
+  define void @scratch_l() { ret void }
+...
+---
+name: scratch_l
+tracksRegLiveness: true
+stack:
+  - { id: 0, type: spill-slot, size: 1, alignment: 1 }
+body: |
+  bb.0:
+    liveins: $sp, $l
+    ; CHECK-LABEL: name: scratch_l
+    ; CHECK: STORE_8_STATIC_ADDR @__i8085_static_scratch.scratch_l.0, killed $l
+    ; CHECK: $l = LOAD_8_STATIC_ADDR @__i8085_static_scratch.scratch_l.0
+    STORE_8 %stack.0, 0, killed $l, implicit $sp
+    $l = LOAD_8_WITH_ADDR %stack.0, 0, implicit $sp
+    RET implicit-def $sp, implicit $sp, implicit $l
+...

@@ -1,0 +1,65 @@
+# RUN: llc -run-pass=i8085-expand-pseudo32 %s -o - | FileCheck %s
+--- |
+  target triple = "i8085-unknown-elf"
+  @word = global i32 0, align 1
+  define void @pointer() { ret void }
+  define void @stack() { ret void }
+  define void @absolute() { ret void }
+  define void @register_address() { ret void }
+...
+---
+name: pointer
+body: |
+  bb.0:
+    liveins: $bc, $sp
+    ; CHECK-LABEL: name: pointer
+    ; CHECK: MOV_FROM_M
+    ; CHECK: MOV_FROM_M
+    ; CHECK: MOV_FROM_M
+    ; CHECK: MOV_FROM_M
+    ; CHECK: RET
+    dead $iax = LOAD_32_WITH_ADDR $bc, 0, implicit-def dead $h, implicit-def dead $l, implicit $sp :: (volatile load (s32) from @word, align 1)
+    RET implicit $sp, implicit-def $sp
+...
+---
+name: stack
+body: |
+  bb.0:
+    liveins: $sp
+    ; CHECK-LABEL: name: stack
+    ; CHECK: MOV_FROM_M
+    ; CHECK: MOV_FROM_M
+    ; CHECK: MOV_FROM_M
+    ; CHECK: MOV_FROM_M
+    ; CHECK: RET
+    dead $iax = LOAD_32_OFFSET_WITH_SP 10, implicit-def dead $h, implicit-def dead $l, implicit $sp :: (volatile load (s32) from @word, align 1)
+    RET implicit $sp, implicit-def $sp
+...
+---
+name: absolute
+body: |
+  bb.0:
+    liveins: $sp
+    ; CHECK-LABEL: name: absolute
+    ; CHECK: MOV_FROM_M
+    ; CHECK: MOV_FROM_M
+    ; CHECK: MOV_FROM_M
+    ; CHECK: MOV_FROM_M
+    ; CHECK: RET
+    dead $iax = LOAD_32_WITH_IMM_ADDR @word, implicit-def dead $h, implicit-def dead $l, implicit $sp :: (volatile load (s32) from @word, align 1)
+    RET implicit $sp, implicit-def $sp
+...
+---
+name: register_address
+body: |
+  bb.0:
+    liveins: $bc, $sp
+    ; CHECK-LABEL: name: register_address
+    ; CHECK: MOV_FROM_M
+    ; CHECK: MOV_FROM_M
+    ; CHECK: MOV_FROM_M
+    ; CHECK: MOV_FROM_M
+    ; CHECK: RET
+    dead $iax = LOAD_32_ADDR_CONTENT $bc, implicit-def dead $a, implicit-def dead $h, implicit-def dead $l, implicit-def dead $bc, implicit-def dead $b, implicit-def dead $c, implicit $sp :: (volatile load (s32) from @word, align 1)
+    RET implicit $sp, implicit-def $sp
+...

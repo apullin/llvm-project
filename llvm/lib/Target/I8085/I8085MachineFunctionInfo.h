@@ -14,6 +14,7 @@
 #define LLVM_I8085_MACHINE_FUNCTION_INFO_H
 
 #include "llvm/CodeGen/MachineFunction.h"
+#include "llvm/ADT/SmallVector.h"
 
 namespace llvm {
 
@@ -54,6 +55,7 @@ class I8085MachineFunctionInfo : public MachineFunctionInfo {
   int StackRealignSaveFI;
   /// Indicates whether this function realigns the stack.
   bool HasStackRealign;
+  SmallVector<std::pair<MCRegister, int>, 2> IncomingRegSaveSlots;
 
   public:
   I8085MachineFunctionInfo(const Function &F, const TargetSubtargetInfo *STI)
@@ -110,6 +112,13 @@ class I8085MachineFunctionInfo : public MachineFunctionInfo {
 
   bool hasStackRealign() const { return HasStackRealign; }
   void setHasStackRealign(bool B) { HasStackRealign = B; }
+
+  void addIncomingRegSaveSlot(MCRegister Reg, int FI) {
+    IncomingRegSaveSlots.emplace_back(Reg, FI);
+  }
+  ArrayRef<std::pair<MCRegister, int>> getIncomingRegSaveSlots() const {
+    return IncomingRegSaveSlots;
+  }
 };
 
 } // namespace llvm

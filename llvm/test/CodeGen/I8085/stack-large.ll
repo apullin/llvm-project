@@ -22,7 +22,7 @@ define void @stack_large() {
 ; CHECK-NEXT:    LXI H, 80
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    SPHL
-; CHECK-NEXT:    .cfi_adjust_cfa_offset 4294967216
+; CHECK-NEXT:    .cfi_adjust_cfa_offset -80
 ; CHECK-NEXT:    RET
   %arr = alloca [80 x i8], align 1
   %p = getelementptr inbounds [80 x i8], ptr %arr, i16 0, i16 79

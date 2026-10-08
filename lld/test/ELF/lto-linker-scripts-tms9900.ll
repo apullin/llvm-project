@@ -13,9 +13,9 @@
 ; OPT: define internal {{.*}} @keepme{{.*}} section ".text.keepme^^main.o"
 ; OPT: define dso_local {{.*}} @_start{{.*}} section ".text^^main.o"
 ; OPT: call fastcc i16 @fast
-; OPT: "linker_output_section"=".fast"
-; OPT: "linker_output_section"=".keep"
-; OPT: "linker_output_section"=".text"
+; OPT: "linker_output_section"="script:0;"
+; OPT: "linker_output_section"="script:1;"
+; OPT: "linker_output_section"="script:2;"
 
 ; ELF:      Name: .fast
 ; ELF:      Address: 0x6000

@@ -48,36 +48,18 @@ static bool isSectionPrefix(StringRef prefix, StringRef name) {
   return name.consume_front(prefix) && (name.empty() || name[0] == '.');
 }
 
-StringRef LinkerScript::getOutputSectionName(const InputSectionBase *s) const {
-  // This is for --emit-relocs and -r. If .text.foo is emitted as .text.bar, we
-  // want to emit .rela.text.foo as .rela.text.bar for consistency (this is not
-  // technically required, but not doing it is odd). This code guarantees that.
-  if (auto *isec = dyn_cast<InputSection>(s)) {
-    if (InputSectionBase *rel = isec->getRelocatedSection()) {
-      OutputSection *out = rel->getOutputSection();
-      if (!out) {
-        assert(ctx.arg.relocatable && (rel->flags & SHF_LINK_ORDER));
-        return s->name;
-      }
-      StringSaver &ss = ctx.saver;
-      if (s->type == SHT_CREL)
-        return ss.save(".crel" + out->name);
-      if (s->type == SHT_RELA)
-        return ss.save(".rela" + out->name);
-      return ss.save(".rel" + out->name);
-    }
-  }
-
+static StringRef getOrphanOutputSectionName(Ctx &ctx, StringRef name,
+                                          bool hasSectionsCommand) {
   if (ctx.arg.relocatable)
-    return s->name;
+    return name;
 
   // A BssSection created for a common symbol is identified as "COMMON" in
   // linker scripts. It should go to .bss section.
-  if (s->name == "COMMON")
+  if (name == "COMMON")
     return ".bss";
 
   if (hasSectionsCommand)
-    return s->name;
+    return name;
 
   // When no SECTIONS is specified, emulate GNU ld's internal linker scripts
   // by grouping sections with certain prefixes.
@@ -96,11 +78,11 @@ StringRef LinkerScript::getOutputSectionName(const InputSectionBase *s) const {
   // cold parts in .text.split instead of .text.unlikely mitigates against poor
   // profile inaccuracy. Techniques such as hugepage remapping can make
   // conservative decisions at the section granularity.
-  if (isSectionPrefix(".text", s->name)) {
+  if (isSectionPrefix(".text", name)) {
     if (ctx.arg.zKeepTextSectionPrefix)
       for (StringRef v : {".text.hot", ".text.unknown", ".text.unlikely",
                           ".text.startup", ".text.exit", ".text.split"})
-        if (isSectionPrefix(v.substr(5), s->name.substr(5)))
+        if (isSectionPrefix(v.substr(5), name.substr(5)))
           return v;
     return ".text";
   }
@@ -112,10 +94,35 @@ StringRef LinkerScript::getOutputSectionName(const InputSectionBase *s) const {
                       ".tdata",       ".ARM.exidx",  ".ARM.extab",
                       ".ctors",       ".dtors",      ".sbss",
                       ".sdata",       ".srodata"})
-    if (isSectionPrefix(v, s->name))
+    if (isSectionPrefix(v, name))
       return v;
 
-  return s->name;
+  return name;
+}
+
+StringRef LinkerScript::getOutputSectionName(const InputSectionBase *s) const {
+  // This is for --emit-relocs and -r. If .text.foo is emitted as .text.bar, we
+  // want to emit .rela.text.foo as .rela.text.bar for consistency.
+  if (auto *isec = dyn_cast<InputSection>(s)) {
+    if (InputSectionBase *rel = isec->getRelocatedSection()) {
+      OutputSection *out = rel->getOutputSection();
+      if (!out) {
+        assert(ctx.arg.relocatable && (rel->flags & SHF_LINK_ORDER));
+        return s->name;
+      }
+      StringSaver &ss = ctx.saver;
+      if (s->type == SHT_CREL)
+        return ss.save(".crel" + out->name);
+      if (s->type == SHT_RELA)
+        return ss.save(".rela" + out->name);
+      return ss.save(".rel" + out->name);
+    }
+  }
+
+  // TU suffixes identify inputs, not output section names. Orphans must keep
+  // native naming/grouping rules too, including links without SECTIONS.
+  return getOrphanOutputSectionName(ctx, getInputSectionOrigin(s).first,
+                                   hasSectionsCommand);
 }
 
 uint64_t ExprValue::getValue() const {
@@ -462,22 +469,35 @@ bool LinkerScript::shouldKeep(StringRef name, InputFile *file, uint64_t flags) {
 
 StringRef LinkerScript::mapLTOSectionName(StringRef inputSection,
                                         InputFile *file, uint64_t flags) {
-  for (SectionCommand *base : sectionCommands) {
+  std::string key = "script:";
+  for (auto [index, base] : llvm::enumerate(sectionCommands)) {
     auto *outDesc = dyn_cast<OutputDesc>(base);
     if (!outDesc)
       continue;
-    for (SectionCommand *cmd : outDesc->osec.commands) {
+    bool matches = llvm::any_of(outDesc->osec.commands, [&](SectionCommand *cmd) {
       auto *isd = dyn_cast<InputSectionDescription>(cmd);
       if (!isd || !isd->matchesFile(*file) ||
           (flags & isd->withFlags) != isd->withFlags ||
           (flags & isd->withoutFlags) != 0)
-        continue;
-      for (const SectionPattern &pat : isd->sectionPatterns)
-        if (pat.sectionPat.match(inputSection) && !pat.excludesFile(*file))
-          return outDesc->osec.name;
-    }
+        return false;
+      return llvm::any_of(isd->sectionPatterns, [&](const SectionPattern &pat) {
+        return pat.sectionPat.match(inputSection) && !pat.excludesFile(*file);
+      });
+    });
+    if (!matches)
+      continue;
+
+    // An output's identity is its directive, not merely its name: scripts may
+    // define two regions named .bank at different addresses. Conditional
+    // outputs are resolved after native GC, so retain every possible fallback
+    // in the equivalence key instead of guessing eligibility before LTO.
+    key += utostr(index) + ";";
+    if (outDesc->osec.constraint == ConstraintKind::NoConstraint)
+      return ctx.saver.save(key);
   }
-  return StringRef();
+  key += "orphan:";
+  key += getOrphanOutputSectionName(ctx, inputSection, hasSectionsCommand);
+  return ctx.saver.save(key);
 }
 
 // A helper function for the SORT() command.
@@ -762,8 +782,8 @@ void LinkerScript::processSectionCommands() {
     }
 
     // This is for ONLY_IF_RO and ONLY_IF_RW. An output section directive
-    // ".foo : ONLY_IF_R[OW] { ... }" is handled only if all member input
-    // sections satisfy a given constraint. If not, a directive is handled
+    // ".foo : ONLY_IF_RO { ... }" requires all member inputs to be read-only;
+    // ONLY_IF_RW requires at least one writable member. Otherwise it is handled
     // as if it wasn't present from the beginning.
     //
     // Because we'll iterate over SectionCommands many more times, the easy

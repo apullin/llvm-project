@@ -583,8 +583,9 @@ struct SymbolResolution {
   /// The linker script matched this symbol's input section with KEEP.
   unsigned LinkerScriptKeep : 1;
 
-  /// Output section selected by the linker script for this symbol. During LTO,
-  /// optimizations must preserve this placement constraint.
+  /// Placement-equivalence key selected by the linker script for this symbol.
+  /// It can encode conditional outputs and their fallbacks; it is not always
+  /// a literal output name. During LTO, optimizations must preserve this key.
   StringRef OutputSectionName;
 };
 

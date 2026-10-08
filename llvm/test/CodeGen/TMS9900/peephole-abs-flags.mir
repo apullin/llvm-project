@@ -1,0 +1,67 @@
+# RUN: llc -mtriple=tms9900 -run-pass=tms9900-peephole -verify-machineinstrs %s -o - | FileCheck %s
+
+# ABS sets comparison flags from its original operand (Data Manual 3.4 and
+# 3.5.4), not the absolute-value result. For input -1, ABS produces +1 but
+# leaves AGT clear. A subsequent word zero-test must establish AGT again.
+
+---
+name: abs_ci_zero
+tracksRegLiveness: true
+body: |
+  bb.0:
+    successors: %bb.1, %bb.2
+    liveins: $r5
+    $r5 = ABSr killed $r5, implicit-def dead $st
+    CI killed $r5, 0, implicit-def $st
+    JGT %bb.1, implicit $st
+  bb.2:
+    RET
+  bb.1:
+    RET
+
+# CHECK-LABEL: name: abs_ci_zero
+# CHECK: ABSr
+# CHECK-NEXT: $r5 = MOVrr killed $r5, implicit-def $st
+# CHECK-NEXT: JGT
+...
+---
+name: abs_self_move
+tracksRegLiveness: true
+body: |
+  bb.0:
+    successors: %bb.1, %bb.2
+    liveins: $r5
+    $r5 = ABSr killed $r5, implicit-def dead $st
+    $r5 = MOVrr killed $r5, implicit-def $st
+    JGT %bb.1, implicit $st
+  bb.2:
+    RET
+  bb.1:
+    RET
+
+# CHECK-LABEL: name: abs_self_move
+# CHECK: ABSr
+# CHECK-NEXT: $r5 = MOVrr killed $r5, implicit-def $st
+# CHECK-NEXT: JGT
+...
+---
+name: abs_compare_zero_register
+tracksRegLiveness: true
+body: |
+  bb.0:
+    successors: %bb.1, %bb.2
+    liveins: $r5
+    $r6 = CLRr
+    $r5 = ABSr killed $r5, implicit-def dead $st
+    Crr killed $r5, killed $r6, implicit-def $st
+    JGT %bb.1, implicit $st
+  bb.2:
+    RET
+  bb.1:
+    RET
+
+# CHECK-LABEL: name: abs_compare_zero_register
+# CHECK: ABSr
+# CHECK-NEXT: Crr killed $r5, killed $r6, implicit-def $st
+# CHECK-NEXT: JGT
+...

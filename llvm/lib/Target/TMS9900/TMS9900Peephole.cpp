@@ -42,7 +42,8 @@ namespace {
 /// Return true when Opcode defines operand 0 with a word result and sets the
 /// comparison flags from that full 16-bit result.  Byte instructions cannot
 /// satisfy a following word zero-test: their flags describe only the high
-/// byte, and they additionally update odd parity.
+/// byte, and they additionally update odd parity. ABS is also excluded: its
+/// comparison flags describe the original operand, not the absolute result.
 static bool setsWordResultComparisonFlags(unsigned Opcode) {
   switch (Opcode) {
   default:
@@ -70,7 +71,6 @@ static bool setsWordResultComparisonFlags(unsigned Opcode) {
   case TMS9900::DECr:
   case TMS9900::DECTr:
   case TMS9900::NEGr:
-  case TMS9900::ABSr:
   case TMS9900::INVr:
   case TMS9900::SOCrr:
   case TMS9900::SOCim:

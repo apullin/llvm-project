@@ -1,4 +1,4 @@
-; RUN: llc -mattr=i8085,sram < %s -march=i8085 | FileCheck %s
+; RUN: llc -mtriple=i8085-unknown-elf -mattr=i8085,sram < %s -march=i8085 | FileCheck %s
 
 ; Arithmetic with overflow detection using LLVM intrinsics.
 ; Adapted from RISC-V arith-with-overflow.ll

@@ -1754,6 +1754,16 @@ static void createBitcodeSymbol(Ctx &ctx, Symbol *&sym,
   uint8_t type = objSym.isTLS() ? STT_TLS : STT_NOTYPE;
   uint8_t visibility = mapVisibility(objSym.getVisibility());
 
+  // Linker-script-aware LTO exposes local IR definitions to describe their
+  // input sections. They have file scope and must never enter name resolution
+  // with definitions or references from other files.
+  if (!objSym.isGlobal()) {
+    objSym.Name = ctx.uniqueSaver.save(objSym.getName());
+    sym = make<Defined>(ctx, &f, objSym.getName(), STB_LOCAL, visibility, type,
+                        0, 0, nullptr);
+    return;
+  }
+
   if (!sym) {
     // Symbols can be duplicated in bitcode files because of '#include' and
     // linkonce_odr. Use uniqueSaver to save symbol names for de-duplication.
@@ -1816,6 +1826,9 @@ void BitcodeFile::parseLazy() {
   numSymbols = obj->symbols().size();
   symbols = std::make_unique<Symbol *[]>(numSymbols);
   for (auto [i, irSym] : llvm::enumerate(obj->symbols())) {
+    // A file-local name cannot satisfy an external archive reference.
+    if (!irSym.isGlobal())
+      continue;
     // Symbols can be duplicated in bitcode files because of '#include' and
     // linkonce_odr. Use uniqueSaver to save symbol names for de-duplication.
     // Update objSym.Name to reference (via StringRef) the string saver's copy;

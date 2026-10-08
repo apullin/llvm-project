@@ -2055,7 +2055,7 @@ def STST : TMS9900Inst<(outs GR16:$rd), (ins),
   bits<4> rd;
   bits<16> Inst;
   let Inst{15-5} = 0b00000010110;
-  let Inst{4} = 0;
+  let Inst{4} = ?; // N (don't care)
   let Inst{3-0} = rd;
   let Uses = [ST];
   let SchedRW = [WriteFast8];
@@ -2068,7 +2068,7 @@ def STWP : TMS9900Inst<(outs GR16:$rd), (ins),
   bits<4> rd;
   bits<16> Inst;
   let Inst{15-5} = 0b00000010101;
-  let Inst{4} = 0;
+  let Inst{4} = ?; // N (don't care)
   let Inst{3-0} = rd;
   let Uses = [WP];
   let SchedRW = [WriteFast8];

@@ -1335,8 +1335,9 @@ class Format7_R0Count<bits<8> opcode, dag outs, dag ins, string asmstr,
 
 //===----------------------------------------------------------------------===//
 // Format 8: Immediate Register
-// [opcode:8][N:4][W:4] + [imm:16]
-// (Actually opcode is in bits 0-10, but simplified here)
+// [opcode:11][N:1][W:4] + [imm:16]
+// N is a don't-care bit. Unspecified encoding bits emit as zero but are
+// ignored by the generated decoder.
 //===----------------------------------------------------------------------===//
 
 class Format8<bits<4> subop, dag outs, dag ins, string asmstr,
@@ -1351,6 +1352,7 @@ class Format8<bits<4> subop, dag outs, dag ins, string asmstr,
   // where ssss = sub-opcode, rrrr = register
   let Inst{15-8} = 0b00000010;  // Format 8 identifier
   let Inst{7-4} = subop;
+  let Inst{4} = ?;             // N (don't care)
   let Inst{3-0} = rd;
   // Second word
   let Inst{31-16} = imm;
@@ -1371,6 +1373,7 @@ class Format8_Cmp<bits<4> subop, dag outs, dag ins, string asmstr,
   // First word: 0000 0010 ssss rrrr
   let Inst{15-8} = 0b00000010;  // Format 8 identifier
   let Inst{7-4} = subop;
+  let Inst{4} = ?;             // N (don't care)
   let Inst{3-0} = rs;
   // Second word
   let Inst{31-16} = imm;
@@ -1392,7 +1395,7 @@ class Format9<bits<11> opcode, dag outs, dag ins, string asmstr,
 
   // First word (low 16 bits in big-endian output)
   let Inst{15-5} = opcode;
-  let Inst{4-0} = 0;          // N (unused)
+  let Inst{4-0} = ?;          // N (don't care)
   // Second word (high 16 bits in big-endian output)
   let Inst{31-16} = imm;
 
@@ -1400,12 +1403,13 @@ class Format9<bits<11> opcode, dag outs, dag ins, string asmstr,
 }
 
 //===----------------------------------------------------------------------===//
-// Format 11: RTWP
-// [opcode:16]
+// Format 11: RTWP and external instructions
+// [opcode:11][N:5]
 //===----------------------------------------------------------------------===//
 
 class Format11<bits<16> opcode, dag outs, dag ins, string asmstr,
                list<dag> pattern>
     : TMS9900Inst<outs, ins, asmstr, pattern> {
   bits<16> Inst = opcode;
+  let Inst{4-0} = ?;          // N (don't care)
 }

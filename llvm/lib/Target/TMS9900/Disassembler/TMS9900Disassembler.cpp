@@ -114,29 +114,28 @@ static const uint16_t LWPI_OPCODE = 0x02E0;
 static const uint16_t LIMI_OPCODE = 0x0300;
 
 static unsigned getInstructionWords(uint16_t Insn) {
-  switch (Insn) {
+  // Internal/immediate/external instructions decode their opcode from the
+  // upper eleven bits. N bits must not be mistaken for addressing modes.
+  switch (Insn & 0xFFE0) {
   case RTWP_OPCODE:
   case IDLE_OPCODE:
   case RSET_OPCODE:
   case CKOF_OPCODE:
   case CKON_OPCODE:
   case LREX_OPCODE:
+  case STWP_OPCODE:
+  case STST_OPCODE:
     return 1;
+  case 0x0200: // LI
+  case 0x0220: // AI
+  case 0x0240: // ANDI
+  case 0x0260: // ORI
+  case 0x0280: // CI
+  case LWPI_OPCODE:
+  case LIMI_OPCODE:
+    return 2;
   default:
     break;
-  }
-
-  if ((Insn & 0xFFF0) == STWP_OPCODE || (Insn & 0xFFF0) == STST_OPCODE)
-    return 1;
-
-  if ((Insn & 0xFFE0) == LWPI_OPCODE || (Insn & 0xFFE0) == LIMI_OPCODE)
-    return 2;
-
-  if ((Insn & 0xFF00) == 0x0200) {
-    unsigned Subop = (Insn >> 4) & 0xF;
-    if (Subop == 0x0 || Subop == 0x2 || Subop == 0x4 || Subop == 0x6 ||
-        Subop == 0x8)
-      return 2;
   }
 
   if ((Insn & 0xFF00) == 0x1D00 || (Insn & 0xFF00) == 0x1E00 ||

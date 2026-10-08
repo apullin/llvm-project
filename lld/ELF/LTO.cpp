@@ -9,6 +9,7 @@
 #include "LTO.h"
 #include "Config.h"
 #include "InputFiles.h"
+#include "LinkerScript.h"
 #include "SymbolTable.h"
 #include "Symbols.h"
 #include "lld/Common/Args.h"
@@ -19,9 +20,14 @@
 #include "lld/Common/TargetOptionsCommandFlags.h"
 #include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/StringRef.h"
+#include "llvm/ADT/StringExtras.h"
 #include "llvm/ADT/Twine.h"
 #include "llvm/BinaryFormat/ELF.h"
 #include "llvm/Bitcode/BitcodeWriter.h"
+#include "llvm/IR/Constants.h"
+#include "llvm/IR/Function.h"
+#include "llvm/IR/GlobalVariable.h"
+#include "llvm/IR/Module.h"
 #include "llvm/LTO/Config.h"
 #include "llvm/LTO/LTO.h"
 #include "llvm/Support/Caching.h"
@@ -30,6 +36,7 @@
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/Path.h"
+#include "llvm/Transforms/Utils/ModuleUtils.h"
 #include <algorithm>
 #include <cstddef>
 #include <memory>
@@ -60,6 +67,70 @@ static lto::Config createConfig() {
   // Always emit a section per function/datum with LTO.
   c.Options.FunctionSections = true;
   c.Options.DataSections = true;
+
+  if (config->ltoLinkerScripts) {
+    c.PreLinkModuleHook = [](StringRef moduleID, Module &m) -> Error {
+      auto it = ctx.ltoScriptModuleFiles.find(moduleID);
+      if (it == ctx.ltoScriptModuleFiles.end())
+        return make_error<StringError>("missing LTO input ownership: " +
+                                           moduleID.str(),
+                                       inconvertibleErrorCode());
+      StringRef file = it->second;
+      if (!m.getModuleInlineAsm().empty() || !m.alias_empty() || !m.ifunc_empty())
+        return make_error<StringError>(
+            "--lto-linker-scripts: module asm, aliases and ifuncs are not "
+            "supported in " + file.str(), inconvertibleErrorCode());
+      for (InputSectionDescription *id : script->keptSections)
+        if ((id->withFlags | id->withoutFlags) &
+            ~(SHF_ALLOC | SHF_WRITE | SHF_EXECINSTR))
+          return make_error<StringError>(
+              "--lto-linker-scripts: KEEP flags other than "
+              "SHF_ALLOC/SHF_WRITE/SHF_EXECINSTR are not supported",
+              inconvertibleErrorCode());
+
+      SmallVector<GlobalValue *, 0> kept;
+      for (GlobalObject &go : m.global_objects()) {
+        if (go.isDeclarationForLinker() || go.getName().starts_with("llvm."))
+          continue;
+        if (go.hasCommonLinkage() || go.hasAppendingLinkage())
+          return make_error<StringError>(
+              "--lto-linker-scripts: common/appending linkage is not supported "
+              "for " + go.getName().str(), inconvertibleErrorCode());
+
+        uint64_t flags = SHF_ALLOC;
+        std::string section;
+        if (isa<Function>(go)) {
+          section = ".text.";
+          flags |= SHF_EXECINSTR;
+        } else {
+          auto &gv = cast<GlobalVariable>(go);
+          if (gv.isThreadLocal())
+            return make_error<StringError>(
+                "--lto-linker-scripts: TLS is not supported", inconvertibleErrorCode());
+          if (gv.isConstant())
+            section = ".rodata.";
+          else {
+            flags |= SHF_WRITE;
+            section = gv.getInitializer()->isNullValue() ? ".bss." : ".data.";
+          }
+        }
+        section += go.getName();
+        if (go.hasSection())
+          section = go.getSection().str();
+
+        // Ownership is encoded in a private section name, not a surviving
+        // symbol name. This survives local renaming and prevailing COMDAT
+        // selection; sections from different TUs cannot coalesce accidentally.
+        go.setSection(".lto_script." + toHex(file) + "." + toHex(section));
+        if (script->shouldKeep(file, section, flags))
+          kept.push_back(&go);
+      }
+      // KEEP must become an optimizer root before IR linking/DCE, including
+      // local definitions. Linker GC is still governed by the original script.
+      appendToCompilerUsed(m, kept);
+      return Error::success();
+    };
+  }
 
   c.Options.BBAddrMap = config->ltoBBAddrMap;
 
@@ -213,6 +284,8 @@ BitcodeCompiler::~BitcodeCompiler() = default;
 
 void BitcodeCompiler::add(BitcodeFile &f) {
   lto::InputFile &obj = *f.obj;
+  if (config->ltoLinkerScripts)
+    ctx.ltoScriptModuleFiles[obj.getName()] = saver().save(f.getNameForScript());
   bool isExec = !config->shared && !config->relocatable;
 
   if (config->thinLTOEmitIndexFiles)

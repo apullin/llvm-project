@@ -184,6 +184,8 @@ public:
         sortInner(SortSectionPolicy::Default) {}
 
   bool excludesFile(const InputFile *file) const;
+  bool excludesFile(const InputSectionBase *sec) const;
+  bool excludesFile(StringRef file) const;
 
   StringMatcher sectionPat;
   SortSectionPolicy sortOuter;
@@ -207,6 +209,8 @@ public:
   }
 
   bool matchesFile(const InputFile *file) const;
+  bool matchesFile(const InputSectionBase *sec) const;
+  bool matchesFile(StringRef file) const;
 
   // Input sections that matches at least one of SectionPatterns
   // will be associated with this InputSectionDescription.
@@ -344,6 +348,7 @@ public:
   bool needsInterpSection();
 
   bool shouldKeep(InputSectionBase *s);
+  bool shouldKeep(StringRef file, StringRef section, uint64_t flags);
   std::pair<const OutputSection *, const Defined *> assignAddresses();
   bool spillSections();
   void erasePotentialSpillSections();

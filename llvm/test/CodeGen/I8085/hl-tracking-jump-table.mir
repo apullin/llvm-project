@@ -1,0 +1,31 @@
+# RUN: llc -run-pass=i8085-hl-tracking -verify-machineinstrs %s -o - | FileCheck %s
+
+--- |
+  target triple = "i8085-unknown-elf"
+
+  define void @reuse_jump_table_address() { ret void }
+...
+
+---
+name:            reuse_jump_table_address
+jumpTable:
+  kind:            block-address
+  entries:
+    - id:              0
+      blocks:          [ '%bb.1', '%bb.2' ]
+body:             |
+  bb.0:
+    ; CHECK-LABEL: name: reuse_jump_table_address
+    ; CHECK: $hl = LXI %jump-table.0
+    ; CHECK-NOT: $hl = LXI %jump-table.0
+    ; CHECK: RET
+    $hl = LXI %jump-table.0
+    $hl = LXI %jump-table.0
+    RET implicit $sp, implicit-def $sp
+
+  bb.1:
+    RET implicit $sp, implicit-def $sp
+
+  bb.2:
+    RET implicit $sp, implicit-def $sp
+...

@@ -4,29 +4,25 @@
 define i16 @loadtest16() #0  {
 ; CHECK-LABEL: loadtest16:
 ; CHECK:         .cfi_startproc
-; CHECK-NEXT:  LBB0_0:
+; CHECK-NEXT:  ; %bb.0:
 ; CHECK-NEXT:    LXI H, 65532
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    SPHL
 ; CHECK-NEXT:    .cfi_adjust_cfa_offset 4
 ; CHECK-NEXT:    LXI B, 20000
-; CHECK-NEXT:    LXI H, 1
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, B
 ; CHECK-NEXT:    LXI H, 0
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV M, C
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, B
 ; CHECK-NEXT:    LXI D, 105
-; CHECK-NEXT:    LXI H, 3
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, D
-; CHECK-NEXT:    LXI H, 2
-; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    MOV M, E
-; CHECK-NEXT:    LXI H, 4
-; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, D
+; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    SPHL
-; CHECK-NEXT:    .cfi_adjust_cfa_offset 4294967292
+; CHECK-NEXT:    .cfi_adjust_cfa_offset -4
 ; CHECK-NEXT:    RET
 
   %1 = alloca i16, align 1
@@ -44,7 +40,7 @@ define i16 @loadtest16() #0  {
 define i8 @loadtest8()  {
 ; CHECK-LABEL: loadtest8:
 ; CHECK:         .cfi_startproc
-; CHECK-NEXT:  LBB1_0:
+; CHECK-NEXT:  ; %bb.0:
 ; CHECK-NEXT:    LXI H, 65534
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    SPHL
@@ -54,13 +50,11 @@ define i8 @loadtest8()  {
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV M, A
 ; CHECK-NEXT:    MVI B, 55
-; CHECK-NEXT:    LXI H, 1
-; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    MOV M, B
-; CHECK-NEXT:    LXI H, 2
-; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    SPHL
-; CHECK-NEXT:    .cfi_adjust_cfa_offset 4294967294
+; CHECK-NEXT:    .cfi_adjust_cfa_offset -2
 ; CHECK-NEXT:    RET
 
   %1 = alloca i8, align 1

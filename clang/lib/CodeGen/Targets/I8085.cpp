@@ -42,6 +42,15 @@ public:
     for (auto &I : FI.arguments())
       I.info = classifyArgumentType(I.type);
   }
+
+  RValue EmitVAArg(CodeGenFunction &CGF, Address VAListAddr, QualType Ty,
+                   AggValueSlot Slot) const override {
+    // Variadic arguments, including byval aggregates, are packed inline in a
+    // byte-aligned stack area rather than passed indirectly through pointers.
+    return emitVoidPtrVAArg(CGF, VAListAddr, Ty, /*IsIndirect=*/false,
+                            getContext().getTypeInfoInChars(Ty),
+                            CharUnits::One(), /*AllowHigherAlign=*/false, Slot);
+  }
 };
 
 class I8085TargetCodeGenInfo : public TargetCodeGenInfo {

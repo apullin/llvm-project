@@ -1,0 +1,82 @@
+# RUN: llc -run-pass=i8085-expand-pseudo32 -verify-machineinstrs %s -o - | FileCheck %s
+--- |
+  target triple = "i8085-unknown-elf"
+  define void @batch() { ret void }
+  define void @slow() { ret void }
+  define void @reload() { ret void }
+  define void @reload_slow() { ret void }
+...
+---
+name: batch
+tracksRegLiveness: true
+body: |
+  bb.0:
+    liveins: $iax, $sp
+    $a = MVI 45
+    STC implicit-def $sreg
+    ; Both consecutive copies must preserve A and carry. No nominal dead
+    ; clobber on the second copy may hide liveness from the first one.
+    ; CHECK-LABEL: name: batch
+    ; CHECK: PUSH $psw
+    ; CHECK: MOV_FROM_M
+    ; CHECK: $psw = POP
+    ; CHECK: PUSH $psw
+    ; CHECK: MOV_FROM_M
+    ; CHECK: $psw = POP
+    ; CHECK: RET
+    $ibx = MOV_32 $iax
+    $iax = MOV_32 $ibx
+    RET implicit $sp, implicit-def $sp, implicit $a, implicit $sreg, implicit $iax
+...
+---
+name: slow
+tracksRegLiveness: true
+body: |
+  bb.0:
+    liveins: $iax, $bc, $de, $sp
+    $a = MVI 45
+    STC implicit-def $sreg
+    ; CHECK-LABEL: name: slow
+    ; CHECK: PUSH $psw
+    ; CHECK: $a = MOV_FROM_M
+    ; CHECK: MOV_M $a
+    ; CHECK: $psw = POP
+    ; CHECK: RET
+    $ibx = MOV_32 $iax
+    RET implicit $sp, implicit-def $sp, implicit $a, implicit $sreg, implicit $bc, implicit $de, implicit $ibx
+...
+---
+name: reload
+tracksRegLiveness: true
+body: |
+  bb.0:
+    liveins: $sp
+    $a = MVI 45
+    STC implicit-def $sreg
+    ; The PSW push must be included in the source address calculation.
+    ; CHECK-LABEL: name: reload
+    ; CHECK: PUSH $psw
+    ; CHECK: $hl = LXI 58
+    ; CHECK: DAD $sp, implicit-def $sreg
+    ; CHECK: MOV_FROM_M
+    ; CHECK: $psw = POP
+    ; CHECK: RET
+    $ibx = LOAD_32_WITH_ADDR $sp, 56, implicit-def dead $h, implicit-def dead $l, implicit $sp :: (load (s32))
+    RET implicit $sp, implicit-def $sp, implicit $a, implicit $sreg, implicit $ibx
+...
+---
+name: reload_slow
+tracksRegLiveness: true
+body: |
+  bb.0:
+    liveins: $sp, $bc, $de
+    $a = MVI 45
+    STC implicit-def $sreg
+    ; CHECK-LABEL: name: reload_slow
+    ; CHECK: PUSH $psw
+    ; CHECK: MOV_FROM_M
+    ; CHECK: $psw = POP
+    ; CHECK: RET
+    $ibx = LOAD_32_WITH_ADDR $sp, 56, implicit-def dead $h, implicit-def dead $l, implicit $sp :: (load (s32))
+    RET implicit $sp, implicit-def $sp, implicit $a, implicit $sreg, implicit $bc, implicit $de, implicit $ibx
+...

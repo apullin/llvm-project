@@ -28,8 +28,8 @@ enum NodeType {
   FIRST_NUMBER = ISD::BUILTIN_OP_END,
   /// Return from subroutine.
   RET_FLAG,
-  /// Return from ISR.
-  RETI_FLAG,
+  /// Save the VLA frame base before an i32 return overwrites DE.
+  SAVE_VLA_BASE_FOR_RET,
   /// Represents an abstract call instruction,
   /// which includes a bunch of information.
   CALL,
@@ -38,20 +38,20 @@ enum NodeType {
   /// A wrapper node for TargetConstantPool,
   /// TargetExternalSymbol, and TargetGlobalAddress.
   WRAPPER,
-  LSL,     ///< Logical shift left.
-  LSLBN,   ///< Byte logical shift left N bits.
-  LSLWN,   ///< Word logical shift left N bits.
-  LSLHI,   ///< Higher 8-bit of word logical shift left.
-  LSR,     ///< Logical shift right.
-  LSRBN,   ///< Byte logical shift right N bits.
-  LSRWN,   ///< Word logical shift right N bits.
-  LSRLO,   ///< Lower 8-bit of word logical shift right.
-  ASR,     ///< Arithmetic shift right.
-  ASRBN,   ///< Byte arithmetic shift right N bits.
-  ASRWN,   ///< Word arithmetic shift right N bits.
-  ASRLO,   ///< Lower 8-bit of word arithmetic shift right.
-  ROR,     ///< Bit rotate right.
-  ROL,     ///< Bit rotate left.
+  LSL,   ///< Logical shift left.
+  LSLBN, ///< Byte logical shift left N bits.
+  LSLWN, ///< Word logical shift left N bits.
+  LSLHI, ///< Higher 8-bit of word logical shift left.
+  LSR,   ///< Logical shift right.
+  LSRBN, ///< Byte logical shift right N bits.
+  LSRWN, ///< Word logical shift right N bits.
+  LSRLO, ///< Lower 8-bit of word logical shift right.
+  ASR,   ///< Arithmetic shift right.
+  ASRBN, ///< Byte arithmetic shift right N bits.
+  ASRWN, ///< Word arithmetic shift right N bits.
+  ASRLO, ///< Lower 8-bit of word arithmetic shift right.
+  ROR,   ///< Bit rotate right.
+  ROL,   ///< Bit rotate left.
   /// I8085 conditional branches. Operand 0 is the chain operand, operand 1
   /// is the block to branch if condition is true, operand 2 is the
   /// condition code, and operand 3 is the flag operand produced by a CMP
@@ -78,7 +78,13 @@ enum NodeType {
   /// Atomically capture the i32 call result from BC:DE into a GR32.
   /// Avoids intermediate virtual registers that cause register pressure
   /// issues with the fast register allocator at O0.
-  PACK_CALL_RESULT_32
+  PACK_CALL_RESULT_32,
+
+  /// Multiply a 16-bit value by an immediate constant using inline
+  /// shift-add chains (DAD H / DAD B / SUB). Operand 0 is the value,
+  /// operand 1 is the constant. Used when the inline decomposition
+  /// is cheaper than calling __mul16.
+  MUL_IMM
 };
 
 } // end of namespace I8085ISD
@@ -137,6 +143,13 @@ public:
 
   bool isOffsetFoldingLegal(const GlobalAddressSDNode *GA) const override;
 
+  /// Division by constant is NOT cheaper as multiply-by-reciprocal on the
+  /// i8085.  The reciprocal multiply requires i32 precision (CALL __mul32)
+  /// which is far more expensive than the i16 division libcall (__udiv16).
+  bool isIntDivCheap(EVT VT, AttributeList Attr) const override {
+    return true;
+  }
+
   EVT getSetCCResultType(const DataLayout &DL, LLVMContext &Context,
                          EVT VT) const override;
 
@@ -181,9 +194,13 @@ private:
   SDValue LowerGlobalAddress(SDValue Op, SelectionDAG &DAG) const;
   SDValue LowerBlockAddress(SDValue Op, SelectionDAG &DAG) const;
   SDValue LowerConstantPool(SDValue Op, SelectionDAG &DAG) const;
+  SDValue LowerJumpTable(SDValue Op, SelectionDAG &DAG) const;
   SDValue LowerVASTART(SDValue Op, SelectionDAG &DAG) const;
   SDValue LowerVAEND(SDValue Op, SelectionDAG &DAG) const;
   SDValue LowerVACOPY(SDValue Op, SelectionDAG &DAG) const;
+  SDValue getReturnAddressFrameIndex(SelectionDAG &DAG) const;
+  SDValue LowerRETURNADDR(SDValue Op, SelectionDAG &DAG) const;
+  SDValue LowerFRAMEADDR(SDValue Op, SelectionDAG &DAG) const;
   SDValue performSubCombine(SDNode *N, DAGCombinerInfo &DCI) const;
   SDValue performMulCombine(SDNode *N, DAGCombinerInfo &DCI) const;
   SDValue performTruncMulCombine(SDNode *N, DAGCombinerInfo &DCI) const;

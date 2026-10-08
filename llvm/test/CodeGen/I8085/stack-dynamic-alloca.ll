@@ -1,4 +1,5 @@
 ; RUN: llc -mattr=i8085,sram < %s -march=i8085 -verify-machineinstrs | FileCheck %s
+; RUN: llc -mattr=i8085,sram < %s -march=i8085 -verify-machineinstrs -filetype=obj -o %t
 
 ; Dynamic alloca and stack realignment smoke tests.
 
@@ -27,6 +28,24 @@ entry:
   %v = load i32, ptr %p, align 4
   %v16 = trunc i32 %v to i16
   ret i16 %v16
+}
+
+declare void @escape(ptr)
+
+define i32 @realign_dynamic_i32(i16 %n) #0 {
+; CHECK-LABEL: realign_dynamic_i32:
+; CHECK: PUSH D
+; CHECK: LXI B, 4660
+; CHECK-NEXT: MOV D, H
+; CHECK-NEXT: MOV E, L
+; CHECK: POP H
+; CHECK: ADI 6
+; CHECK: SPHL
+; CHECK: RET
+entry:
+  %p = alloca i8, i16 %n, align 4
+  call void @escape(ptr %p)
+  ret i32 -1526721996
 }
 
 attributes #0 = { "stackrealign" }

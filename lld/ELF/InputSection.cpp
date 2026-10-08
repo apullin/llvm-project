@@ -36,6 +36,16 @@ using namespace lld::elf;
 
 DenseSet<std::pair<const Symbol *, uint64_t>> elf::ppc64noTocRelax;
 
+void elf::setLtoScriptFileForLinkerScript(InputSectionBase *sec,
+                                          StringRef file) {
+  ctx.ltoScriptFiles[sec] = file;
+}
+
+StringRef elf::getLtoScriptFileForLinkerScript(const InputSectionBase *sec) {
+  auto it = ctx.ltoScriptFiles.find(sec);
+  return it == ctx.ltoScriptFiles.end() ? StringRef() : it->second;
+}
+
 // Returns a string to construct an error message.
 std::string lld::toString(const InputSectionBase *sec) {
   return (toString(sec->file) + ":(" + sec->name + ")").str();

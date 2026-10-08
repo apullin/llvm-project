@@ -4,19 +4,16 @@
 define i16 @add_sub_1(i16,i16) {
 ; CHECK-LABEL: add_sub_1:
 ; CHECK:         .cfi_startproc
-; CHECK-NEXT:  LBB0_0:
-; CHECK-NEXT:    LXI H, 5
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV D, M
-; CHECK-NEXT:    LXI H, 4
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV E, M
-; CHECK-NEXT:    LXI H, 3
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV B, M
+; CHECK-NEXT:  ; %bb.0:
 ; CHECK-NEXT:    LXI H, 2
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV C, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV B, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV E, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV D, M
 ; CHECK-NEXT:    MOV A, C
 ; CHECK-NEXT:    ADD E
 ; CHECK-NEXT:    MOV C, A
@@ -62,31 +59,28 @@ define i16 @add_sub_1(i16,i16) {
 define i16 @add_sub_2(i16,i16) {
 ; CHECK-LABEL: add_sub_2:
 ; CHECK:         .cfi_startproc
-; CHECK-NEXT:  LBB1_0:
-; CHECK-NEXT:    LXI H, 5
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV B, M
-; CHECK-NEXT:    LXI H, 4
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV C, M
-; CHECK-NEXT:    LXI H, 3
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV D, M
+; CHECK-NEXT:  ; %bb.0:
 ; CHECK-NEXT:    LXI H, 2
 ; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    MOV C, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV B, M
+; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    MOV E, M
-; CHECK-NEXT:    MOV A, E
-; CHECK-NEXT:    ADD C
-; CHECK-NEXT:    MOV E, A
-; CHECK-NEXT:    MOV A, D
-; CHECK-NEXT:    ADC B
-; CHECK-NEXT:    MOV D, A
-; CHECK-NEXT:    LXI B, 10000
-; CHECK-NEXT:    MOV A, E
-; CHECK-NEXT:    SUB C
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV D, M
+; CHECK-NEXT:    MOV A, C
+; CHECK-NEXT:    ADD E
 ; CHECK-NEXT:    MOV C, A
-; CHECK-NEXT:    MOV A, D
-; CHECK-NEXT:    SBB B
+; CHECK-NEXT:    MOV A, B
+; CHECK-NEXT:    ADC D
+; CHECK-NEXT:    MOV B, A
+; CHECK-NEXT:    LXI D, 10000
+; CHECK-NEXT:    MOV A, C
+; CHECK-NEXT:    SUB E
+; CHECK-NEXT:    MOV C, A
+; CHECK-NEXT:    MOV A, B
+; CHECK-NEXT:    SBB D
 ; CHECK-NEXT:    MOV B, A
 ; CHECK-NEXT:    MOV A, C
 ; CHECK-NEXT:    ADD C
@@ -113,17 +107,17 @@ define i16 @add_sub_2(i16,i16) {
 define i8 @add_sub_3(i8,i8) {
 ; CHECK-LABEL: add_sub_3:
 ; CHECK:         .cfi_startproc
-; CHECK-NEXT:  LBB2_0:
+; CHECK-NEXT:  ; %bb.0:
 ; CHECK-NEXT:    LXI H, 3
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV A, M
-; CHECK-NEXT:    LXI H, 2
-; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    DCX H
 ; CHECK-NEXT:    MOV B, M
 ; CHECK-NEXT:    ADD B
 ; CHECK-NEXT:    MOV B, A
 ; CHECK-NEXT:    MVI A, 58
 ; CHECK-NEXT:    ADD B
+; CHECK-NEXT:    MOV B, A
 ; CHECK-NEXT:    RET
 
   %3 = add i8 %0, %1 ; 48
@@ -138,7 +132,7 @@ define i8 @add_sub_3(i8,i8) {
 define i8 @add_sub_4(i8,i8) {
 ; CHECK-LABEL: add_sub_4:
 ; CHECK:         .cfi_startproc
-; CHECK-NEXT:  LBB3_0:
+; CHECK-NEXT:  ; %bb.0:
 ; CHECK-NEXT:    LXI H, 65534
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    SPHL
@@ -147,12 +141,12 @@ define i8 @add_sub_4(i8,i8) {
 ; CHECK-NEXT:    LXI H, 1
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    LXI H, 4
-; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    MOV B, M
 ; CHECK-NEXT:    ADD B
 ; CHECK-NEXT:    MOV B, A
-; CHECK-NEXT:    MOV A, B
 ; CHECK-NEXT:    XRI -1
 ; CHECK-NEXT:    MOV B, A
 ; CHECK-NEXT:    MVI A, 6
@@ -162,10 +156,10 @@ define i8 @add_sub_4(i8,i8) {
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV M, B
 ; CHECK-NEXT:    MOV A, B
-; CHECK-NEXT:    LXI H, 2
-; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    SPHL
-; CHECK-NEXT:    .cfi_adjust_cfa_offset 4294967294
+; CHECK-NEXT:    .cfi_adjust_cfa_offset -2
 ; CHECK-NEXT:    RET
 
   %3 = alloca i8, align 1

@@ -2011,6 +2011,12 @@ size_t Platform::GetSoftwareBreakpointTrapOpcode(Target &target,
     trap_opcode_size = sizeof(g_msp430_opcode);
   } break;
 
+  case llvm::Triple::i8085: {
+    static const uint8_t g_i8085_opcode[] = {0xCF}; // RST 1
+    trap_opcode = g_i8085_opcode;
+    trap_opcode_size = sizeof(g_i8085_opcode);
+  } break;
+
   case llvm::Triple::systemz: {
     static const uint8_t g_hex_opcode[] = {0x00, 0x01};
     trap_opcode = g_hex_opcode;

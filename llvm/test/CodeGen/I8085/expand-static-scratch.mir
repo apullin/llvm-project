@@ -1,0 +1,33 @@
+# RUN: llc -O0 -mtriple=i8085-unknown-elf -run-pass=i8085-expand-pseudo -verify-machineinstrs %s -o - | FileCheck %s
+
+--- |
+  target triple = "i8085-unknown-elf"
+
+  @slot8 = internal global [1 x i8] zeroinitializer, align 1
+  @slot16 = internal global [2 x i8] zeroinitializer, align 1
+
+  define void @expand_static() { ret void }
+...
+
+---
+name:            expand_static
+tracksRegLiveness: true
+body:             |
+  bb.0:
+    liveins: $a, $de
+
+    ; CHECK-LABEL: name:            expand_static
+    ; CHECK: LDA @slot8
+    ; CHECK-NEXT: STA @slot8
+    ; CHECK: LHLD @slot16
+    ; CHECK-NEXT: $d = MOV $h
+    ; CHECK-NEXT: $e = MOV $l
+    ; CHECK: $h = MOV $d
+    ; CHECK-NEXT: $l = MOV $e
+    ; CHECK-NEXT: SHLD @slot16
+    $a = LOAD_8_STATIC_ADDR @slot8, implicit $sp
+    STORE_8_STATIC_ADDR @slot8, killed $a, implicit $sp
+    $de = LOAD_16_STATIC_ADDR @slot16, implicit $sp
+    STORE_16_STATIC_ADDR @slot16, killed $de, implicit $sp
+    RET implicit $sp, implicit-def $sp
+...

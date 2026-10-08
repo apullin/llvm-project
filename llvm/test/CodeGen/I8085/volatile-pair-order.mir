@@ -1,0 +1,39 @@
+# RUN: llc -run-pass=i8085-expand-pseudo -verify-machineinstrs %s -o - | FileCheck %s
+--- |
+  target triple = "i8085-unknown-elf"
+  @word = global i16 0
+  define void @loads() { ret void }
+  define void @stores() { ret void }
+...
+---
+name: loads
+body: |
+  bb.0:
+    liveins: $sp
+    ; CHECK-LABEL: name: loads
+    ; CHECK: $hl = LXI 12
+    ; CHECK: $c = MOV_FROM_M
+    ; CHECK: $b = MOV_FROM_M
+    ; CHECK: $hl = LXI 10
+    ; CHECK: $e = MOV_FROM_M
+    ; CHECK: $d = MOV_FROM_M
+    $bc = LOAD_16_WITH_ADDR $sp, 12, implicit-def dead $h, implicit-def dead $l :: (volatile load (s16) from @word)
+    $de = LOAD_16_WITH_ADDR $sp, 10, implicit-def dead $h, implicit-def dead $l :: (volatile load (s16) from @word)
+    RET implicit $sp, implicit-def $sp
+...
+---
+name: stores
+body: |
+  bb.0:
+    liveins: $sp, $bc, $de
+    ; CHECK-LABEL: name: stores
+    ; CHECK: $hl = LXI 12
+    ; CHECK: MOV_M $c
+    ; CHECK: MOV_M $b
+    ; CHECK: $hl = LXI 10
+    ; CHECK: MOV_M $e
+    ; CHECK: MOV_M $d
+    STORE_16 $sp, 12, $bc, implicit-def dead $h, implicit-def dead $l :: (volatile store (s16) into @word)
+    STORE_16 $sp, 10, $de, implicit-def dead $h, implicit-def dead $l :: (volatile store (s16) into @word)
+    RET implicit $sp, implicit-def $sp
+...

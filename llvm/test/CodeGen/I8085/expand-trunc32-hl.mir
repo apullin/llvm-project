@@ -1,0 +1,57 @@
+# RUN: llc -O0 -run-pass=i8085-expand-pseudo32 -verify-machineinstrs %s -o - | FileCheck %s
+--- |
+  target triple = "i8085-unknown-elf"
+  define void @low_word_hl() { ret void }
+  define void @high_word_hl() { ret void }
+  define void @byte_h_live_l() { ret void }
+...
+---
+name: low_word_hl
+tracksRegLiveness: true
+body: |
+  bb.0:
+    liveins: $sp, $iax
+    ; CHECK-LABEL: name: low_word_hl
+    ; CHECK: $hl = LXI 0
+    ; CHECK-NEXT: DAD $sp
+    ; CHECK-NEXT: $a = MOV_FROM_M
+    ; CHECK-NEXT: $hl = INX
+    ; CHECK-NEXT: $h = MOV_FROM_M
+    ; CHECK-NEXT: $l = MOV $a
+    $hl = TRUNC32TO16 $iax, implicit-def dead $a
+    RET implicit-def $sp, implicit $sp, implicit $hl
+...
+---
+name: high_word_hl
+tracksRegLiveness: true
+body: |
+  bb.0:
+    liveins: $sp, $iax
+    ; CHECK-LABEL: name: high_word_hl
+    ; CHECK: $hl = LXI 2
+    ; CHECK-NEXT: DAD $sp
+    ; CHECK-NEXT: $a = MOV_FROM_M
+    ; CHECK-NEXT: $hl = INX
+    ; CHECK-NEXT: $h = MOV_FROM_M
+    ; CHECK-NEXT: $l = MOV $a
+    $hl = TRUNC32TO16_HI $iax, implicit-def dead $a
+    RET implicit-def $sp, implicit $sp, implicit $hl
+...
+---
+name: byte_h_live_l
+tracksRegLiveness: true
+body: |
+  bb.0:
+    liveins: $sp, $iax, $l, $sreg
+    ; CHECK-LABEL: name: byte_h_live_l
+    ; CHECK: PUSH $psw
+    ; CHECK-NEXT: PUSH $hl
+    ; CHECK-NEXT: $hl = LXI 4
+    ; CHECK-NEXT: DAD $sp
+    ; CHECK-NEXT: $a = MOV_FROM_M
+    ; CHECK-NEXT: $hl = POP
+    ; CHECK-NEXT: $h = MOV $a
+    ; CHECK-NEXT: $psw = POP
+    $h = TRUNC32TO8 $iax, implicit-def dead $a
+    RET implicit-def $sp, implicit $sp, implicit $hl, implicit $sreg
+...

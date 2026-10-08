@@ -36,6 +36,7 @@ public:
   }
   bool isPICDefaultForced() const override { return true; }
   const char *getDefaultLinker() const override { return "ld.lld"; }
+  bool HasNativeLLVMSupport() const override { return true; }
 
   UnwindLibType
   GetUnwindLibType(const llvm::opt::ArgList &Args) const override {

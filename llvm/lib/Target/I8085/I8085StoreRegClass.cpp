@@ -33,14 +33,12 @@ public:
       for (auto MI = MBB.begin(); MI != MBB.end(); ++MI) {
         int SrcIdx = -1;
         const TargetRegisterClass *RC = nullptr;
+        unsigned CopyOpc = TargetOpcode::COPY;
         switch (MI->getOpcode()) {
-        case I8085::STORE_8_ADDR_CONTENT:
-          SrcIdx = 0;
-          RC = &I8085::GR16BDRegClass;
-          break;
-        case I8085::STORE_16_ADDR_CONTENT:
+        case I8085::STORE_16_WITH_IMM_ADDR:
           SrcIdx = 1;
           RC = &I8085::GR16BDRegClass;
+          CopyOpc = I8085::COPY_TO_GR16BD;
           break;
         case I8085::STORE_8:
         case I8085::STORE_16:
@@ -66,6 +64,15 @@ public:
 
         if (Src.isVirtual()) {
           const TargetRegisterClass *CurRC = MRI.getRegClass(Src);
+          if (CopyOpc != TargetOpcode::COPY && !RC->hasSubClassEq(CurRC)) {
+            Register Tmp = MRI.createVirtualRegister(RC);
+            BuildMI(MBB, MI, MI->getDebugLoc(), TII.get(CopyOpc), Tmp)
+                .addReg(Src, getKillRegState(IsKill));
+            MO.setReg(Tmp);
+            MO.setIsKill(true);
+            Changed = true;
+            continue;
+          }
           const TargetRegisterClass *NewRC =
               MRI.constrainRegClass(Src, RC);
           CurRC = NewRC ? MRI.getRegClass(Src) : CurRC;
@@ -74,7 +81,7 @@ public:
           // insert a copy for just this use.
           if (!NewRC || !RC->hasSubClassEq(CurRC)) {
             Register Tmp = MRI.createVirtualRegister(RC);
-            BuildMI(MBB, MI, MI->getDebugLoc(), TII.get(TargetOpcode::COPY), Tmp)
+            BuildMI(MBB, MI, MI->getDebugLoc(), TII.get(CopyOpc), Tmp)
                 .addReg(Src, getKillRegState(IsKill));
             MO.setReg(Tmp);
             MO.setIsKill(true);
@@ -82,7 +89,7 @@ public:
           }
         } else if (!RC->contains(Src)) {
           Register Tmp = MRI.createVirtualRegister(RC);
-          BuildMI(MBB, MI, MI->getDebugLoc(), TII.get(TargetOpcode::COPY), Tmp)
+          BuildMI(MBB, MI, MI->getDebugLoc(), TII.get(CopyOpc), Tmp)
               .addReg(Src, getKillRegState(IsKill));
           MO.setReg(Tmp);
           MO.setIsKill(true);

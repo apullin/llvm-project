@@ -1,0 +1,19 @@
+# RUN: llc -O2 -run-pass=machine-cp -verify-machineinstrs %s -o - | FileCheck %s
+--- |
+  target triple = "i8085-unknown-elf"
+  define void @copy_through_gr32() { ret void }
+...
+---
+name: copy_through_gr32
+tracksRegLiveness: true
+body: |
+  bb.0:
+    liveins: $sp, $bc
+    ; CHECK-LABEL: name: copy_through_gr32
+    ; CHECK: $hl = COPY killed $bc
+    ; CHECK-NEXT: $iax = LOAD_32 305419896
+    ; CHECK: RET {{.*}}implicit $hl
+    $hl = COPY killed $bc
+    $iax = LOAD_32 305419896, implicit $sp
+    RET implicit-def $sp, implicit $sp, implicit $hl, implicit $iax
+...

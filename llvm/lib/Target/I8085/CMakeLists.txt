@@ -15,9 +15,11 @@ tablegen(LLVM I8085GenSubtargetInfo.inc -gen-subtarget)
 add_public_tablegen_target(I8085CommonTableGen)
 
 add_llvm_target(I8085CodeGen
+  I8085AddrHints.cpp
   I8085AsmPrinter.cpp
   I8085ExpandCopies.cpp
   I8085ExpandPseudoInsts.cpp
+  I8085ForcedHints.cpp
   I8085HLTracking.cpp
   I8085ExpandPseudoInsts32.cpp
   I8085FrameLowering.cpp
@@ -31,6 +33,7 @@ add_llvm_target(I8085CodeGen
   I8085RegisterInfo.cpp
   I8085SelectToBranch.cpp
   I8085StoreRegClass.cpp
+  I8085StaticScratch.cpp
   I8085Subtarget.cpp
   I8085TargetMachine.cpp
   I8085TargetObjectFile.cpp
@@ -45,6 +48,7 @@ add_llvm_target(I8085CodeGen
   MC
   I8085Desc
   I8085Info
+  Passes
   SelectionDAG
   Support
   Target

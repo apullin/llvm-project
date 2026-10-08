@@ -69,6 +69,7 @@ class Proc<string Name, list<SubtargetFeature> Features>
  : Processor<Name, NoItineraries, Features>;
 
 def : Proc<"i8085", []>;
+def : Proc<"generic", []>;
 
 
 def I8085 : Target {

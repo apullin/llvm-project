@@ -1,14 +1,14 @@
 // REQUIRES: i8085-sim
-// RUN: %S/../../../../../tooling/build/build-clang-8085/bin/clang -target i8085-unknown-elf -O0 -ffreestanding -fno-builtin -nostdlib -c \
-// RUN:   %S/../../../../../sysroot/crt/crt0.S -o %t.crt0.o
-// RUN: %S/../../../../../tooling/build/build-clang-8085/bin/clang -target i8085-unknown-elf -O0 -ffreestanding -fno-builtin -nostdlib -emit-llvm -c \
+// RUN: %i8085_clang -target i8085-unknown-elf -O0 -ffreestanding -fno-builtin -nostdlib -c \
+// RUN:   %i8085_sdk/sysroot/crt/crt0.S -o %t.crt0.o
+// RUN: %i8085_clang -target i8085-unknown-elf -O0 -ffreestanding -fno-builtin -nostdlib -emit-llvm -c \
 // RUN:   %s -o %t.bc
-// RUN: %S/../../../../../tooling/build/build-clang-8085/bin/llc -mtriple=i8085-unknown-elf -filetype=obj %t.bc -o %t.o
-// RUN: %S/../../../../../tooling/build/build-clang-8085/bin/ld.lld -m i8085elf \
-// RUN:   -T %S/../../../../../sysroot/ldscripts/i8085-32kram-32krom.ld -Map %t.map \
+// RUN: %i8085_llc -mtriple=i8085-unknown-elf -filetype=obj %t.bc -o %t.o
+// RUN: %i8085_lld -m i8085elf \
+// RUN:   -T %i8085_sdk/sysroot/ldscripts/i8085-32kram-32krom.ld -Map %t.map \
 // RUN:   -o %t.elf %t.crt0.o %t.o
-// RUN: llvm-objcopy -O binary %t.elf %t.bin
-// RUN: %S/../../../../../i8085-trace/build/i8085-trace -S -q -n 200000 \
+// RUN: %i8085_objcopy -O binary %t.elf %t.bin
+// RUN: %i8085_sim -S -q -n 200000 \
 // RUN:   --irq=75@50 --irq=65@50 --irq=55@50 \
 // RUN:   -d 0x05F0:0x03 %t.bin 2>&1 | FileCheck %s --check-prefix=MASK
 
@@ -23,7 +23,7 @@ __attribute__((naked)) void isr_rst65(void) {
                    "dad d\n"
                    "mvi m, 0x65\n"
                    "ei\n"
-                   "reti\n");
+                   "ret\n");
 }
 
 __attribute__((naked)) void isr_rst55(void) {
@@ -37,7 +37,7 @@ __attribute__((naked)) void isr_rst55(void) {
                    "dad d\n"
                    "mvi m, 0x55\n"
                    "ei\n"
-                   "reti\n");
+                   "ret\n");
 }
 
 __attribute__((naked)) void isr_rst75(void) {
@@ -51,7 +51,7 @@ __attribute__((naked)) void isr_rst75(void) {
                    "dad d\n"
                    "mvi m, 0x75\n"
                    "ei\n"
-                   "reti\n");
+                   "ret\n");
 }
 
 __attribute__((naked)) int main(void) {

@@ -14,6 +14,7 @@
 #define LLVM_I8085_MACHINE_FUNCTION_INFO_H
 
 #include "llvm/CodeGen/MachineFunction.h"
+#include "llvm/ADT/SmallVector.h"
 
 namespace llvm {
 
@@ -43,6 +44,8 @@ class I8085MachineFunctionInfo : public MachineFunctionInfo {
 
   /// FrameIndex for start of varargs area.
   int VarArgsFrameIndex;
+  /// FrameIndex for the incoming return-address slot.
+  int ReturnAddrFrameIndex;
   /// FrameIndex for per-function GR32 scratch storage (IAX/IBX bytes).
   int GR32ScratchFI;
   /// When only IBX is used (no IAX), the scratch slot is only 4 bytes
@@ -52,11 +55,13 @@ class I8085MachineFunctionInfo : public MachineFunctionInfo {
   int StackRealignSaveFI;
   /// Indicates whether this function realigns the stack.
   bool HasStackRealign;
+  SmallVector<std::pair<MCRegister, int>, 2> IncomingRegSaveSlots;
 
   public:
   I8085MachineFunctionInfo(const Function &F, const TargetSubtargetInfo *STI)
       : HasSpills(false), HasAllocas(false), HasStackArgs(false),
-        CalleeSavedFrameSize(0), VarArgsFrameIndex(0), GR32ScratchFI(-1),
+        CalleeSavedFrameSize(0), VarArgsFrameIndex(0),
+        ReturnAddrFrameIndex(0), GR32ScratchFI(-1),
         IBXRemappedToZero(false), StackRealignSaveFI(-1),
         HasStackRealign(false) {
     CallingConv::ID CallConv = F.getCallingConv();
@@ -90,6 +95,10 @@ class I8085MachineFunctionInfo : public MachineFunctionInfo {
   int getVarArgsFrameIndex() const { return VarArgsFrameIndex; }
   void setVarArgsFrameIndex(int Idx) { VarArgsFrameIndex = Idx; }
 
+  int getReturnAddrFrameIndex() const { return ReturnAddrFrameIndex; }
+  void setReturnAddrFrameIndex(int Idx) { ReturnAddrFrameIndex = Idx; }
+  bool hasReturnAddrFrameIndex() const { return ReturnAddrFrameIndex != 0; }
+
   int getGR32ScratchFI() const { return GR32ScratchFI; }
   void setGR32ScratchFI(int Idx) { GR32ScratchFI = Idx; }
   bool hasGR32ScratchFI() const { return GR32ScratchFI >= 0; }
@@ -103,6 +112,13 @@ class I8085MachineFunctionInfo : public MachineFunctionInfo {
 
   bool hasStackRealign() const { return HasStackRealign; }
   void setHasStackRealign(bool B) { HasStackRealign = B; }
+
+  void addIncomingRegSaveSlot(MCRegister Reg, int FI) {
+    IncomingRegSaveSlots.emplace_back(Reg, FI);
+  }
+  ArrayRef<std::pair<MCRegister, int>> getIncomingRegSaveSlots() const {
+    return IncomingRegSaveSlots;
+  }
 };
 
 } // namespace llvm

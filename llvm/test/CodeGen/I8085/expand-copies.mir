@@ -1,0 +1,45 @@
+# RUN: llc -O0 -run-pass=i8085-expand-copies %s -o - | FileCheck %s
+
+--- |
+  target triple = "i8085-unknown-elf"
+  define void @copy_sp_bc() { ret void }
+  define void @copy_sp_bc_preserve_state() { ret void }
+...
+
+---
+name:            copy_sp_bc
+tracksRegLiveness: true
+body:             |
+  bb.0:
+    liveins: $sp
+    ; CHECK-LABEL: name:            copy_sp_bc
+    ; CHECK: $hl = LXI 0
+    ; CHECK-NEXT: DAD $sp
+    ; CHECK-NEXT: $b = MOV{{( killed)?}} $h
+    ; CHECK-NEXT: $c = MOV{{( killed)?}} $l
+    $bc = COPY $sp
+    RET implicit $sp, implicit-def $sp
+...
+
+---
+name:            copy_sp_bc_preserve_state
+tracksRegLiveness: true
+body:             |
+  bb.0:
+    liveins: $sp, $hl, $a
+    ; CHECK-LABEL: name:            copy_sp_bc_preserve_state
+    ; CHECK: PUSH $hl
+    ; CHECK-NEXT: PUSH $psw
+    ; CHECK-NEXT: $hl = LXI 4
+    ; CHECK-NEXT: DAD $sp
+    ; CHECK-NEXT: $b = MOV{{( killed)?}} $h
+    ; CHECK-NEXT: $c = MOV{{( killed)?}} $l
+    ; CHECK-NEXT: $psw = POP
+    ; CHECK-NEXT: $hl = POP
+    ; CHECK-NEXT: $c = MOV $a
+    ; CHECK-NEXT: $d = MOV $h
+    $bc = COPY $sp
+    $c = MOV $a
+    $d = MOV $h
+    RET implicit $sp, implicit-def $sp
+...

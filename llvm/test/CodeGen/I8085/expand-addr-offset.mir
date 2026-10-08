@@ -11,8 +11,13 @@
   define void @load16_hl_from_sp() { ret void }
   define void @load16_hl_from_sp_neg() { ret void }
   define void @load16_de_from_sp() { ret void }
+  define void @load16_pair_sp_near() { ret void }
   define void @store16_sp_offset() { ret void }
+  define void @store16_pair_sp_near() { ret void }
   define void @store16_sp_neg_pseudo() { ret void }
+  define void @store16_hl_dead_bc() { ret void }
+  define void @store16_hl_live_bc() { ret void }
+  define void @store16_sp_value_preserve_hl() { ret void }
 ...
 
 ---
@@ -131,13 +136,32 @@ body:             |
   bb.0:
     liveins: $sp
     ; CHECK-LABEL: name:            load16_de_from_sp
-    ; CHECK: $hl = LXI 1
-    ; CHECK-NEXT: DAD $sp
-    ; CHECK-NEXT: $d = MOV_FROM_M
-    ; CHECK-NEXT: $hl = LXI 0
+    ; CHECK: $hl = LXI 0
     ; CHECK-NEXT: DAD $sp
     ; CHECK-NEXT: $e = MOV_FROM_M
+    ; CHECK-NEXT: $hl = INX
+    ; CHECK-NEXT: $d = MOV_FROM_M
     $de = LOAD_16_WITH_ADDR $sp, 0, implicit-def $a, implicit-def $hl, implicit $sp
+    RET implicit $sp, implicit-def $sp
+...
+
+---
+name:            load16_pair_sp_near
+body:             |
+  bb.0:
+    liveins: $sp
+    ; CHECK-LABEL: name:            load16_pair_sp_near
+    ; CHECK: $hl = LXI 33
+    ; CHECK-NEXT: DAD $sp
+    ; CHECK-NEXT: $c = MOV_FROM_M
+    ; CHECK-NEXT: $hl = INX
+    ; CHECK-NEXT: $b = MOV_FROM_M
+    ; CHECK-NEXT: $hl = INX
+    ; CHECK-NEXT: $e = MOV_FROM_M
+    ; CHECK-NEXT: $hl = INX
+    ; CHECK-NEXT: $d = MOV_FROM_M
+    $de = LOAD_16_WITH_ADDR $sp, 35, implicit-def $a, implicit-def $hl, implicit $sp :: (load (s16))
+    $bc = LOAD_16_WITH_ADDR $sp, 33, implicit-def $a, implicit-def $hl, implicit $sp :: (load (s16))
     RET implicit $sp, implicit-def $sp
 ...
 
@@ -147,13 +171,34 @@ body:             |
   bb.0:
     liveins: $bc, $sp
     ; CHECK-LABEL: name:            store16_sp_offset
-    ; CHECK: $hl = LXI 5
-    ; CHECK-NEXT: DAD $sp
-    ; CHECK-NEXT: MOV_M $b
-    ; CHECK-NEXT: $hl = LXI 4
+    ; CHECK: $hl = LXI 4
     ; CHECK-NEXT: DAD $sp
     ; CHECK-NEXT: MOV_M $c
+    ; CHECK-NEXT: $hl = INX
+    ; CHECK-NEXT: MOV_M $b
     STORE_16_AT_OFFSET_WITH_SP $bc, 4, implicit-def $hl, implicit $sp
+    RET implicit $sp, implicit-def $sp
+...
+
+---
+name:            store16_pair_sp_near
+body:             |
+  bb.0:
+    liveins: $bc, $de, $sp
+    ; CHECK-LABEL: name:            store16_pair_sp_near
+    ; CHECK: $hl = LXI 41
+    ; CHECK-NEXT: DAD $sp
+    ; CHECK-NEXT: MOV_M $c
+    ; CHECK-NEXT: $hl = INX
+    ; CHECK-NEXT: MOV_M $b
+    ; CHECK-NEXT: $hl = INX
+    ; CHECK-NEXT: $hl = INX
+    ; CHECK-NEXT: $hl = INX
+    ; CHECK-NEXT: MOV_M $e
+    ; CHECK-NEXT: $hl = INX
+    ; CHECK-NEXT: MOV_M $d
+    STORE_16 $sp, 45, $de, implicit-def $hl, implicit $sp :: (store (s16))
+    STORE_16 $sp, 41, $bc, implicit-def $hl, implicit $sp :: (store (s16))
     RET implicit $sp, implicit-def $sp
 ...
 
@@ -165,10 +210,59 @@ body:             |
     ; CHECK-LABEL: name:            store16_sp_neg_pseudo
     ; CHECK: $hl = LXI {{-?[0-9]+}}
     ; CHECK-NEXT: DAD $sp
-    ; CHECK-NEXT: MOV_M $d
-    ; CHECK: $hl = LXI {{-?[0-9]+}}
-    ; CHECK-NEXT: DAD $sp
     ; CHECK-NEXT: MOV_M $e
+    ; CHECK-NEXT: $hl = INX
+    ; CHECK-NEXT: MOV_M $d
     STORE_16_AT_OFFSET_WITH_SP $de, -6, implicit-def $hl, implicit $sp
+    RET implicit $sp, implicit-def $sp
+...
+
+---
+name:            store16_hl_dead_bc
+body:             |
+  bb.0:
+    liveins: $de, $hl
+    ; CHECK-LABEL: name:            store16_hl_dead_bc
+    ; CHECK-NOT: PUSH $bc
+    ; CHECK: PUSH $hl
+    ; CHECK: $bc = POP
+    ; CHECK: MOV_M $c
+    ; CHECK: MOV_M $b
+    ; CHECK-NOT: $bc = POP
+    STORE_16 $de, 8, $hl, implicit-def $hl, implicit $sp
+    RET implicit $sp, implicit-def $sp
+...
+
+---
+name:            store16_hl_live_bc
+body:             |
+  bb.0:
+    liveins: $bc, $de, $hl
+    ; CHECK-LABEL: name:            store16_hl_live_bc
+    ; CHECK: PUSH $bc
+    ; CHECK-NEXT: PUSH $hl
+    ; CHECK: $bc = POP
+    ; CHECK: MOV_M $c
+    ; CHECK: MOV_M $b
+    ; CHECK: $bc = POP
+    STORE_16 $de, 8, $hl, implicit-def $hl, implicit $sp
+    RET implicit $bc, implicit $sp, implicit-def $sp
+...
+
+---
+name:            store16_sp_value_preserve_hl
+body:             |
+  bb.0:
+    liveins: $de, $hl, $sp
+    ; CHECK-LABEL: name: store16_sp_value_preserve_hl
+    ; CHECK: PUSH $hl
+    ; CHECK-NEXT: $hl = LXI 2
+    ; CHECK-NEXT: DAD $sp
+    ; CHECK: $hl = LXI 3
+    ; CHECK: MOV_M $a
+    ; CHECK-NEXT: $hl = POP
+    ; CHECK-NEXT: $a = MOV $h
+    STORE_16 $de, 3, $sp, implicit $sp
+    $a = MOV $h
     RET implicit $sp, implicit-def $sp
 ...

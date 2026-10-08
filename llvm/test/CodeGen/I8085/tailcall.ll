@@ -11,7 +11,9 @@ entry:
   ret i16 7
 }
 
+; CHECK-LABEL: callee:
+; CHECK: LXI B, 7
+; CHECK: RET
 ; CHECK-LABEL: caller:
 ; CHECK-NOT: CALL
 ; CHECK: JMP callee
-; CHECK-LABEL: callee:

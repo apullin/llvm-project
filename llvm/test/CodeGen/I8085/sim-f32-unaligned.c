@@ -1,14 +1,14 @@
 // REQUIRES: i8085-sim
-// RUN: %S/../../../../../tooling/build/build-clang-8085/bin/clang -target i8085-unknown-elf -O0 -ffreestanding -fno-builtin -nostdlib -c \
-// RUN:   %S/../../../../../sysroot/crt/crt0.S -o %t.crt0.o
-// RUN: %S/../../../../../tooling/build/build-clang-8085/bin/clang -target i8085-unknown-elf -O0 -ffreestanding -fno-builtin -nostdlib -emit-llvm -c \
+// RUN: %i8085_clang -target i8085-unknown-elf -O0 -ffreestanding -fno-builtin -nostdlib -c \
+// RUN:   %i8085_sdk/sysroot/crt/crt0.S -o %t.crt0.o
+// RUN: %i8085_clang -target i8085-unknown-elf -O0 -ffreestanding -fno-builtin -nostdlib -emit-llvm -c \
 // RUN:   %s -o %t.bc
-// RUN: %S/../../../../../tooling/build/build-clang-8085/bin/llc -mtriple=i8085-unknown-elf -filetype=obj %t.bc -o %t.o
-// RUN: %S/../../../../../tooling/build/build-clang-8085/bin/ld.lld -m i8085elf \
-// RUN:   -T %S/../../../../../sysroot/ldscripts/i8085-sim-flat.ld -Map %t.map \
-// RUN:   -o %t.elf %t.crt0.o %t.o %S/../../../../../sysroot/lib/libgcc.a
-// RUN: llvm-objcopy -O binary %t.elf %t.bin
-// RUN: %S/../../../../../i8085-trace/build/i8085-trace -S -q -n 200000 -d %testdump_addr:0x14 %t.bin 2>&1 | FileCheck %s --check-prefix=F32UNALIGNED
+// RUN: %i8085_llc -mtriple=i8085-unknown-elf -filetype=obj %t.bc -o %t.o
+// RUN: %i8085_lld -m i8085elf \
+// RUN:   -T %i8085_sdk/sysroot/ldscripts/i8085-sim-flat.ld -Map %t.map \
+// RUN:   -o %t.elf %t.crt0.o %t.o %i8085_sdk/sysroot/lib/libgcc.a
+// RUN: %i8085_objcopy -O binary %t.elf %t.bin
+// RUN: %i8085_sim -S -q -n 200000 -d %testdump_addr:0x20 %t.bin 2>&1 | FileCheck %s --check-prefix=F32UNALIGNED
 
 #include <stdint.h>
 
@@ -28,7 +28,7 @@ static uint32_t fbits(float f) {
   return x.u;
 }
 
-TESTDUMP_U32(out, 5);
+TESTDUMP_U32(out, 8);
 
 int main(void) {
   volatile PackedF a = {0, 1.0f};
@@ -72,10 +72,29 @@ int main(void) {
   sum = i.f + j.f;
   out[4] = fbits(sum);
 
+  union {
+    uint32_t u;
+    float f;
+  } u5 = {0x007FFFFFu};
+  volatile PackedF k = {0, u5.f};
+  sum = k.f + j.f;
+  out[5] = fbits(sum);
+
+  union {
+    uint32_t u;
+    float f;
+  } u6 = {0x80000001u};
+  volatile PackedF l = {0, u6.f};
+  sum = i.f + l.f;
+  out[6] = fbits(sum);
+
+  sum = j.f + l.f;
+  out[7] = fbits(sum);
+
   return 0;
 }
 
-// F32UNALIGNED: Memory dump {{0x[0-9A-F][0-9A-F][0-9A-F][0-9A-F]}} - {{0x[0-9A-F][0-9A-F][0-9A-F][0-9A-F]}} (20 bytes):
+// F32UNALIGNED: Memory dump {{0x[0-9A-F][0-9A-F][0-9A-F][0-9A-F]}} - {{0x[0-9A-F][0-9A-F][0-9A-F][0-9A-F]}} (32 bytes):
 // F32UNALIGNED: {{ *}}{{[0-9A-F][0-9A-F][0-9A-F][0-9A-F]}}:{{ *}}01 00 00 00 01 00 00 00 01 00 00 00 03 00 00 00
-// F32UNALIGNED: {{ *}}{{[0-9A-F][0-9A-F][0-9A-F][0-9A-F]}}:{{ *}}01 00 80 00
+// F32UNALIGNED: {{ *}}{{[0-9A-F][0-9A-F][0-9A-F][0-9A-F]}}:{{ *}}01 00 80 00 00 00 80 00 FF FF 7F 00 00 00 00 00
 // F32UNALIGNED: "halt":"hlt"

@@ -261,6 +261,7 @@ struct Config {
   bool ltoPGOWarnMismatch;
   bool ltoDebugPassManager;
   bool ltoEmitAsm;
+  bool ltoLinkerScripts;
   bool ltoUniqueBasicBlockSectionNames;
   bool ltoValidateAllVtablesHaveTypeInfos;
   bool ltoWholeProgramVisibility;
@@ -474,6 +475,8 @@ struct Ctx {
   SmallVector<BitcodeFile *, 0> bitcodeFiles;
   SmallVector<BitcodeFile *, 0> lazyBitcodeFiles;
   SmallVector<InputSectionBase *, 0> inputSections;
+  llvm::DenseMap<const InputSectionBase *, llvm::StringRef> ltoScriptFiles;
+  llvm::DenseMap<llvm::StringRef, llvm::StringRef> ltoScriptModuleFiles;
   SmallVector<EhInputSection *, 0> ehInputSections;
   // Duplicate symbol candidates.
   SmallVector<DuplicateSymbol, 0> duplicates;

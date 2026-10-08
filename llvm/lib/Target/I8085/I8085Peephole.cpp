@@ -17,6 +17,7 @@
 
 #include "llvm/CodeGen/MachineFunctionPass.h"
 #include "llvm/CodeGen/MachineInstr.h"
+#include "llvm/CodeGen/MachineInstrBuilder.h"
 #include "llvm/CodeGen/MachineOperand.h"
 #include "llvm/CodeGen/TargetInstrInfo.h"
 #include "llvm/Support/Debug.h"
@@ -26,11 +27,55 @@ using namespace llvm;
 #define DEBUG_TYPE "i8085-peephole"
 
 namespace {
+static unsigned getConditionalReturnOpcode(unsigned BranchOpc) {
+  switch (BranchOpc) {
+  case I8085::JNZ:
+    return I8085::RNZ;
+  case I8085::JZ:
+    return I8085::RZ;
+  case I8085::JNC:
+    return I8085::RNC;
+  case I8085::JC:
+    return I8085::RC;
+  case I8085::JPO:
+    return I8085::RPO;
+  case I8085::JPE:
+    return I8085::RPE;
+  case I8085::JP:
+    return I8085::RP;
+  case I8085::JM:
+    return I8085::RM;
+  default:
+    return 0;
+  }
+}
+
+static bool beginsWithReturn(const MachineBasicBlock &MBB) {
+  auto I = MBB.getFirstNonDebugInstr(/*SkipPseudoOp=*/false);
+  return I != MBB.end() && I->getOpcode() == I8085::RET;
+}
+
+static bool stillReferencesBlock(MachineBasicBlock &MBB,
+                                 const MachineBasicBlock &Target) {
+  for (const MachineInstr &MI : MBB) {
+    for (const MachineOperand &MO : MI.operands()) {
+      if (MO.isMBB() && MO.getMBB() == &Target)
+        return true;
+    }
+  }
+
+  return MBB.isLayoutSuccessor(&Target) && MBB.canFallThrough();
+}
+
 class I8085Peephole : public MachineFunctionPass {
+  bool EnableConditionalReturns;
+
 public:
   static char ID;
 
-  I8085Peephole() : MachineFunctionPass(ID) {
+  I8085Peephole(bool EnableConditionalReturns = true)
+      : MachineFunctionPass(ID),
+        EnableConditionalReturns(EnableConditionalReturns) {
     initializeI8085PeepholePass(*PassRegistry::getPassRegistry());
   }
 
@@ -43,6 +88,24 @@ public:
     for (MachineBasicBlock &MBB : MF) {
       for (auto MI = MBB.begin(); MI != MBB.end();) {
         auto Next = std::next(MI);
+
+        unsigned CondRetOpc = getConditionalReturnOpcode(MI->getOpcode());
+        if (EnableConditionalReturns && CondRetOpc &&
+            MI->getNumOperands() >= 1 &&
+            MI->getOperand(0).isMBB()) {
+          MachineBasicBlock *TargetMBB = MI->getOperand(0).getMBB();
+          if (beginsWithReturn(*TargetMBB)) {
+            BuildMI(MBB, MI, MI->getDebugLoc(),
+                    MF.getSubtarget().getInstrInfo()->get(CondRetOpc));
+            MI = MBB.erase(MI);
+            if (MBB.isSuccessor(TargetMBB) &&
+                !stillReferencesBlock(MBB, *TargetMBB))
+              MBB.removeSuccessor(TargetMBB);
+            Changed = true;
+            continue;
+          }
+        }
+
         if (MI->getOpcode() == I8085::MOV && MI->getNumOperands() >= 2 &&
             MI->getOperand(0).isReg() && MI->getOperand(1).isReg()) {
           Register Dst = MI->getOperand(0).getReg();
@@ -157,18 +220,16 @@ public:
           continue;
         }
 
-        // Redundant flag-test elimination: ANI/ORI/XRI/ANA/ORA/XRA (and
-        // their memory-indirect variants) all set Z, S, P flags and clear CY
-        // exactly like ORA A would, so ORA A immediately after is redundant.
+        // OR/XOR produce the same documented flags as ORA A. AND does not:
+        // it sets AC, which a following ORA A clears (observable by DAA/PSW).
         if (MI->getOpcode() == I8085::ORA && MI->getNumOperands() >= 1 &&
             MI->getOperand(0).isReg() && MI->getOperand(0).getReg() == I8085::A &&
             MI != MBB.begin()) {
           auto Prev = std::prev(MI);
           unsigned PrevOpc = Prev->getOpcode();
-          if (PrevOpc == I8085::ANI || PrevOpc == I8085::ORI ||
-              PrevOpc == I8085::XRI || PrevOpc == I8085::ANA ||
+          if (PrevOpc == I8085::ORI || PrevOpc == I8085::XRI ||
               PrevOpc == I8085::ORA || PrevOpc == I8085::XRA ||
-              PrevOpc == I8085::ANA_M || PrevOpc == I8085::ORA_M ||
+              PrevOpc == I8085::ORA_M ||
               PrevOpc == I8085::XRA_M) {
             MI = MBB.erase(MI);
             Changed = true;
@@ -225,4 +286,6 @@ char I8085Peephole::ID = 0;
 INITIALIZE_PASS(I8085Peephole, "i8085-peephole",
                 "I8085 peephole optimizations", false, false)
 
-FunctionPass *llvm::createI8085PeepholePass() { return new I8085Peephole(); }
+FunctionPass *llvm::createI8085PeepholePass(bool EnableConditionalReturns) {
+  return new I8085Peephole(EnableConditionalReturns);
+}

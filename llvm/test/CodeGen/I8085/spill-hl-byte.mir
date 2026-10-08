@@ -1,0 +1,59 @@
+# RUN: llc -O0 -mtriple=i8085-unknown-elf -run-pass=i8085-expand-pseudo -verify-machineinstrs %s -o - | FileCheck %s
+
+# Allocator spill/reload hooks must handle every GR8 register, not narrow a
+# virtual register class after allocation has already begun.
+--- |
+  target triple = "i8085-unknown-elf"
+  @slot = internal global i8 0
+  define void @stack_h() { ret void }
+  define void @base_de_l() { ret void }
+  define void @static_h() { ret void }
+...
+---
+name: stack_h
+tracksRegLiveness: true
+body: |
+  bb.0:
+    liveins: $sp, $hl, $a, $sreg
+    ; CHECK-LABEL: name: stack_h
+    ; CHECK: PUSH $hl
+    ; CHECK-NEXT: PUSH $psw
+    ; CHECK-NEXT: $a = MOV $h
+    ; CHECK-NEXT: $hl = LXI 12
+    ; CHECK-NEXT: DAD $sp
+    ; CHECK-NEXT: MOV_M $a
+    ; CHECK-NEXT: $psw = POP
+    ; CHECK-NEXT: $hl = POP
+    STORE_8 $sp, 8, $h, implicit $sp
+    RET implicit-def $sp, implicit $sp, implicit $hl, implicit $a, implicit $sreg
+...
+---
+name: base_de_l
+tracksRegLiveness: true
+body: |
+  bb.0:
+    liveins: $sp, $de, $l, $a, $sreg
+    ; CHECK-LABEL: name: base_de_l
+    ; CHECK: PUSH $psw
+    ; CHECK-NEXT: $a = MOV $l
+    ; CHECK-NEXT: $hl = LXI 1
+    ; CHECK-NEXT: DAD $de
+    ; CHECK-NEXT: MOV_M $a
+    ; CHECK-NEXT: $psw = POP
+    STORE_8 $de, 1, killed $l, implicit $sp
+    RET implicit-def $sp, implicit $sp, implicit $de, implicit $a, implicit $sreg
+...
+---
+name: static_h
+tracksRegLiveness: true
+body: |
+  bb.0:
+    liveins: $sp, $hl, $a, $sreg
+    ; CHECK-LABEL: name: static_h
+    ; CHECK: PUSH $psw
+    ; CHECK-NEXT: $a = MOV $h
+    ; CHECK-NEXT: STA @slot
+    ; CHECK-NEXT: $psw = POP
+    STORE_8_STATIC_ADDR @slot, $h, implicit $sp
+    RET implicit-def $sp, implicit $sp, implicit $hl, implicit $a, implicit $sreg
+...

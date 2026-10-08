@@ -158,6 +158,9 @@ bool I8085SelectToBranch::tryConvertSelectAdd(Instruction *AddInst) {
     OrigBB->getTerminator()->eraseFromParent();
 
     IRBuilder<> Builder(OrigBB);
+    // Select permits poison/undef conditions; branching on them is immediate
+    // UB. Choose a stable condition before promoting it to control flow.
+    Cond = Builder.CreateFreeze(Cond, "sel.cond.frozen");
     if (ZeroOnTrue) {
       // cond==true -> skip (result = X), cond==false -> add
       Builder.CreateCondBr(Cond, SkipBB, AddBB);

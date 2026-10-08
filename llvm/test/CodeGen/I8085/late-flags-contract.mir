@@ -1,0 +1,58 @@
+# RUN: llc -run-pass=i8085-peephole -verify-machineinstrs %s -o - | FileCheck %s --check-prefix=AND
+# RUN: llc -run-pass=i8085-hl-tracking -verify-machineinstrs %s -o - | FileCheck %s --check-prefix=HL
+--- |
+  target triple = "i8085-unknown-elf"
+  define void @and_flags() { ret void }
+  define void @live_carry() { ret void }
+  define void @dead_carry() { ret void }
+...
+---
+name: and_flags
+body: |
+  bb.0:
+    liveins: $a, $sp
+    ; AND-LABEL: name: and_flags
+    ; AND: ANI 15
+    ; AND-NEXT: ORA $a
+    ; AND-NEXT: DAA
+    ANI 15, implicit-def $sreg, implicit-def $a, implicit $a
+    ORA $a, implicit-def $sreg, implicit-def $a, implicit $a
+    DAA implicit-def $sreg, implicit-def $a, implicit $a, implicit $sreg
+    RET implicit $sp, implicit-def $sp
+...
+---
+name: live_carry
+body: |
+  bb.0:
+    liveins: $sp
+    ; HL-LABEL: name: live_carry
+    ; HL: $hl = LXI 8
+    ; HL: DAD $sp
+    ; HL: $hl = LXI 8
+    ; HL-NEXT: DAD $sp
+    ; HL-NEXT: PUSH $psw
+    $hl = LXI 8
+    DAD $sp, implicit-def $sreg, implicit-def $h, implicit-def $l, implicit $h, implicit $l
+    $hl = LXI 8
+    DAD $sp, implicit-def $sreg, implicit-def $h, implicit-def $l, implicit $h, implicit $l
+    PUSH $psw, implicit-def $sp, implicit $sp
+    $psw = POP implicit-def $sp, implicit $sp
+    RET implicit $sp, implicit-def $sp
+...
+---
+name: dead_carry
+body: |
+  bb.0:
+    liveins: $sp
+    ; HL-LABEL: name: dead_carry
+    ; HL: $hl = LXI 8
+    ; HL: DAD $sp
+    ; HL-NOT: LXI
+    ; HL-NOT: DAD
+    ; HL: RET
+    $hl = LXI 8
+    DAD $sp, implicit-def $sreg, implicit-def $h, implicit-def $l, implicit $h, implicit $l
+    $hl = LXI 8
+    DAD $sp, implicit-def dead $sreg, implicit-def $h, implicit-def $l, implicit $h, implicit $l
+    RET implicit $sp, implicit-def $sp
+...

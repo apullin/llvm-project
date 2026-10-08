@@ -4,6 +4,10 @@
   target triple = "i8085-unknown-elf"
   define void @jmp32_if_not_equal() { ret void }
   define void @jmp32_if_not_equal_twice() { ret void }
+  define void @jmp32_if_not_equal_same_successor() { ret void }
+  define void @jmp32_if_ult_same_successor() { ret void }
+  define void @jmp32_if_not_equal_fallthrough_successor() { ret void }
+  define void @jmp32_if_ult_fallthrough_successor() { ret void }
   define void @jmp32_if_same_sign() { ret void }
   define void @jmp32_if_positive() { ret void }
 ...
@@ -16,7 +20,7 @@ body:             |
     ; CHECK-LABEL: name:            jmp32_if_not_equal
     ; CHECK: CMP_M
     ; CHECK: JNZ %bb.{{[0-9]+}}
-    JMP_32_IF_NOT_EQUAL $iax, $ibx, %bb.1, implicit-def $sreg, implicit-def $a, implicit-def $hl
+    JMP_32_IF_NOT_EQUAL $iax, $ibx, %bb.1, implicit-def $sreg, implicit-def $a, implicit-def $h, implicit-def $l
     RET implicit $sp, implicit-def $sp
   bb.1:
     RET implicit $sp, implicit-def $sp
@@ -30,12 +34,70 @@ body:             |
     ; CHECK-LABEL: name:            jmp32_if_not_equal_twice
     ; CHECK-NOT: JMP_32_IF_NOT_EQUAL
     ; CHECK-COUNT-8: JNZ %bb.
-    JMP_32_IF_NOT_EQUAL $iax, $ibx, %bb.1, implicit-def $sreg, implicit-def $a, implicit-def $hl
-    JMP_32_IF_NOT_EQUAL $iax, $ibx, %bb.2, implicit-def $sreg, implicit-def $a, implicit-def $hl
+    JMP_32_IF_NOT_EQUAL $iax, $ibx, %bb.1, implicit-def $sreg, implicit-def $a, implicit-def $h, implicit-def $l
+    JMP_32_IF_NOT_EQUAL $iax, $ibx, %bb.2, implicit-def $sreg, implicit-def $a, implicit-def $h, implicit-def $l
     RET implicit $sp, implicit-def $sp
   bb.1:
     RET implicit $sp, implicit-def $sp
   bb.2:
+    RET implicit $sp, implicit-def $sp
+...
+
+---
+name:            jmp32_if_not_equal_same_successor
+body:             |
+  bb.0:
+    successors: %bb.1
+    liveins: $iax, $ibx
+    ; CHECK-LABEL: name:            jmp32_if_not_equal_same_successor
+    ; CHECK-NOT: JMP_32_IF_NOT_EQUAL
+    ; CHECK: JMP %bb.1
+    JMP_32_IF_NOT_EQUAL $iax, $ibx, %bb.1, implicit-def $sreg, implicit-def $a, implicit-def $h, implicit-def $l
+    JMP %bb.1
+  bb.1:
+    RET implicit $sp, implicit-def $sp
+...
+
+---
+name:            jmp32_if_ult_same_successor
+body:             |
+  bb.0:
+    successors: %bb.1
+    liveins: $iax, $ibx
+    ; CHECK-LABEL: name:            jmp32_if_ult_same_successor
+    ; CHECK-NOT: JMP_32_IF_ULT
+    ; CHECK: JMP %bb.1
+    JMP_32_IF_ULT $iax, $ibx, %bb.1, implicit-def $sreg, implicit-def $a, implicit-def $h, implicit-def $l
+    JMP %bb.1
+  bb.1:
+    RET implicit $sp, implicit-def $sp
+...
+
+---
+name:            jmp32_if_not_equal_fallthrough_successor
+body:             |
+  bb.0:
+    successors: %bb.1
+    liveins: $iax, $ibx
+    ; CHECK-LABEL: name:            jmp32_if_not_equal_fallthrough_successor
+    ; CHECK-NOT: JMP_32_IF_NOT_EQUAL
+    ; CHECK: bb.1:
+    JMP_32_IF_NOT_EQUAL $iax, $ibx, %bb.1, implicit-def $sreg, implicit-def $a, implicit-def $h, implicit-def $l
+  bb.1:
+    RET implicit $sp, implicit-def $sp
+...
+
+---
+name:            jmp32_if_ult_fallthrough_successor
+body:             |
+  bb.0:
+    successors: %bb.1
+    liveins: $iax, $ibx
+    ; CHECK-LABEL: name:            jmp32_if_ult_fallthrough_successor
+    ; CHECK-NOT: JMP_32_IF_ULT
+    ; CHECK: bb.1:
+    JMP_32_IF_ULT $iax, $ibx, %bb.1, implicit-def $sreg, implicit-def $a, implicit-def $h, implicit-def $l
+  bb.1:
     RET implicit $sp, implicit-def $sp
 ...
 
@@ -48,7 +110,7 @@ body:             |
     ; CHECK: XRA_M
     ; CHECK-NEXT: ANI 128
     ; CHECK-NEXT: JZ %bb.1
-    JMP_32_IF_SAME_SIGN $iax, $ibx, %bb.1, implicit-def $sreg, implicit-def $a, implicit-def $hl
+    JMP_32_IF_SAME_SIGN $iax, $ibx, %bb.1, implicit-def $sreg, implicit-def $a, implicit-def $h, implicit-def $l
     RET implicit $sp, implicit-def $sp
   bb.1:
     RET implicit $sp, implicit-def $sp
@@ -63,7 +125,7 @@ body:             |
     ; CHECK: MOV_FROM_M
     ; CHECK-NEXT: ANI 128
     ; CHECK-NEXT: JZ %bb.1
-    JMP_32_IF_POSITIVE $iax, %bb.1, implicit-def $sreg, implicit-def $a, implicit-def $hl
+    JMP_32_IF_POSITIVE $iax, %bb.1, implicit-def $sreg, implicit-def $a, implicit-def $h, implicit-def $l
     RET implicit $sp, implicit-def $sp
   bb.1:
     RET implicit $sp, implicit-def $sp

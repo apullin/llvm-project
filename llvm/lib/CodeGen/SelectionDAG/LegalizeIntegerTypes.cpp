@@ -5276,6 +5276,8 @@ bool DAGTypeLegalizer::ExpandIntegerOperand(SDNode *N, unsigned OpNo) {
   case ISD::UINT_TO_FP:        Res = ExpandIntOp_XINT_TO_FP(N); break;
   case ISD::STORE:   Res = ExpandIntOp_STORE(cast<StoreSDNode>(N), OpNo); break;
   case ISD::TRUNCATE:          Res = ExpandIntOp_TRUNCATE(N); break;
+  case ISD::ZERO_EXTEND:
+  case ISD::ANY_EXTEND:        Res = ExpandIntOp_TRUNCATE(N); break;
 
   case ISD::SHL:
   case ISD::SRA:

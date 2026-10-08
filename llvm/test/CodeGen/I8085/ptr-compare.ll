@@ -6,66 +6,35 @@
 define i8 @ptr_eq(ptr %a, ptr %b) {
 ; CHECK-LABEL: ptr_eq:
 ; CHECK:         .cfi_startproc
-; CHECK-NEXT:  LBB0_0:
-; CHECK-NEXT:    LXI H, 65532
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    SPHL
-; CHECK-NEXT:    .cfi_adjust_cfa_offset 4
-; CHECK-NEXT:    LXI H, 9
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV B, M
-; CHECK-NEXT:    LXI H, 8
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV C, M
-; CHECK-NEXT:    LXI H, 3
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, B
-; CHECK-NEXT:    LXI H, 2
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, C
-; CHECK-NEXT:    LXI H, 7
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV B, M
-; CHECK-NEXT:    LXI H, 6
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV C, M
-; CHECK-NEXT:    LXI H, 1
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, B
-; CHECK-NEXT:    LXI H, 0
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, C
-; CHECK-NEXT:    MVI B, 1
-; CHECK-NEXT:    LXI H, 3
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV D, M
-; CHECK-NEXT:    LXI H, 2
+; CHECK-NEXT:  ; %bb.0: ; %entry
+; CHECK-NEXT:    LXI H, 4
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV E, M
-; CHECK-NEXT:    LXI H, 0
-; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV D, M
+; CHECK-NEXT:    DCX H
+; CHECK-NEXT:    DCX H
+; CHECK-NEXT:    DCX H
 ; CHECK-NEXT:    MOV A, M
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    MOV H, M
 ; CHECK-NEXT:    MOV L, A
+; CHECK-NEXT:    MVI B, 1
 ; CHECK-NEXT:    MOV A, H
 ; CHECK-NEXT:    CMP D
 ; CHECK-NEXT:    JNZ LBB0_3
-; CHECK-NEXT:  LBB0_1:
+; CHECK-NEXT:  ; %bb.1: ; %entry
 ; CHECK-NEXT:    MOV A, L
 ; CHECK-NEXT:    CMP E
 ; CHECK-NEXT:    JNZ LBB0_3
-; CHECK-NEXT:  LBB0_2:
-; CHECK-NEXT:    JMP LBB0_4
-; CHECK-NEXT:  LBB0_3:
-; CHECK-NEXT:  LBB0_5:
-; CHECK-NEXT:    MVI B, 0
-; CHECK-NEXT:  LBB0_4:
+; CHECK-NEXT:  ; %bb.2: ; %entry
+; CHECK-NEXT:  ; %bb.4: ; %entry
 ; CHECK-NEXT:    MOV A, B
-; CHECK-NEXT:    LXI H, 4
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    SPHL
-; CHECK-NEXT:    .cfi_adjust_cfa_offset 4294967292
+; CHECK-NEXT:    RET
+; CHECK-NEXT:  LBB0_3: ; %entry
+; CHECK-NEXT:  ; %bb.5: ; %entry
+; CHECK-NEXT:    MVI B, 0
+; CHECK-NEXT:    MOV A, B
 ; CHECK-NEXT:    RET
 entry:
   %cmp = icmp eq ptr %a, %b
@@ -76,30 +45,27 @@ entry:
 define i8 @ptr_ult(ptr %a, ptr %b) {
 ; CHECK-LABEL: ptr_ult:
 ; CHECK:         .cfi_startproc
-; CHECK-NEXT:  LBB1_0:
-; CHECK-NEXT:    LXI H, 5
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV B, M
-; CHECK-NEXT:    LXI H, 4
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV C, M
-; CHECK-NEXT:    LXI H, 3
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV D, M
+; CHECK-NEXT:  ; %bb.0: ; %entry
 ; CHECK-NEXT:    LXI H, 2
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV E, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV D, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV C, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV B, M
 ; CHECK-NEXT:    MOV A, E
 ; CHECK-NEXT:    SUB C
-; CHECK-NEXT:    MOV C, A
+; CHECK-NEXT:    MOV E, A
 ; CHECK-NEXT:    MOV A, D
 ; CHECK-NEXT:    SBB B
-; CHECK-NEXT:    MOV B, A
+; CHECK-NEXT:    MOV D, A
 ; CHECK-NEXT:    JNC LBB1_2
-; CHECK-NEXT:  LBB1_1:
+; CHECK-NEXT:  ; %bb.1: ; %entry
 ; CHECK-NEXT:    MVI A, 1
 ; CHECK-NEXT:    RET
-; CHECK-NEXT:  LBB1_2:
+; CHECK-NEXT:  LBB1_2: ; %entry
 ; CHECK-NEXT:    MVI A, 0
 ; CHECK-NEXT:    RET
 entry:

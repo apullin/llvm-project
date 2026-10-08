@@ -29,16 +29,21 @@ FunctionPass *createI8085ISelDag(I8085TargetMachine &TM,
                                
 FunctionPass *createI8085ExpandPseudoPass();
 FunctionPass *createI8085ExpandPseudo32Pass();
+FunctionPass *createI8085AddrHintsPass();
+FunctionPass *createI8085ForcedHintsPass();
 FunctionPass *createI8085StoreRegClassPass();
 FunctionPass *createI8085ExpandCopiesPass();
-FunctionPass *createI8085PeepholePass();
+FunctionPass *createI8085PeepholePass(bool EnableConditionalReturns = true);
 FunctionPass *createI8085FrameAnalyzerPass();
 FunctionPass *createI8085BranchSelectionPass();
 FunctionPass *createI8085SelectToBranchPass();
 FunctionPass *createI8085HLTrackingPass();
+FunctionPass *createI8085StaticScratchPass();
 
 void initializeI8085ExpandPseudoPass(PassRegistry &);
 void initializeI8085ExpandPseudo32Pass(PassRegistry &);
+void initializeI8085AddrHintsPass(PassRegistry &);
+void initializeI8085ForcedHintsPass(PassRegistry &);
 void initializeI8085StoreRegClassPass(PassRegistry &);
 void initializeI8085ExpandCopiesPass(PassRegistry &);
 void initializeI8085PeepholePass(PassRegistry &);
@@ -46,6 +51,7 @@ void initializeI8085FrameAnalyzerPass(PassRegistry &);
 void initializeI8085DAGToDAGISelLegacyPass(PassRegistry &);
 void initializeI8085SelectToBranchPass(PassRegistry &);
 void initializeI8085HLTrackingPass(PassRegistry &);
+void initializeI8085StaticScratchPass(PassRegistry &);
 
 /// Contains the I8085 backend.
 namespace I8085 {

@@ -1,4 +1,5 @@
 ; RUN: llc -mattr=i8085,sram < %s -march=i8085 -verify-machineinstrs | FileCheck %s
+; RUN: llc -mattr=i8085,sram < %s -march=i8085 -O0 -verify-machineinstrs | FileCheck %s
 
 ; Force register pressure across a call to stress spills.
 

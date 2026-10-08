@@ -15,7 +15,9 @@
 #include "llvm/CodeGen/Passes.h"
 #include "llvm/CodeGen/TargetPassConfig.h"
 #include "llvm/IR/Module.h"
+#include "llvm/IR/PassManager.h"
 #include "llvm/MC/TargetRegistry.h"
+#include "llvm/Passes/PassBuilder.h"
 
 #include "I8085.h"
 #include "I8085MachineFunctionInfo.h"
@@ -54,6 +56,10 @@ I8085TargetMachine::I8085TargetMachine(const Target &T, const Triple &TT,
       SubTarget(TT, std::string(getCPU(CPU)), std::string(FS), *this) {
   this->TLOF = std::make_unique<I8085TargetObjectFile>();
   initAsmInfo();
+
+  // I8085 supports explicit MachineOutliner runs. Leave default outlining off
+  // until SP-relative fixups and benchmark coverage are mature enough for -Oz.
+  setMachineOutliner(true);
 }
 
 namespace {
@@ -70,6 +76,8 @@ public:
   void addIRPasses() override;
   bool addInstSelector() override;
   void addPreRegAlloc() override;
+  void addPostRegAlloc() override;
+  void addMachineLateOptimization() override;
   void addPreSched2() override;
   void addPreEmitPass() override;
 };
@@ -77,6 +85,37 @@ public:
 
 TargetPassConfig *I8085TargetMachine::createPassConfig(PassManagerBase &PM) {
   return new I8085PassConfig(*this, PM);
+}
+
+/// Annotate size-optimized functions with a conservative inline threshold.
+/// The LLVM inliner's IR-level cost model (InstrCost=5 per IR instruction)
+/// underestimates machine code expansion on the 8-bit i8085 where each IR
+/// instruction expands to 4-10 machine instructions but a CALL is only 3 bytes.
+/// Setting threshold=0 (effective threshold=1 due to max(1,Threshold) clamp)
+/// ensures only net-beneficial inlines (cost <= 0) occur under -Os/-Oz.
+struct I8085AnnotateInlineThresholdPass
+    : public PassInfoMixin<I8085AnnotateInlineThresholdPass> {
+  PreservedAnalyses run(Module &M, ModuleAnalysisManager &AM) {
+    bool Changed = false;
+    for (Function &F : M) {
+      if (F.isDeclaration())
+        continue;
+      if (F.hasOptSize() || F.hasMinSize()) {
+        F.addFnAttr("function-inline-threshold", "0");
+        Changed = true;
+      }
+    }
+    return Changed ? PreservedAnalyses::none() : PreservedAnalyses::all();
+  }
+};
+
+void I8085TargetMachine::registerPassBuilderCallbacks(PassBuilder &PB) {
+  PB.registerPipelineEarlySimplificationEPCallback(
+      [](ModulePassManager &PM, OptimizationLevel Level) {
+        if (Level == OptimizationLevel::O0)
+          return;
+        PM.addPass(I8085AnnotateInlineThresholdPass());
+      });
 }
 
 void I8085PassConfig::addIRPasses() {
@@ -102,12 +141,16 @@ extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializeI8085Target() {
   auto &PR = *PassRegistry::getPassRegistry();
   initializeI8085ExpandPseudoPass(PR);
   initializeI8085ExpandPseudo32Pass(PR);
+  initializeI8085AddrHintsPass(PR);
+  initializeI8085ForcedHintsPass(PR);
   initializeI8085StoreRegClassPass(PR);
   initializeI8085ExpandCopiesPass(PR);
   initializeI8085PeepholePass(PR);
+  initializeI8085HLTrackingPass(PR);
   initializeI8085FrameAnalyzerPass(PR);
   initializeI8085DAGToDAGISelLegacyPass(PR);
   initializeI8085SelectToBranchPass(PR);
+  initializeI8085StaticScratchPass(PR);
 }
 
 const I8085Subtarget *I8085TargetMachine::getSubtargetImpl() const {
@@ -137,7 +180,25 @@ bool I8085PassConfig::addInstSelector() {
 }
 
 void I8085PassConfig::addPreRegAlloc() {
+  addPass(createI8085AddrHintsPass());
+  addPass(createI8085ForcedHintsPass());
   addPass(createI8085StoreRegClassPass());
+}
+
+void I8085PassConfig::addPostRegAlloc() {
+  addPass(createI8085StaticScratchPass());
+}
+
+void I8085PassConfig::addMachineLateOptimization() {
+  // Keep the existing late-copy-propagation containment until all remaining
+  // pseudo scratch/clobber contracts have independent execution coverage.
+  // GR32 live-through HL is now modeled as preserved; the earlier copy
+  // propagation pass remains enabled and has dedicated regression tests.
+  addPass(&MachineLateInstrsCleanupID);
+  addPass(&BranchFolderPassID);
+  if (!TM->requiresStructuredCFG())
+    addPass(&TailDuplicateID);
+  // MachineCopyPropagationID intentionally omitted — see above.
 }
 
 void I8085PassConfig::addPreSched2() {
@@ -146,7 +207,10 @@ void I8085PassConfig::addPreSched2() {
   addPass(createI8085ExpandPseudo32Pass());
   addPass(createI8085ExpandPseudoPass());
   addPass(createI8085ExpandCopiesPass());
-  addPass(createI8085PeepholePass());
+  // Conditional returns have a false-condition fallthrough that generic
+  // block placement cannot represent through analyzeBranch().  Form them only
+  // after block placement in addPreEmitPass().
+  addPass(createI8085PeepholePass(/*EnableConditionalReturns=*/false));
   addPass(createI8085HLTrackingPass());
 }
 
@@ -154,6 +218,7 @@ void I8085PassConfig::addPreEmitPass() {
   // The i8085 uses absolute 16-bit addresses for all branches (JMP, JZ, JNZ,
   // etc.), so every branch can reach every address in the 64KB address space.
   // Branch relaxation is not needed and is therefore not added here.
+  addPass(createI8085PeepholePass(/*EnableConditionalReturns=*/true));
 }
 
 MachineFunctionInfo *I8085TargetMachine::createMachineFunctionInfo(

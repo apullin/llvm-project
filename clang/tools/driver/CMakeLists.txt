@@ -107,26 +107,23 @@ set(I8085_CRT_OBJECTS
 
 set(I8085_BUILTINS_DIR "${LLVM_MAIN_SRC_DIR}/../compiler-rt/lib/builtins")
 set(I8085_LIBGCC_SOURCES
-  "${I8085_BUILTINS_DIR}/i8085/int_mul_div.c"
+  "${I8085_BUILTINS_DIR}/i8085/int_mul.S"
+  "${I8085_BUILTINS_DIR}/i8085/int_div.S"
+  "${I8085_BUILTINS_DIR}/i8085/int_shift.S"
+  "${I8085_BUILTINS_DIR}/i8085/int_arith64.S"
+  "${I8085_BUILTINS_DIR}/i8085/int_divdi3.S"
+  "${I8085_BUILTINS_DIR}/i8085/int_shift64.S"
   "${I8085_BUILTINS_DIR}/addsf3.c"
-  "${I8085_BUILTINS_DIR}/muldi3.c"
   "${I8085_BUILTINS_DIR}/mulsf3.c"
-  "${I8085_BUILTINS_DIR}/divdi3.c"
   "${I8085_BUILTINS_DIR}/divsf3.c"
-  "${I8085_BUILTINS_DIR}/udivdi3.c"
-  "${I8085_BUILTINS_DIR}/moddi3.c"
-  "${I8085_BUILTINS_DIR}/umoddi3.c"
-  "${I8085_BUILTINS_DIR}/udivmoddi4.c"
-  "${I8085_BUILTINS_DIR}/ashldi3.c"
-  "${I8085_BUILTINS_DIR}/ashrdi3.c"
-  "${I8085_BUILTINS_DIR}/lshrdi3.c"
-  "${I8085_BUILTINS_DIR}/clzsi2.c"
-  "${I8085_BUILTINS_DIR}/ctzsi2.c"
-  "${I8085_BUILTINS_DIR}/clzdi2.c"
-  "${I8085_BUILTINS_DIR}/ctzdi2.c"
-  "${I8085_BUILTINS_DIR}/cmpdi2.c"
-  "${I8085_BUILTINS_DIR}/ucmpdi2.c"
-  "${I8085_BUILTINS_DIR}/negdi2.c"
+  "${I8085_BUILTINS_DIR}/i8085/clzsi2.S"
+  "${I8085_BUILTINS_DIR}/i8085/ctzsi2.S"
+  "${I8085_BUILTINS_DIR}/i8085/clzdi2.S"
+  "${I8085_BUILTINS_DIR}/i8085/ctzdi2.S"
+  "${I8085_BUILTINS_DIR}/popcountsi2.c"
+  "${I8085_BUILTINS_DIR}/popcountdi2.c"
+  "${I8085_BUILTINS_DIR}/paritysi2.c"
+  "${I8085_BUILTINS_DIR}/paritydi2.c"
   "${I8085_BUILTINS_DIR}/negsf2.c"
   "${I8085_BUILTINS_DIR}/subsf3.c"
   "${I8085_BUILTINS_DIR}/comparesf2.c"
@@ -257,6 +254,13 @@ add_custom_target(clang-i8085-sysroot
 
 add_dependencies(clang clang-i8085-sysroot)
 
+# POST_BUILD compilation runs Clang itself, so source edits must relink the
+# driver to refresh the bundled runtime, not leave stale archives installed.
+file(GLOB I8085_LIBGCC_HEADERS CONFIGURE_DEPENDS
+  "${I8085_BUILTINS_DIR}/*.h" "${I8085_BUILTINS_DIR}/*.inc")
+set_property(TARGET clang APPEND PROPERTY LINK_DEPENDS
+  ${I8085_LIBGCC_SOURCES} ${I8085_LIBGCC_HEADERS} ${I8085_LIBC_C_SOURCE})
+
 add_custom_command(
   TARGET clang POST_BUILD
   COMMAND ${CMAKE_COMMAND} -E make_directory ${I8085_SYSROOT_LIB_DIR}
@@ -278,7 +282,7 @@ add_custom_command(
   TARGET clang POST_BUILD
   COMMAND ${CMAKE_COMMAND} -E make_directory ${I8085_LIBGCC_OBJ_DIR}
   COMMAND ${CMAKE_COMMAND} -E make_directory ${I8085_SYSROOT_LIB_DIR}
-  COMMAND ${CMAKE_COMMAND} -E rm -f ${I8085_SYSROOT_LIB_DIR}/libgcc.a
+  COMMAND ${CMAKE_COMMAND} -E rm -f ${I8085_SYSROOT_LIB_DIR}/libgcc.next.a
   COMMENT "Preparing i8085 libgcc build"
   VERBATIM)
 
@@ -294,7 +298,9 @@ endforeach()
 add_custom_command(
   TARGET clang POST_BUILD
   COMMAND ${LLVM_RUNTIME_OUTPUT_INTDIR}/llvm-ar rcs
-          ${I8085_SYSROOT_LIB_DIR}/libgcc.a ${I8085_LIBGCC_OBJECTS}
+          ${I8085_SYSROOT_LIB_DIR}/libgcc.next.a ${I8085_LIBGCC_OBJECTS}
+  COMMAND ${CMAKE_COMMAND} -E rename ${I8085_SYSROOT_LIB_DIR}/libgcc.next.a
+          ${I8085_SYSROOT_LIB_DIR}/libgcc.a
   COMMENT "Building i8085 libgcc from compiler-rt builtins"
   VERBATIM)
 

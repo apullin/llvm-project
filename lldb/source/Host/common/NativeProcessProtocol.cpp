@@ -532,6 +532,13 @@ NativeProcessProtocol::GetSoftwareBreakpointTrapOpcode(size_t size_hint) {
   case llvm::Triple::msp430:
     return llvm::ArrayRef(g_msp430_opcode);
 
+  case llvm::Triple::i8085:
+    // RST 1 (0xCF) - single-byte trap instruction
+    {
+      static const uint8_t g_i8085_opcode[] = {0xCF};
+      return llvm::ArrayRef(g_i8085_opcode);
+    }
+
   case llvm::Triple::systemz:
     return llvm::ArrayRef(g_s390x_opcode);
 

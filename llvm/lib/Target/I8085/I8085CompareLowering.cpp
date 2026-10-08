@@ -45,6 +45,15 @@ static void addBranchToSingleSuccessor(MachineBasicBlock *MBB, const DebugLoc &D
   BuildMI(MBB, DL, TII.get(I8085::JMP)).addMBB(*MBB->succ_begin());
 }
 
+static MachineBasicBlock *createSplitMBB(MachineFunction &MF,
+                                         const BasicBlock *LLVMBB,
+                                         MachineInstr &SplitMI) {
+  MachineBasicBlock *NewMBB = MF.CreateMachineBasicBlock(LLVMBB);
+  const TargetInstrInfo &TII = *MF.getSubtarget().getInstrInfo();
+  NewMBB->setCallFrameSize(TII.getCallFrameSizeAt(SplitMI));
+  return NewMBB;
+}
+
 MachineBasicBlock *I8085TargetLowering::insertCond8Set(MachineInstr &MI,
                                                   MachineBasicBlock *MBB) const {
 
@@ -74,8 +83,8 @@ MachineBasicBlock *I8085TargetLowering::insertCond8Set(MachineInstr &MI,
     BuildMI(MBB, dl, TII.get(I8085::JMP)).addMBB(FallThrough);
   }
 
-  MachineBasicBlock *trueMBB = MF->CreateMachineBasicBlock(LLVM_BB);
-  MachineBasicBlock *falseMBB = MF->CreateMachineBasicBlock(LLVM_BB);
+  MachineBasicBlock *trueMBB = createSplitMBB(*MF, LLVM_BB, MI);
+  MachineBasicBlock *falseMBB = createSplitMBB(*MF, LLVM_BB, MI);
 
   MachineFunction::iterator I;
   for (I = MF->begin(); I != MF->end() && &(*I) != MBB; ++I)
@@ -201,9 +210,9 @@ MachineBasicBlock *I8085TargetLowering::insertSigned8Cond(MachineInstr &MI,
     BuildMI(MBB, dl, TII.get(I8085::JMP)).addMBB(FallThrough);
   }
 
-  MachineBasicBlock *continMBB = MF->CreateMachineBasicBlock(LLVM_BB);
-  MachineBasicBlock *samesignMBB = MF->CreateMachineBasicBlock(LLVM_BB);
-  MachineBasicBlock *diffsignMBB = MF->CreateMachineBasicBlock(LLVM_BB);
+  MachineBasicBlock *continMBB = createSplitMBB(*MF, LLVM_BB, MI);
+  MachineBasicBlock *samesignMBB = createSplitMBB(*MF, LLVM_BB, MI);
+  MachineBasicBlock *diffsignMBB = createSplitMBB(*MF, LLVM_BB, MI);
 
   MachineFunction::iterator I;
   for (I = MF->begin(); I != MF->end() && &(*I) != MBB; ++I)
@@ -247,7 +256,7 @@ MachineBasicBlock *I8085TargetLowering::insertSigned8Cond(MachineInstr &MI,
   BuildMI(MBB, dl, TII.get(I8085::JZ))
         .addMBB(samesignMBB);
 
-  BuildMI(MBB, dl, TII.get(I8085::JNZ))
+  BuildMI(MBB, dl, TII.get(I8085::JMP))
         .addMBB(diffsignMBB);
     
   
@@ -320,9 +329,9 @@ MachineBasicBlock *I8085TargetLowering::insertDifferentSigned8Cond(MachineInstr 
     BuildMI(MBB, dl, TII.get(I8085::JMP)).addMBB(FallThrough);
   }
 
-  MachineBasicBlock *continMBB = MF->CreateMachineBasicBlock(LLVM_BB);
-  MachineBasicBlock *firstOperandPosMBB = MF->CreateMachineBasicBlock(LLVM_BB);
-  MachineBasicBlock *firstOperandNegMBB = MF->CreateMachineBasicBlock(LLVM_BB);
+  MachineBasicBlock *continMBB = createSplitMBB(*MF, LLVM_BB, MI);
+  MachineBasicBlock *firstOperandPosMBB = createSplitMBB(*MF, LLVM_BB, MI);
+  MachineBasicBlock *firstOperandNegMBB = createSplitMBB(*MF, LLVM_BB, MI);
 
   MachineFunction::iterator I;
   for (I = MF->begin(); I != MF->end() && &(*I) != MBB; ++I)
@@ -361,7 +370,7 @@ MachineBasicBlock *I8085TargetLowering::insertDifferentSigned8Cond(MachineInstr 
   BuildMI(MBB, dl, TII.get(I8085::JZ))
         .addMBB(firstOperandPosMBB);
 
-  BuildMI(MBB, dl, TII.get(I8085::JNZ))
+  BuildMI(MBB, dl, TII.get(I8085::JMP))
         .addMBB(firstOperandNegMBB);        
   
   if(Opc == I8085::SET_DIFF_SIGN_GT_8 || Opc == I8085::SET_DIFF_SIGN_GE_8){
@@ -424,14 +433,14 @@ MachineBasicBlock *I8085TargetLowering::insertCond16Set(MachineInstr &MI,
     BuildMI(MBB, dl, TII.get(I8085::JMP)).addMBB(FallThrough);
   }
 
-  MachineBasicBlock *trueMBB = MF->CreateMachineBasicBlock(LLVM_BB);
-  MachineBasicBlock *falseMBB = MF->CreateMachineBasicBlock(LLVM_BB);
-  MachineBasicBlock *continMBB = MF->CreateMachineBasicBlock(LLVM_BB);
+  MachineBasicBlock *trueMBB = createSplitMBB(*MF, LLVM_BB, MI);
+  MachineBasicBlock *falseMBB = createSplitMBB(*MF, LLVM_BB, MI);
+  MachineBasicBlock *continMBB = createSplitMBB(*MF, LLVM_BB, MI);
   MachineBasicBlock *checkMBB = nullptr;
   bool NeedsCarryCheck =
       (Opc == I8085::SET_UGT_16 || Opc == I8085::SET_ULE_16);
   if (NeedsCarryCheck)
-    checkMBB = MF->CreateMachineBasicBlock(LLVM_BB);
+    checkMBB = createSplitMBB(*MF, LLVM_BB, MI);
 
   MachineFunction::iterator I;
   for (I = MF->begin(); I != MF->end() && &(*I) != MBB; ++I)
@@ -577,8 +586,8 @@ MachineBasicBlock *I8085TargetLowering::insertEqualityCond16Set(MachineInstr &MI
     BuildMI(MBB, dl, TII.get(I8085::JMP)).addMBB(FallThrough);
   }
 
-  MachineBasicBlock *trueMBB = MF->CreateMachineBasicBlock(LLVM_BB);
-  MachineBasicBlock *falseMBB = MF->CreateMachineBasicBlock(LLVM_BB);
+  MachineBasicBlock *trueMBB = createSplitMBB(*MF, LLVM_BB, MI);
+  MachineBasicBlock *falseMBB = createSplitMBB(*MF, LLVM_BB, MI);
 
   MachineFunction::iterator I;
   for (I = MF->begin(); I != MF->end() && &(*I) != MBB; ++I)
@@ -680,9 +689,9 @@ MachineBasicBlock *I8085TargetLowering::insertSignedCond16Set(MachineInstr &MI,
     BuildMI(MBB, dl, TII.get(I8085::JMP)).addMBB(FallThrough);
   }
 
-  MachineBasicBlock *continMBB = MF->CreateMachineBasicBlock(LLVM_BB);
-  MachineBasicBlock *samesignMBB = MF->CreateMachineBasicBlock(LLVM_BB);
-  MachineBasicBlock *diffsignMBB = MF->CreateMachineBasicBlock(LLVM_BB);
+  MachineBasicBlock *continMBB = createSplitMBB(*MF, LLVM_BB, MI);
+  MachineBasicBlock *samesignMBB = createSplitMBB(*MF, LLVM_BB, MI);
+  MachineBasicBlock *diffsignMBB = createSplitMBB(*MF, LLVM_BB, MI);
 
   MachineFunction::iterator I;
   for (I = MF->begin(); I != MF->end() && &(*I) != MBB; ++I)
@@ -790,9 +799,9 @@ MachineBasicBlock *I8085TargetLowering::insertDifferentSignedCond16Set(MachineIn
     BuildMI(MBB, dl, TII.get(I8085::JMP)).addMBB(FallThrough);
   }
 
-  MachineBasicBlock *continMBB = MF->CreateMachineBasicBlock(LLVM_BB);
-  MachineBasicBlock *firstOperandPos = MF->CreateMachineBasicBlock(LLVM_BB);
-  MachineBasicBlock *firstOperandNeg = MF->CreateMachineBasicBlock(LLVM_BB);
+  MachineBasicBlock *continMBB = createSplitMBB(*MF, LLVM_BB, MI);
+  MachineBasicBlock *firstOperandPos = createSplitMBB(*MF, LLVM_BB, MI);
+  MachineBasicBlock *firstOperandNeg = createSplitMBB(*MF, LLVM_BB, MI);
 
   MachineFunction::iterator I;
   for (I = MF->begin(); I != MF->end() && &(*I) != MBB; ++I)
@@ -886,8 +895,8 @@ MachineBasicBlock *I8085TargetLowering::insertEqualityCond32Set(MachineInstr &MI
     BuildMI(MBB, dl, TII.get(I8085::JMP)).addMBB(FallThrough);
   }
 
-  MachineBasicBlock *trueMBB = MF->CreateMachineBasicBlock(LLVM_BB);
-  MachineBasicBlock *falseMBB = MF->CreateMachineBasicBlock(LLVM_BB);
+  MachineBasicBlock *trueMBB = createSplitMBB(*MF, LLVM_BB, MI);
+  MachineBasicBlock *falseMBB = createSplitMBB(*MF, LLVM_BB, MI);
 
   MachineFunction::iterator I;
   for (I = MF->begin(); I != MF->end() && &(*I) != MBB; ++I)
@@ -988,9 +997,9 @@ MachineBasicBlock *I8085TargetLowering::insertCond32Set(MachineInstr &MI,
     BuildMI(MBB, dl, TII.get(I8085::JMP)).addMBB(FallThrough);
   }
 
-  MachineBasicBlock *trueMBB = MF->CreateMachineBasicBlock(LLVM_BB);
-  MachineBasicBlock *falseMBB = MF->CreateMachineBasicBlock(LLVM_BB);
-  MachineBasicBlock *continMBB = MF->CreateMachineBasicBlock(LLVM_BB);
+  MachineBasicBlock *trueMBB = createSplitMBB(*MF, LLVM_BB, MI);
+  MachineBasicBlock *falseMBB = createSplitMBB(*MF, LLVM_BB, MI);
+  MachineBasicBlock *continMBB = createSplitMBB(*MF, LLVM_BB, MI);
 
   MachineFunction::iterator I;
   for (I = MF->begin(); I != MF->end() && &(*I) != MBB; ++I)
@@ -1115,9 +1124,9 @@ MachineBasicBlock *I8085TargetLowering::insertSignedCond32Set(MachineInstr &MI,
     BuildMI(MBB, dl, TII.get(I8085::JMP)).addMBB(FallThrough);
   }
 
-  MachineBasicBlock *continMBB = MF->CreateMachineBasicBlock(LLVM_BB);
-  MachineBasicBlock *samesignMBB = MF->CreateMachineBasicBlock(LLVM_BB);
-  MachineBasicBlock *diffsignMBB = MF->CreateMachineBasicBlock(LLVM_BB);
+  MachineBasicBlock *continMBB = createSplitMBB(*MF, LLVM_BB, MI);
+  MachineBasicBlock *samesignMBB = createSplitMBB(*MF, LLVM_BB, MI);
+  MachineBasicBlock *diffsignMBB = createSplitMBB(*MF, LLVM_BB, MI);
 
   MachineFunction::iterator I;
   for (I = MF->begin(); I != MF->end() && &(*I) != MBB; ++I)
@@ -1224,9 +1233,9 @@ MachineBasicBlock *I8085TargetLowering::insertDifferentSignedCond32Set(MachineIn
     BuildMI(MBB, dl, TII.get(I8085::JMP)).addMBB(FallThrough);
   }
 
-  MachineBasicBlock *continMBB = MF->CreateMachineBasicBlock(LLVM_BB);
-  MachineBasicBlock *firstOperandPos = MF->CreateMachineBasicBlock(LLVM_BB);
-  MachineBasicBlock *firstOperandNeg = MF->CreateMachineBasicBlock(LLVM_BB);
+  MachineBasicBlock *continMBB = createSplitMBB(*MF, LLVM_BB, MI);
+  MachineBasicBlock *firstOperandPos = createSplitMBB(*MF, LLVM_BB, MI);
+  MachineBasicBlock *firstOperandNeg = createSplitMBB(*MF, LLVM_BB, MI);
 
   MachineFunction::iterator I;
   for (I = MF->begin(); I != MF->end() && &(*I) != MBB; ++I)

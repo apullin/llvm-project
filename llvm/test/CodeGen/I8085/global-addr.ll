@@ -9,18 +9,17 @@
 define void @store_globals(i8 %a, i16 %b) {
 ; CHECK-LABEL: store_globals:
 ; CHECK:         .cfi_startproc
-; CHECK-NEXT:  LBB0_0:
+; CHECK-NEXT:  ; %bb.0: ; %entry
 ; CHECK-NEXT:    LXI H, 2
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV A, M
 ; CHECK-NEXT:    LXI H, g8
 ; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    LXI H, 4
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV B, M
 ; CHECK-NEXT:    LXI H, 3
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV C, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV B, M
 ; CHECK-NEXT:    LXI H, g16
 ; CHECK-NEXT:    MOV M, C
 ; CHECK-NEXT:    INX H
@@ -35,14 +34,14 @@ entry:
 define i16 @load_globals() {
 ; CHECK-LABEL: load_globals:
 ; CHECK:         .cfi_startproc
-; CHECK-NEXT:  LBB1_0:
+; CHECK-NEXT:  ; %bb.0: ; %entry
 ; CHECK-NEXT:    LXI H, g8
 ; CHECK-NEXT:    MOV A, M
 ; CHECK-NEXT:    MOV C, A
 ; CHECK-NEXT:    MVI B, 0
 ; CHECK-NEXT:    LXI H, g16+1
 ; CHECK-NEXT:    MOV D, M
-; CHECK-NEXT:    LXI H, g16
+; CHECK-NEXT:    DCX H
 ; CHECK-NEXT:    MOV E, M
 ; CHECK-NEXT:    MOV A, C
 ; CHECK-NEXT:    ADD E

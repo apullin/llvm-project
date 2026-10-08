@@ -7,4 +7,9 @@ define i64 @ret_i64_sext(i16 %x) {
 
 ; CHECK-LABEL: name: ret_i64_sext
 ; CHECK-NOT: SRL
-; CHECK: RET{{.*}}$iax{{.*}}$ibx
+; CHECK: %3:gr16bd = COPY %1
+; CHECK: %2:gr32 = SEXT16TO32 %3
+; CHECK: %4:gr32 = ASR_32_BY_16 %2
+; CHECK: STORE_32_ADDR_CONTENT %0, %2
+; CHECK: STORE_32 %20, 4, killed %19
+; CHECK: RET

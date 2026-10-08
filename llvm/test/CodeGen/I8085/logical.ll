@@ -4,22 +4,20 @@
 define i8 @functionone(i8,i8) {
 ; CHECK-LABEL: functionone:
 ; CHECK:         .cfi_startproc
-; CHECK-NEXT:  LBB0_0:
+; CHECK-NEXT:  ; %bb.0:
 ; CHECK-NEXT:    LXI H, 3
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV C, M
-; CHECK-NEXT:    LXI H, 2
-; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    DCX H
 ; CHECK-NEXT:    MOV D, M
 ; CHECK-NEXT:    MOV B, D
 ; CHECK-NEXT:    MOV A, B
 ; CHECK-NEXT:    XRA C
 ; CHECK-NEXT:    MOV B, A
-; CHECK-NEXT:    MOV A, B
 ; CHECK-NEXT:    ANA C
 ; CHECK-NEXT:    MOV B, A
-; CHECK-NEXT:    MOV A, B
 ; CHECK-NEXT:    ORA D
+; CHECK-NEXT:    MOV B, A
 ; CHECK-NEXT:    RET
 
   %3 = xor i8 %0, %1
@@ -31,21 +29,21 @@ define i8 @functionone(i8,i8) {
 define i16 @functiontwo(i16,i16) {
 ; CHECK-LABEL: functiontwo:
 ; CHECK:         .cfi_startproc
-; CHECK-NEXT:  LBB1_0:
-; CHECK-NEXT:    LXI H, 5
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV D, M
+; CHECK-NEXT:  ; %bb.0:
 ; CHECK-NEXT:    LXI H, 4
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV E, M
-; CHECK-NEXT:    LXI H, 3
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV B, M
-; CHECK-NEXT:    LXI H, 2
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV C, M
-; CHECK-NEXT:    MOV H, B
-; CHECK-NEXT:    MOV L, C
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV D, M
+; CHECK-NEXT:    DCX H
+; CHECK-NEXT:    DCX H
+; CHECK-NEXT:    DCX H
+; CHECK-NEXT:    MOV A, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV H, M
+; CHECK-NEXT:    MOV L, A
+; CHECK-NEXT:    MOV B, H
+; CHECK-NEXT:    MOV C, L
 ; CHECK-NEXT:    MOV A, C
 ; CHECK-NEXT:    XRA E
 ; CHECK-NEXT:    MOV C, A
@@ -75,24 +73,20 @@ define i16 @functiontwo(i16,i16) {
 define i8 @functionthree(i8,i8) {
 ; CHECK-LABEL: functionthree:
 ; CHECK:         .cfi_startproc
-; CHECK-NEXT:  LBB2_0:
+; CHECK-NEXT:  ; %bb.0:
 ; CHECK-NEXT:    LXI H, 3
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV A, M
-; CHECK-NEXT:    LXI H, 2
-; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    DCX H
 ; CHECK-NEXT:    MOV B, M
-; CHECK-NEXT:    MOV A, B
-; CHECK-NEXT:    XRA A
+; CHECK-NEXT:    XRA B
 ; CHECK-NEXT:    MOV B, A
-; CHECK-NEXT:    MOV A, B
 ; CHECK-NEXT:    ANI 40
 ; CHECK-NEXT:    MOV B, A
-; CHECK-NEXT:    MOV A, B
 ; CHECK-NEXT:    ORI 80
 ; CHECK-NEXT:    MOV B, A
-; CHECK-NEXT:    MOV A, B
 ; CHECK-NEXT:    XRI 111
+; CHECK-NEXT:    MOV B, A
 ; CHECK-NEXT:    RET
 
   %3 = xor i8 %0, %1
@@ -105,19 +99,16 @@ define i8 @functionthree(i8,i8) {
 define i16 @functionfour(i16,i16) {
 ; CHECK-LABEL: functionfour:
 ; CHECK:         .cfi_startproc
-; CHECK-NEXT:  LBB3_0:
-; CHECK-NEXT:    LXI H, 5
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV D, M
-; CHECK-NEXT:    LXI H, 4
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV E, M
-; CHECK-NEXT:    LXI H, 3
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV B, M
+; CHECK-NEXT:  ; %bb.0:
 ; CHECK-NEXT:    LXI H, 2
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV C, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV B, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV E, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV D, M
 ; CHECK-NEXT:    MOV A, C
 ; CHECK-NEXT:    XRA E
 ; CHECK-NEXT:    MOV C, A

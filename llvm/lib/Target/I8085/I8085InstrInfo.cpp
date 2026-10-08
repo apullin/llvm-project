@@ -12,13 +12,20 @@
 
 #include "I8085InstrInfo.h"
 
+#include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/STLExtras.h"
+#include "llvm/ADT/SmallVector.h"
+#include "llvm/CodeGen/LivePhysRegs.h"
 #include "llvm/CodeGen/MachineConstantPool.h"
 #include "llvm/CodeGen/MachineFrameInfo.h"
 #include "llvm/CodeGen/MachineInstrBuilder.h"
 #include "llvm/CodeGen/MachineMemOperand.h"
+#include "llvm/CodeGen/MachineModuleInfo.h"
+#include "llvm/CodeGen/MachineOutliner.h"
+#include "llvm/IR/Attributes.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/Function.h"
+#include "llvm/IR/Module.h"
 #include "llvm/MC/MCContext.h"
 #include "llvm/MC/TargetRegistry.h"
 #include "llvm/Support/Debug.h"
@@ -92,16 +99,42 @@ void I8085InstrInfo::copyPhysReg(MachineBasicBlock &MBB,
   }
 
   if (SrcReg == I8085::SP) {
-    BuildMI(MBB, MI, DL, get(I8085::LXI), I8085::HL).addImm(0);
+    bool PreserveHL = DestReg != I8085::HL;
+    bool PreservePSW = true;
+    if (MI != MBB.end() && MI->getOpcode() == TargetOpcode::COPY &&
+        MBB.getParent()->getRegInfo().tracksLiveness()) {
+      LivePhysRegs LiveRegs(RI);
+      LiveRegs.addLiveOuts(MBB);
+      for (auto I = MBB.rbegin(), E = MI.getReverse(); I != E; ++I)
+        LiveRegs.stepBackward(*I);
+      PreserveHL = DestReg != I8085::HL &&
+                   (LiveRegs.contains(I8085::HL) ||
+                    LiveRegs.contains(I8085::H) || LiveRegs.contains(I8085::L));
+      PreservePSW =
+          LiveRegs.contains(I8085::A) || LiveRegs.contains(I8085::SREG);
+    }
+
+    if (PreserveHL)
+      BuildMI(MBB, MI, DL, get(I8085::PUSH)).addReg(I8085::HL);
+    if (PreservePSW)
+      BuildMI(MBB, MI, DL, get(I8085::PUSH)).addReg(I8085::PSW);
+
+    const unsigned StackAdjustment =
+        2 * (unsigned(PreserveHL) + unsigned(PreservePSW));
+    BuildMI(MBB, MI, DL, get(I8085::LXI), I8085::HL).addImm(StackAdjustment);
     BuildMI(MBB, MI, DL, get(I8085::DAD)).addReg(I8085::SP);
-    if (DestReg == I8085::HL)
-      return;
-    if (!getPairRegs(DestReg, destLow, destHigh))
-      return;
-    BuildMI(MBB, MI, DL, get(I8085::MOV), destHigh)
-        .addReg(I8085::H);
-    BuildMI(MBB, MI, DL, get(I8085::MOV), destLow)
-        .addReg(I8085::L);
+
+    if (DestReg != I8085::HL) {
+      if (!getPairRegs(DestReg, destLow, destHigh))
+        return;
+      BuildMI(MBB, MI, DL, get(I8085::MOV), destHigh).addReg(I8085::H);
+      BuildMI(MBB, MI, DL, get(I8085::MOV), destLow).addReg(I8085::L);
+    }
+
+    if (PreservePSW)
+      BuildMI(MBB, MI, DL, get(I8085::POP), I8085::PSW);
+    if (PreserveHL)
+      BuildMI(MBB, MI, DL, get(I8085::POP), I8085::HL);
     return;
   }
 
@@ -213,26 +246,17 @@ void I8085InstrInfo::storeRegToStackSlot(MachineBasicBlock &MBB,
     llvm_unreachable("Cannot store this register into a stack slot!");
   }
 
-  MachineRegisterInfo &MRI = MF.getRegInfo();
-  if (Opcode == I8085::STORE_8 && RC != &I8085::GR8NoHLRegClass) {
-    // STORE_8 uses HL as the address register, so H/L cannot be the source.
-    if (SrcReg.isVirtual() &&
-        MRI.constrainRegClass(SrcReg, &I8085::GR8NoHLRegClass)) {
-      // Narrowed to a safe register class.
-    } else if (!I8085::GR8NoHLRegClass.contains(SrcReg)) {
-      Register Tmp = MRI.createVirtualRegister(&I8085::GR8NoHLRegClass);
-      BuildMI(MBB, MI, DL, get(TargetOpcode::COPY), Tmp)
-          .addReg(SrcReg, getKillRegState(isKill));
-      SrcReg = Tmp;
-      isKill = true;
-    }
-  }
-
-  BuildMI(MBB, MI, DL, get(Opcode))
-      .addFrameIndex(FrameIndex)
-      .addImm(0)
-      .addReg(SrcReg, getKillRegState(isKill))
-      .addMemOperand(MMO);
+  // Spilling must accept every register in RC, including H/L. Expansion
+  // captures their value before using HL to compute the stack address.
+  MachineInstrBuilder Spill =
+      BuildMI(MBB, MI, DL, get(Opcode))
+          .addFrameIndex(FrameIndex)
+          .addImm(0)
+          .addReg(SrcReg, getKillRegState(isKill))
+          .addMemOperand(MMO);
+  for (MachineOperand &MO : Spill->implicit_operands())
+    if (MO.isReg() && MO.isDef())
+      MO.setIsDead();
 }
 
 void I8085InstrInfo::loadRegFromStackSlot(MachineBasicBlock &MBB,
@@ -265,19 +289,13 @@ void I8085InstrInfo::loadRegFromStackSlot(MachineBasicBlock &MBB,
     llvm_unreachable("Cannot load this register from a stack slot!");
   }
 
-  // LOAD_8_WITH_ADDR uses HL internally as the address register, so loading
-  // directly into H or L is unsafe: the loaded value would be clobbered when
-  // the expansion writes to HL for address computation.  Constrain the
-  // destination to GR8NoHL when possible.
-  if (Opcode == I8085::LOAD_8_WITH_ADDR && DestReg.isVirtual()) {
-    MachineRegisterInfo &MRI = MF.getRegInfo();
-    MRI.constrainRegClass(DestReg, &I8085::GR8NoHLRegClass);
-  }
-
-  BuildMI(MBB, MI, DL, get(Opcode), DestReg)
-      .addFrameIndex(FrameIndex)
-      .addImm(0)
-      .addMemOperand(MMO);
+  MachineInstrBuilder Reload = BuildMI(MBB, MI, DL, get(Opcode), DestReg)
+                                   .addFrameIndex(FrameIndex)
+                                   .addImm(0)
+                                   .addMemOperand(MMO);
+  for (MachineOperand &MO : Reload->implicit_operands())
+    if (MO.isReg() && MO.isDef())
+      MO.setIsDead();
 }
 
 
@@ -401,12 +419,27 @@ bool I8085InstrInfo::analyzeBranch(MachineBasicBlock &MBB,
     assert(Cond.size() == 1);
     assert(TBB);
 
-    if (TBB != I->getOperand(0).getMBB())
-      return true;
-
     unsigned OldOpc = Cond[0].getImm();
-    if (OldOpc == Opc)
+    MachineBasicBlock *OldTBB = TBB;
+    MachineBasicBlock *ThisTBB = I->getOperand(0).getMBB();
+    if (OldOpc == Opc && OldTBB == ThisTBB)
       continue;
+
+    // Selection can emit an exhaustive pair such as JZ true; JNZ false.
+    // Model it like the equivalent JZ true; JMP false sequence so generic
+    // block placement does not mistake it for an un-analyzable fallthrough.
+    if (OldOpc == getOppositeBranchOpcode(Opc)) {
+      if (OldTBB == ThisTBB) {
+        TBB = ThisTBB;
+        FBB = nullptr;
+        Cond.clear();
+      } else {
+        TBB = ThisTBB;
+        FBB = OldTBB;
+        Cond[0].setImm(Opc);
+      }
+      continue;
+    }
 
     return true;
   }
@@ -520,6 +553,342 @@ bool I8085InstrInfo::isBranchOffsetInRange(unsigned BranchOp,
   case I8085::JPO:
     return true;
   }
+}
+
+enum I8085MachineOutlinerConstructionID {
+  MachineOutlinerDefault,
+  MachineOutlinerTailCall,
+};
+
+static bool isDADSP(const MachineInstr &MI) {
+  return MI.getOpcode() == I8085::DAD && MI.getOperand(0).isReg() &&
+         MI.getOperand(0).getReg() == I8085::SP;
+}
+
+static bool isLXIHLImm(const MachineInstr &MI) {
+  return MI.getOpcode() == I8085::LXI && MI.getOperand(0).isReg() &&
+         MI.getOperand(0).getReg() == I8085::HL && MI.getOperand(1).isImm();
+}
+
+static bool isI8085OutlinerMemoryOpcode(unsigned Opcode) {
+  switch (Opcode) {
+  case I8085::MOV_FROM_M:
+  case I8085::MOV_M:
+  case I8085::MVI_M:
+    return true;
+  default:
+    return false;
+  }
+}
+
+static bool isI8085OutlinerOpcode(unsigned Opcode) {
+  switch (Opcode) {
+  case I8085::ACI:
+  case I8085::ADC:
+  case I8085::ADD:
+  case I8085::ADI:
+  case I8085::ANA:
+  case I8085::ANI:
+  case I8085::CMA:
+  case I8085::CMC:
+  case I8085::CMP:
+  case I8085::CPI:
+  case I8085::DAA:
+  case I8085::DAD:
+  case I8085::DCR:
+  case I8085::DCX:
+  case I8085::INR:
+  case I8085::INX:
+  case I8085::LXI:
+  case I8085::MOV:
+  case I8085::MOV_FROM_M:
+  case I8085::MOV_M:
+  case I8085::MVI:
+  case I8085::MVI_M:
+  case I8085::NOP:
+  case I8085::ORA:
+  case I8085::ORI:
+  case I8085::RAL:
+  case I8085::RAR:
+  case I8085::RLC:
+  case I8085::RRC:
+  case I8085::SBB:
+  case I8085::SBI:
+  case I8085::STC:
+  case I8085::SUB:
+  case I8085::SUI:
+  case I8085::XCHG:
+  case I8085::XRA:
+  case I8085::XRI:
+    return true;
+  default:
+    return false;
+  }
+}
+
+static bool hasSafeStackRelativeFixups(outliner::Candidate &C) {
+  for (auto It = C.begin(), End = C.end(); It != End; ++It) {
+    if (!isDADSP(*It))
+      continue;
+    if (It == C.begin())
+      return false;
+    if (!isLXIHLImm(*std::prev(It)))
+      return false;
+  }
+  return true;
+}
+
+static bool regOverlapsAny(Register Reg, ArrayRef<Register> Regs,
+                           const TargetRegisterInfo &TRI) {
+  return any_of(Regs, [&](Register Other) {
+    return TRI.regsOverlap(Reg, Other);
+  });
+}
+
+static void addUniqueReg(SmallVectorImpl<Register> &Regs, Register Reg,
+                         const TargetRegisterInfo &TRI) {
+  if (!regOverlapsAny(Reg, Regs, TRI))
+    Regs.push_back(Reg);
+}
+
+static SmallVector<Register, 8>
+getExposedUses(outliner::Candidate &C, const TargetRegisterInfo &TRI) {
+  SmallVector<Register, 8> UseRegs;
+
+  for (auto It = C.end(); It != C.begin();) {
+    --It;
+
+    SmallVector<Register, 8> InstrUseRegs;
+    for (MachineOperand &MOP : It->operands()) {
+      if (!MOP.isReg() || !MOP.getReg().isPhysical())
+        continue;
+
+      Register Reg = MOP.getReg();
+      if (MOP.isDef()) {
+        if (!regOverlapsAny(Reg, InstrUseRegs, TRI))
+          llvm::erase_if(UseRegs, [&](Register UseReg) {
+            return TRI.regsOverlap(Reg, UseReg);
+          });
+      } else if (!MOP.isUndef()) {
+        addUniqueReg(UseRegs, Reg, TRI);
+        addUniqueReg(InstrUseRegs, Reg, TRI);
+      }
+    }
+  }
+
+  return UseRegs;
+}
+
+static bool isLiveInToBlock(Register Reg, const MachineBasicBlock &MBB,
+                            const TargetRegisterInfo &TRI) {
+  for (const MachineBasicBlock::RegisterMaskPair &LiveIn : MBB.liveins())
+    if (TRI.regsOverlap(Reg, Register(LiveIn.PhysReg)))
+      return true;
+  return false;
+}
+
+static bool hasPriorDef(Register Reg, outliner::Candidate &C,
+                        const TargetRegisterInfo &TRI) {
+  MachineBasicBlock &MBB = *C.getMBB();
+  for (auto It = MBB.begin(), End = C.begin(); It != End; ++It)
+    for (MachineOperand &MOP : It->operands())
+      if (MOP.isReg() && MOP.isDef() && MOP.getReg().isPhysical() &&
+          TRI.regsOverlap(Reg, MOP.getReg()))
+        return true;
+
+  return false;
+}
+
+static bool candidateDefinesRegisterAlias(outliner::Candidate &C, Register Reg,
+                                          const TargetRegisterInfo &TRI) {
+  for (MachineInstr &MI : C)
+    for (MachineOperand &MOP : MI.operands())
+      if (MOP.isReg() && MOP.isDef() && MOP.getReg().isPhysical() &&
+          TRI.regsOverlap(Reg, MOP.getReg()))
+        return true;
+
+  return false;
+}
+
+static void addPairAliasDefs(MachineInstrBuilder &MIB, outliner::Candidate &C,
+                             const TargetRegisterInfo &TRI) {
+  // The generic outliner adds implicit operands using exact register numbers.
+  // Add pair aliases so a tail jump that outlines B/C definitions can also
+  // satisfy a cloned RET's implicit BC use.
+  if (candidateDefinesRegisterAlias(C, Register(I8085::BC), TRI))
+    MIB.addReg(I8085::BC, RegState::ImplicitDefine);
+  if (candidateDefinesRegisterAlias(C, Register(I8085::DE), TRI))
+    MIB.addReg(I8085::DE, RegState::ImplicitDefine);
+  if (candidateDefinesRegisterAlias(C, Register(I8085::HL), TRI))
+    MIB.addReg(I8085::HL, RegState::ImplicitDefine);
+}
+
+static bool hasSafeTailCallReplacement(outliner::Candidate &C,
+                                       const TargetRegisterInfo &TRI) {
+  MachineBasicBlock &MBB = *C.getMBB();
+
+  for (Register Reg : getExposedUses(C, TRI)) {
+    if (TRI.regsOverlap(Reg, Register(I8085::SP)))
+      continue;
+
+    if (!isLiveInToBlock(Reg, MBB, TRI) && !hasPriorDef(Reg, C, TRI))
+      return false;
+  }
+
+  return true;
+}
+
+bool I8085InstrInfo::isFunctionSafeToOutlineFrom(
+    MachineFunction &MF, bool OutlineFromLinkOnceODRs) const {
+  const Function &F = MF.getFunction();
+
+  if (!OutlineFromLinkOnceODRs && F.hasLinkOnceODRLinkage())
+    return false;
+  if (F.hasSection())
+    return false;
+  if (F.hasFnAttribute(Attribute::Naked))
+    return false;
+
+  return true;
+}
+
+bool I8085InstrInfo::shouldOutlineFromFunctionByDefault(
+    MachineFunction &MF) const {
+  return MF.getFunction().hasMinSize();
+}
+
+std::optional<outliner::OutlinedFunction>
+I8085InstrInfo::getOutliningCandidateInfo(
+    const MachineModuleInfo &MMI,
+    std::vector<outliner::Candidate> &RepeatedSequenceLocs) const {
+  if (RepeatedSequenceLocs.empty())
+    return std::nullopt;
+
+  const TargetRegisterInfo *TRI =
+      RepeatedSequenceLocs[0].getMF()->getSubtarget().getRegisterInfo();
+
+  llvm::erase_if(RepeatedSequenceLocs, [](outliner::Candidate &C) {
+    return !hasSafeStackRelativeFixups(C);
+  });
+
+  if (RepeatedSequenceLocs.size() < 2)
+    return std::nullopt;
+
+  if (RepeatedSequenceLocs[0].back().getOpcode() == I8085::RET) {
+    llvm::erase_if(RepeatedSequenceLocs, [&](outliner::Candidate &C) {
+      return !hasSafeTailCallReplacement(C, *TRI);
+    });
+
+    if (RepeatedSequenceLocs.size() < 2)
+      return std::nullopt;
+  }
+
+  unsigned SequenceSize = 0;
+  for (MachineInstr &MI : RepeatedSequenceLocs[0])
+    SequenceSize += getInstSizeInBytes(MI);
+
+  constexpr unsigned BranchOverhead = 3;
+
+  if (RepeatedSequenceLocs[0].back().getOpcode() == I8085::RET) {
+    for (outliner::Candidate &C : RepeatedSequenceLocs)
+      C.setCallInfo(MachineOutlinerTailCall, BranchOverhead);
+
+    return outliner::OutlinedFunction(RepeatedSequenceLocs, SequenceSize, 0,
+                                      MachineOutlinerTailCall);
+  }
+
+  // I8085 CALL addr16 is 3 bytes and does not modify condition flags.
+  for (outliner::Candidate &C : RepeatedSequenceLocs)
+    C.setCallInfo(MachineOutlinerDefault, BranchOverhead);
+
+  // Default outlined functions return with RET, a 1-byte instruction.
+  constexpr unsigned FrameOverhead = 1;
+  return outliner::OutlinedFunction(RepeatedSequenceLocs, SequenceSize,
+                                    FrameOverhead, MachineOutlinerDefault);
+}
+
+outliner::InstrType
+I8085InstrInfo::getOutliningTypeImpl(const MachineModuleInfo &MMI,
+                                     MachineBasicBlock::iterator &MBBI,
+                                     unsigned Flags) const {
+  MachineInstr &MI = *MBBI;
+  const MachineFunction *MF = MI.getMF();
+  const TargetRegisterInfo *TRI = MF->getSubtarget().getRegisterInfo();
+
+  if (MI.isDebugInstr() || MI.isPosition() || MI.isCFIInstruction())
+    return outliner::InstrType::Invisible;
+
+  if (MI.getOpcode() == I8085::RET)
+    return outliner::InstrType::LegalTerminator;
+
+  if (MI.isInlineAsm() || MI.isCall() || MI.isBranch() || MI.isReturn() ||
+      MI.isTerminator() || MI.isBarrier())
+    return outliner::InstrType::Illegal;
+
+  if (MI.getDesc().isPseudo())
+    return outliner::InstrType::Illegal;
+
+  if ((MI.mayLoad() || MI.mayStore()) &&
+      !isI8085OutlinerMemoryOpcode(MI.getOpcode()))
+    return outliner::InstrType::Illegal;
+
+  // Most patternless I8085 real instructions are conservatively tagged with
+  // unmodeled side effects. Keep outlining useful, but only for an explicit
+  // set of register/immediate operations and selected HL memory operations.
+  if (MI.hasUnmodeledSideEffects() &&
+      !isI8085OutlinerOpcode(MI.getOpcode()))
+    return outliner::InstrType::Illegal;
+
+  // CALL pushes a 2-byte return address. Only allow DAD SP when
+  // getOutliningCandidateInfo can prove the candidate contains the immediately
+  // preceding LXI H,imm, which buildOutlinedFrame then repairs by +2.
+  if ((MI.readsRegister(I8085::SP, TRI) ||
+       MI.modifiesRegister(I8085::SP, TRI)) &&
+      !isDADSP(MI))
+    return outliner::InstrType::Illegal;
+
+  return outliner::InstrType::Legal;
+}
+
+void I8085InstrInfo::buildOutlinedFrame(
+    MachineBasicBlock &MBB, MachineFunction &MF,
+    const outliner::OutlinedFunction &OF) const {
+  if (OF.FrameConstructionID == MachineOutlinerDefault) {
+    for (auto It = MBB.begin(), End = MBB.end(); It != End; ++It) {
+      if (!isDADSP(*It))
+        continue;
+
+      assert(It != MBB.begin() &&
+             "DAD SP candidate should include a preceding LXI H,imm");
+      MachineInstr &LXI = *std::prev(It);
+      assert(isLXIHLImm(LXI) && "DAD SP candidate should have LXI H,imm");
+      MachineOperand &Offset = LXI.getOperand(1);
+      Offset.setImm(Offset.getImm() + 2);
+    }
+
+    MBB.insert(MBB.end(), BuildMI(MF, DebugLoc(), get(I8085::RET)));
+    return;
+  }
+
+  assert(OF.FrameConstructionID == MachineOutlinerTailCall &&
+         "unexpected I8085 outliner frame construction ID");
+}
+
+MachineBasicBlock::iterator I8085InstrInfo::insertOutlinedCall(
+    Module &M, MachineBasicBlock &MBB, MachineBasicBlock::iterator &It,
+    MachineFunction &MF, outliner::Candidate &C) const {
+  if (C.CallConstructionID == MachineOutlinerTailCall) {
+    MachineInstrBuilder MIB =
+        BuildMI(MF, DebugLoc(), get(I8085::TCRETURN))
+            .addGlobalAddress(M.getNamedValue(MF.getName()))
+            .addImm(0);
+    const TargetRegisterInfo &TRI = *MF.getSubtarget().getRegisterInfo();
+    addPairAliasDefs(MIB, C, TRI);
+    It = MBB.insert(It, MIB);
+  } else
+    It = MBB.insert(It, BuildMI(MF, DebugLoc(), get(I8085::CALL_OUTLINE))
+                            .addGlobalAddress(M.getNamedValue(MF.getName())));
+  return It;
 }
 
 } // end of namespace llvm

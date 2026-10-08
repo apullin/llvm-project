@@ -8574,7 +8574,16 @@ SDValue SelectionDAG::getMemset(SDValue Chain, const SDLoc &dl, SDValue Dst,
   } else {
     TargetLowering::ArgListTy Args;
     Args.push_back(CreateEntry(Dst, PointerType::getUnqual(Ctx)));
-    Args.push_back(CreateEntry(Src, Src.getValueType().getTypeForEVT(Ctx)));
+    // The C library memset takes 'int' for the value parameter.  Widen i8
+    // to the target's int-pointer type so that targets whose calling
+    // convention does not implicitly promote i8 (e.g. i8085) pass the
+    // correct number of bytes on the stack.
+    Type *ValTy = DL.getIntPtrType(Ctx);
+    SDValue Val = Src;
+    if (Val.getValueType().bitsLT(MVT::i16))
+      Val = getNode(ISD::ZERO_EXTEND, dl,
+                    MVT::getIntegerVT(DL.getPointerSizeInBits()), Val);
+    Args.push_back(CreateEntry(Val, ValTy));
     Args.push_back(CreateEntry(Size, DL.getIntPtrType(Ctx)));
     CLI.setLibCallee(TLI->getLibcallCallingConv(RTLIB::MEMSET),
                      Dst.getValueType().getTypeForEVT(Ctx),

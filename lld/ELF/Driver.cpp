@@ -112,6 +112,8 @@ void Ctx::reset() {
   needsTlsLd.store(false, std::memory_order_relaxed);
   scriptSymOrderCounter = 1;
   scriptSymOrder.clear();
+  ltoScriptFiles.clear();
+  ltoScriptModuleFiles.clear();
   ltoAllVtablesHaveTypeInfos = false;
 }
 
@@ -1338,6 +1340,7 @@ static void readConfigs(opt::InputArgList &args) {
                    OPT_no_lto_basic_block_address_map, false);
   config->ltoBasicBlockSections =
       args.getLastArgValue(OPT_lto_basic_block_sections);
+  config->ltoLinkerScripts = args.hasArg(OPT_lto_linker_scripts);
   config->ltoUniqueBasicBlockSectionNames =
       args.hasFlag(OPT_lto_unique_basic_block_section_names,
                    OPT_no_lto_unique_basic_block_section_names, false);
@@ -2485,6 +2488,30 @@ static void markBuffersAsDontNeed(bool skipLinkedOutput) {
 }
 
 // This function is where all the optimizations of link-time
+static void assignLtoScriptFiles(ELFFileBase &obj) {
+  for (InputSectionBase *sec : obj.getSections()) {
+    if (!sec || sec == &InputSection::discarded)
+      continue;
+    StringRef encoded = sec->name;
+    if (encoded.consume_front(".lto_script.")) {
+      auto [fileHex, sectionHex] = encoded.split('.');
+      std::string file, section;
+      if (!tryGetFromHex(fileHex, file) || file.empty() ||
+          !tryGetFromHex(sectionHex, section) || section.empty()) {
+        error("invalid LTO linker-script ownership tag: " + sec->name);
+        continue;
+      }
+      setLtoScriptFileForLinkerScript(sec, saver().save(file));
+      sec->name = saver().save(section);
+    } else if ((sec->flags & SHF_ALLOC) && sec->size != 0) {
+      error("--lto-linker-scripts: cannot attribute generated section " +
+            sec->name + " to an input file (constant pools, jump tables, "
+            "unwind tables and synthesized code are not supported)");
+    }
+  }
+}
+
+// This function is where all the optimizations of link-time
 // optimization takes place. When LTO is in use, some input files are
 // not in native object file format but in the LLVM bitcode format.
 // This function compiles bitcode files into a few big native files
@@ -2991,6 +3018,9 @@ template <class ELFT> void LinkerDriver::link(opt::InputArgList &args) {
   parallelForEach(newObjectFiles, [](ELFFileBase *file) {
     initSectionsAndLocalSyms(file, /*ignoreComdats=*/true);
   });
+  if (config->ltoLinkerScripts)
+    for (ELFFileBase *file : newObjectFiles)
+      assignLtoScriptFiles(*file);
   parallelForEach(newObjectFiles, postParseObjectFile);
   for (const DuplicateSymbol &d : ctx.duplicates)
     reportDuplicate(*d.sym, d.file, d.section, d.value);

@@ -4,86 +4,70 @@
 define float @fadd_f32(float %a, float %b) {
 ; CHECK-LABEL: fadd_f32:
 ; CHECK:         .cfi_startproc
-; CHECK-NEXT:  LBB0_0:
+; CHECK-NEXT:  ; %bb.0:
 ; CHECK-NEXT:    ; implicit-def: $iax
-; CHECK-NEXT:    LXI H, 65520
+; CHECK-NEXT:    LXI H, 65524
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    SPHL
-; CHECK-NEXT:    .cfi_adjust_cfa_offset 16
-; CHECK-NEXT:    LXI H, 22
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
-; CHECK-NEXT:    LXI H, 8
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    LXI H, 23
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
-; CHECK-NEXT:    LXI H, 9
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    LXI H, 24
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
-; CHECK-NEXT:    LXI H, 10
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    LXI H, 25
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
-; CHECK-NEXT:    LXI H, 11
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    LXI H, 8
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
-; CHECK-NEXT:    LXI H, 4
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    LXI H, 9
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
-; CHECK-NEXT:    LXI H, 5
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    LXI H, 10
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
-; CHECK-NEXT:    LXI H, 6
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    LXI H, 11
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
-; CHECK-NEXT:    LXI H, 7
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, A
+; CHECK-NEXT:    .cfi_adjust_cfa_offset 12
 ; CHECK-NEXT:    LXI H, 18
 ; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
+; CHECK-NEXT:    MOV B, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV C, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV D, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV E, M
 ; CHECK-NEXT:    LXI H, 8
 ; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    LXI H, 19
+; CHECK-NEXT:    MOV M, B
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, C
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, D
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, E
+; CHECK-NEXT:    DCX H
+; CHECK-NEXT:    DCX H
+; CHECK-NEXT:    DCX H
+; CHECK-NEXT:    MOV B, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV C, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV D, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV E, M
+; CHECK-NEXT:    LXI H, 4
 ; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
-; CHECK-NEXT:    LXI H, 9
+; CHECK-NEXT:    MOV M, B
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, C
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, D
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, E
+; CHECK-NEXT:    LXI H, 14
 ; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    LXI H, 20
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
-; CHECK-NEXT:    LXI H, 10
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    LXI H, 21
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
-; CHECK-NEXT:    LXI H, 11
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, A
+; CHECK-NEXT:    MOV B, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV C, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV D, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV E, M
 ; CHECK-NEXT:    LXI H, 8
 ; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    MOV M, B
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, C
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, D
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, E
+; CHECK-NEXT:    DCX H
+; CHECK-NEXT:    DCX H
+; CHECK-NEXT:    DCX H
 ; CHECK-NEXT:    MOV A, M
 ; CHECK-NEXT:    LXI H, 0
 ; CHECK-NEXT:    DAD SP
@@ -113,10 +97,28 @@ define float @fadd_f32(float %a, float %b) {
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    MOV M, A
 ; CHECK-NEXT:    CALL __addsf3
-; CHECK-NEXT:    LXI H, 16
+; CHECK-NEXT:    LXI H, 8
 ; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    MOV M, C
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, B
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, E
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, D
+; CHECK-NEXT:    DCX H
+; CHECK-NEXT:    DCX H
+; CHECK-NEXT:    DCX H
+; CHECK-NEXT:    MOV C, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV B, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV E, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV D, M
+; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    SPHL
-; CHECK-NEXT:    .cfi_adjust_cfa_offset 4294967280
+; CHECK-NEXT:    .cfi_adjust_cfa_offset -12
 ; CHECK-NEXT:    RET
   %r = fadd float %a, %b
   ret float %r
@@ -125,86 +127,70 @@ define float @fadd_f32(float %a, float %b) {
 define float @fsub_f32(float %a, float %b) {
 ; CHECK-LABEL: fsub_f32:
 ; CHECK:         .cfi_startproc
-; CHECK-NEXT:  LBB1_0:
+; CHECK-NEXT:  ; %bb.0:
 ; CHECK-NEXT:    ; implicit-def: $iax
-; CHECK-NEXT:    LXI H, 65520
+; CHECK-NEXT:    LXI H, 65524
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    SPHL
-; CHECK-NEXT:    .cfi_adjust_cfa_offset 16
-; CHECK-NEXT:    LXI H, 22
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
-; CHECK-NEXT:    LXI H, 8
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    LXI H, 23
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
-; CHECK-NEXT:    LXI H, 9
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    LXI H, 24
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
-; CHECK-NEXT:    LXI H, 10
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    LXI H, 25
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
-; CHECK-NEXT:    LXI H, 11
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    LXI H, 8
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
-; CHECK-NEXT:    LXI H, 4
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    LXI H, 9
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
-; CHECK-NEXT:    LXI H, 5
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    LXI H, 10
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
-; CHECK-NEXT:    LXI H, 6
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    LXI H, 11
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
-; CHECK-NEXT:    LXI H, 7
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, A
+; CHECK-NEXT:    .cfi_adjust_cfa_offset 12
 ; CHECK-NEXT:    LXI H, 18
 ; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
+; CHECK-NEXT:    MOV B, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV C, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV D, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV E, M
 ; CHECK-NEXT:    LXI H, 8
 ; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    LXI H, 19
+; CHECK-NEXT:    MOV M, B
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, C
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, D
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, E
+; CHECK-NEXT:    DCX H
+; CHECK-NEXT:    DCX H
+; CHECK-NEXT:    DCX H
+; CHECK-NEXT:    MOV B, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV C, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV D, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV E, M
+; CHECK-NEXT:    LXI H, 4
 ; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
-; CHECK-NEXT:    LXI H, 9
+; CHECK-NEXT:    MOV M, B
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, C
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, D
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, E
+; CHECK-NEXT:    LXI H, 14
 ; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    LXI H, 20
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
-; CHECK-NEXT:    LXI H, 10
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    LXI H, 21
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
-; CHECK-NEXT:    LXI H, 11
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, A
+; CHECK-NEXT:    MOV B, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV C, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV D, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV E, M
 ; CHECK-NEXT:    LXI H, 8
 ; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    MOV M, B
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, C
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, D
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, E
+; CHECK-NEXT:    DCX H
+; CHECK-NEXT:    DCX H
+; CHECK-NEXT:    DCX H
 ; CHECK-NEXT:    MOV A, M
 ; CHECK-NEXT:    LXI H, 0
 ; CHECK-NEXT:    DAD SP
@@ -234,10 +220,28 @@ define float @fsub_f32(float %a, float %b) {
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    MOV M, A
 ; CHECK-NEXT:    CALL __subsf3
-; CHECK-NEXT:    LXI H, 16
+; CHECK-NEXT:    LXI H, 8
 ; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    MOV M, C
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, B
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, E
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, D
+; CHECK-NEXT:    DCX H
+; CHECK-NEXT:    DCX H
+; CHECK-NEXT:    DCX H
+; CHECK-NEXT:    MOV C, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV B, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV E, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV D, M
+; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    SPHL
-; CHECK-NEXT:    .cfi_adjust_cfa_offset 4294967280
+; CHECK-NEXT:    .cfi_adjust_cfa_offset -12
 ; CHECK-NEXT:    RET
   %r = fsub float %a, %b
   ret float %r
@@ -246,86 +250,70 @@ define float @fsub_f32(float %a, float %b) {
 define float @fmul_f32(float %a, float %b) {
 ; CHECK-LABEL: fmul_f32:
 ; CHECK:         .cfi_startproc
-; CHECK-NEXT:  LBB2_0:
+; CHECK-NEXT:  ; %bb.0:
 ; CHECK-NEXT:    ; implicit-def: $iax
-; CHECK-NEXT:    LXI H, 65520
+; CHECK-NEXT:    LXI H, 65524
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    SPHL
-; CHECK-NEXT:    .cfi_adjust_cfa_offset 16
-; CHECK-NEXT:    LXI H, 22
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
-; CHECK-NEXT:    LXI H, 8
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    LXI H, 23
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
-; CHECK-NEXT:    LXI H, 9
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    LXI H, 24
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
-; CHECK-NEXT:    LXI H, 10
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    LXI H, 25
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
-; CHECK-NEXT:    LXI H, 11
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    LXI H, 8
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
-; CHECK-NEXT:    LXI H, 4
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    LXI H, 9
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
-; CHECK-NEXT:    LXI H, 5
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    LXI H, 10
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
-; CHECK-NEXT:    LXI H, 6
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    LXI H, 11
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
-; CHECK-NEXT:    LXI H, 7
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, A
+; CHECK-NEXT:    .cfi_adjust_cfa_offset 12
 ; CHECK-NEXT:    LXI H, 18
 ; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
+; CHECK-NEXT:    MOV B, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV C, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV D, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV E, M
 ; CHECK-NEXT:    LXI H, 8
 ; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    LXI H, 19
+; CHECK-NEXT:    MOV M, B
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, C
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, D
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, E
+; CHECK-NEXT:    DCX H
+; CHECK-NEXT:    DCX H
+; CHECK-NEXT:    DCX H
+; CHECK-NEXT:    MOV B, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV C, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV D, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV E, M
+; CHECK-NEXT:    LXI H, 4
 ; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
-; CHECK-NEXT:    LXI H, 9
+; CHECK-NEXT:    MOV M, B
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, C
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, D
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, E
+; CHECK-NEXT:    LXI H, 14
 ; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    LXI H, 20
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
-; CHECK-NEXT:    LXI H, 10
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    LXI H, 21
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
-; CHECK-NEXT:    LXI H, 11
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, A
+; CHECK-NEXT:    MOV B, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV C, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV D, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV E, M
 ; CHECK-NEXT:    LXI H, 8
 ; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    MOV M, B
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, C
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, D
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, E
+; CHECK-NEXT:    DCX H
+; CHECK-NEXT:    DCX H
+; CHECK-NEXT:    DCX H
 ; CHECK-NEXT:    MOV A, M
 ; CHECK-NEXT:    LXI H, 0
 ; CHECK-NEXT:    DAD SP
@@ -355,10 +343,28 @@ define float @fmul_f32(float %a, float %b) {
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    MOV M, A
 ; CHECK-NEXT:    CALL __mulsf3
-; CHECK-NEXT:    LXI H, 16
+; CHECK-NEXT:    LXI H, 8
 ; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    MOV M, C
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, B
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, E
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, D
+; CHECK-NEXT:    DCX H
+; CHECK-NEXT:    DCX H
+; CHECK-NEXT:    DCX H
+; CHECK-NEXT:    MOV C, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV B, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV E, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV D, M
+; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    SPHL
-; CHECK-NEXT:    .cfi_adjust_cfa_offset 4294967280
+; CHECK-NEXT:    .cfi_adjust_cfa_offset -12
 ; CHECK-NEXT:    RET
   %r = fmul float %a, %b
   ret float %r
@@ -367,86 +373,70 @@ define float @fmul_f32(float %a, float %b) {
 define float @fdiv_f32(float %a, float %b) {
 ; CHECK-LABEL: fdiv_f32:
 ; CHECK:         .cfi_startproc
-; CHECK-NEXT:  LBB3_0:
+; CHECK-NEXT:  ; %bb.0:
 ; CHECK-NEXT:    ; implicit-def: $iax
-; CHECK-NEXT:    LXI H, 65520
+; CHECK-NEXT:    LXI H, 65524
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    SPHL
-; CHECK-NEXT:    .cfi_adjust_cfa_offset 16
-; CHECK-NEXT:    LXI H, 22
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
-; CHECK-NEXT:    LXI H, 8
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    LXI H, 23
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
-; CHECK-NEXT:    LXI H, 9
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    LXI H, 24
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
-; CHECK-NEXT:    LXI H, 10
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    LXI H, 25
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
-; CHECK-NEXT:    LXI H, 11
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    LXI H, 8
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
-; CHECK-NEXT:    LXI H, 4
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    LXI H, 9
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
-; CHECK-NEXT:    LXI H, 5
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    LXI H, 10
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
-; CHECK-NEXT:    LXI H, 6
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    LXI H, 11
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
-; CHECK-NEXT:    LXI H, 7
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, A
+; CHECK-NEXT:    .cfi_adjust_cfa_offset 12
 ; CHECK-NEXT:    LXI H, 18
 ; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
+; CHECK-NEXT:    MOV B, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV C, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV D, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV E, M
 ; CHECK-NEXT:    LXI H, 8
 ; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    LXI H, 19
+; CHECK-NEXT:    MOV M, B
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, C
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, D
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, E
+; CHECK-NEXT:    DCX H
+; CHECK-NEXT:    DCX H
+; CHECK-NEXT:    DCX H
+; CHECK-NEXT:    MOV B, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV C, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV D, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV E, M
+; CHECK-NEXT:    LXI H, 4
 ; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
-; CHECK-NEXT:    LXI H, 9
+; CHECK-NEXT:    MOV M, B
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, C
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, D
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, E
+; CHECK-NEXT:    LXI H, 14
 ; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    LXI H, 20
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
-; CHECK-NEXT:    LXI H, 10
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    LXI H, 21
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
-; CHECK-NEXT:    LXI H, 11
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, A
+; CHECK-NEXT:    MOV B, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV C, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV D, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV E, M
 ; CHECK-NEXT:    LXI H, 8
 ; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    MOV M, B
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, C
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, D
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, E
+; CHECK-NEXT:    DCX H
+; CHECK-NEXT:    DCX H
+; CHECK-NEXT:    DCX H
 ; CHECK-NEXT:    MOV A, M
 ; CHECK-NEXT:    LXI H, 0
 ; CHECK-NEXT:    DAD SP
@@ -476,10 +466,28 @@ define float @fdiv_f32(float %a, float %b) {
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    MOV M, A
 ; CHECK-NEXT:    CALL __divsf3
-; CHECK-NEXT:    LXI H, 16
+; CHECK-NEXT:    LXI H, 8
 ; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    MOV M, C
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, B
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, E
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, D
+; CHECK-NEXT:    DCX H
+; CHECK-NEXT:    DCX H
+; CHECK-NEXT:    DCX H
+; CHECK-NEXT:    MOV C, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV B, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV E, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV D, M
+; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    SPHL
-; CHECK-NEXT:    .cfi_adjust_cfa_offset 4294967280
+; CHECK-NEXT:    .cfi_adjust_cfa_offset -12
 ; CHECK-NEXT:    RET
   %r = fdiv float %a, %b
   ret float %r
@@ -488,86 +496,71 @@ define float @fdiv_f32(float %a, float %b) {
 define i1 @fcmp_eq_f32(float %a, float %b) {
 ; CHECK-LABEL: fcmp_eq_f32:
 ; CHECK:         .cfi_startproc
-; CHECK-NEXT:  LBB4_0:
+; CHECK-NEXT:  ; %bb.0:
 ; CHECK-NEXT:    ; implicit-def: $iax
+; CHECK-NEXT:    ; implicit-def: $ibx
 ; CHECK-NEXT:    LXI H, 65520
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    SPHL
 ; CHECK-NEXT:    .cfi_adjust_cfa_offset 16
 ; CHECK-NEXT:    LXI H, 22
 ; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
+; CHECK-NEXT:    MOV B, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV C, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV D, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV E, M
 ; CHECK-NEXT:    LXI H, 8
 ; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    LXI H, 23
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
-; CHECK-NEXT:    LXI H, 9
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    LXI H, 24
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
-; CHECK-NEXT:    LXI H, 10
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    LXI H, 25
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
-; CHECK-NEXT:    LXI H, 11
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    LXI H, 8
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
+; CHECK-NEXT:    MOV M, B
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, C
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, D
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, E
+; CHECK-NEXT:    DCX H
+; CHECK-NEXT:    DCX H
+; CHECK-NEXT:    DCX H
+; CHECK-NEXT:    MOV B, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV C, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV D, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV E, M
 ; CHECK-NEXT:    LXI H, 4
 ; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    LXI H, 9
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
-; CHECK-NEXT:    LXI H, 5
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    LXI H, 10
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
-; CHECK-NEXT:    LXI H, 6
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    LXI H, 11
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
-; CHECK-NEXT:    LXI H, 7
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, A
+; CHECK-NEXT:    MOV M, B
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, C
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, D
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, E
 ; CHECK-NEXT:    LXI H, 18
 ; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
+; CHECK-NEXT:    MOV B, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV C, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV D, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV E, M
 ; CHECK-NEXT:    LXI H, 8
 ; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    LXI H, 19
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
-; CHECK-NEXT:    LXI H, 9
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    LXI H, 20
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
-; CHECK-NEXT:    LXI H, 10
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    LXI H, 21
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
-; CHECK-NEXT:    LXI H, 11
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    LXI H, 8
-; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    MOV M, B
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, C
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, D
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, E
+; CHECK-NEXT:    DCX H
+; CHECK-NEXT:    DCX H
+; CHECK-NEXT:    DCX H
 ; CHECK-NEXT:    MOV A, M
 ; CHECK-NEXT:    LXI H, 0
 ; CHECK-NEXT:    DAD SP
@@ -597,32 +590,66 @@ define i1 @fcmp_eq_f32(float %a, float %b) {
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    MOV M, A
 ; CHECK-NEXT:    CALL __eqsf2
-; CHECK-NEXT:    MOV A, C
-; CHECK-NEXT:    ORA E
-; CHECK-NEXT:    MOV C, A
-; CHECK-NEXT:    MOV A, B
-; CHECK-NEXT:    ORA D
-; CHECK-NEXT:    MOV B, A
-; CHECK-NEXT:    LXI H, 0
-; CHECK-NEXT:    MVI D, 1
-; CHECK-NEXT:    MOV A, B
-; CHECK-NEXT:    CMP H
-; CHECK-NEXT:    JNZ LBB4_3
-; CHECK-NEXT:  LBB4_1:
-; CHECK-NEXT:    MOV A, C
-; CHECK-NEXT:    CMP L
-; CHECK-NEXT:    JNZ LBB4_3
-; CHECK-NEXT:  LBB4_2:
-; CHECK-NEXT:    JMP LBB4_4
-; CHECK-NEXT:  LBB4_3:
+; CHECK-NEXT:    LXI H, 8
+; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    MOV M, C
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, B
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, E
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, D
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MVI M, 0
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MVI M, 0
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MVI M, 0
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MVI M, 0
+; CHECK-NEXT:    MVI B, 1
+; CHECK-NEXT:    DCX H
+; CHECK-NEXT:    DCX H
+; CHECK-NEXT:    DCX H
+; CHECK-NEXT:    MOV A, M
+; CHECK-NEXT:    LXI H, 8
+; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    CMP M
+; CHECK-NEXT:    JNZ LBB4_6
+; CHECK-NEXT:  ; %bb.1:
+; CHECK-NEXT:    LXI H, 13
+; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    MOV A, M
+; CHECK-NEXT:    LXI H, 9
+; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    CMP M
+; CHECK-NEXT:    JNZ LBB4_6
+; CHECK-NEXT:  ; %bb.2:
+; CHECK-NEXT:    LXI H, 14
+; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    MOV A, M
+; CHECK-NEXT:    LXI H, 10
+; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    CMP M
+; CHECK-NEXT:    JNZ LBB4_6
+; CHECK-NEXT:  ; %bb.3:
+; CHECK-NEXT:    LXI H, 15
+; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    MOV A, M
+; CHECK-NEXT:    LXI H, 11
+; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    CMP M
+; CHECK-NEXT:    JNZ LBB4_6
+; CHECK-NEXT:  ; %bb.4:
+; CHECK-NEXT:    JMP LBB4_5
+; CHECK-NEXT:  LBB4_6:
+; CHECK-NEXT:    MVI B, 0
 ; CHECK-NEXT:  LBB4_5:
-; CHECK-NEXT:    MVI D, 0
-; CHECK-NEXT:  LBB4_4:
-; CHECK-NEXT:    MOV A, D
+; CHECK-NEXT:    MOV A, B
 ; CHECK-NEXT:    LXI H, 16
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    SPHL
-; CHECK-NEXT:    .cfi_adjust_cfa_offset 4294967280
+; CHECK-NEXT:    .cfi_adjust_cfa_offset -16
 ; CHECK-NEXT:    RET
   %r = fcmp oeq float %a, %b
   ret i1 %r
@@ -631,7 +658,7 @@ define i1 @fcmp_eq_f32(float %a, float %b) {
 define i1 @fcmp_lt_f32(float %a, float %b) {
 ; CHECK-LABEL: fcmp_lt_f32:
 ; CHECK:         .cfi_startproc
-; CHECK-NEXT:  LBB5_0:
+; CHECK-NEXT:  ; %bb.0:
 ; CHECK-NEXT:    ; implicit-def: $iax
 ; CHECK-NEXT:    ; implicit-def: $ibx
 ; CHECK-NEXT:    LXI H, 65520
@@ -640,78 +667,62 @@ define i1 @fcmp_lt_f32(float %a, float %b) {
 ; CHECK-NEXT:    .cfi_adjust_cfa_offset 16
 ; CHECK-NEXT:    LXI H, 22
 ; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
+; CHECK-NEXT:    MOV B, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV C, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV D, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV E, M
 ; CHECK-NEXT:    LXI H, 8
 ; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    LXI H, 23
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
-; CHECK-NEXT:    LXI H, 9
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    LXI H, 24
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
-; CHECK-NEXT:    LXI H, 10
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    LXI H, 25
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
-; CHECK-NEXT:    LXI H, 11
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    LXI H, 8
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
+; CHECK-NEXT:    MOV M, B
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, C
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, D
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, E
+; CHECK-NEXT:    DCX H
+; CHECK-NEXT:    DCX H
+; CHECK-NEXT:    DCX H
+; CHECK-NEXT:    MOV B, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV C, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV D, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV E, M
 ; CHECK-NEXT:    LXI H, 4
 ; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    LXI H, 9
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
-; CHECK-NEXT:    LXI H, 5
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    LXI H, 10
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
-; CHECK-NEXT:    LXI H, 6
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    LXI H, 11
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
-; CHECK-NEXT:    LXI H, 7
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, A
+; CHECK-NEXT:    MOV M, B
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, C
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, D
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, E
 ; CHECK-NEXT:    LXI H, 18
 ; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
+; CHECK-NEXT:    MOV B, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV C, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV D, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV E, M
 ; CHECK-NEXT:    LXI H, 8
 ; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    LXI H, 19
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
-; CHECK-NEXT:    LXI H, 9
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    LXI H, 20
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
-; CHECK-NEXT:    LXI H, 10
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    LXI H, 21
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
-; CHECK-NEXT:    LXI H, 11
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    LXI H, 8
-; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    MOV M, B
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, C
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, D
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, E
+; CHECK-NEXT:    DCX H
+; CHECK-NEXT:    DCX H
+; CHECK-NEXT:    DCX H
 ; CHECK-NEXT:    MOV A, M
 ; CHECK-NEXT:    LXI H, 0
 ; CHECK-NEXT:    DAD SP
@@ -750,33 +761,28 @@ define i1 @fcmp_lt_f32(float %a, float %b) {
 ; CHECK-NEXT:    MOV M, E
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    MOV M, D
-; CHECK-NEXT:    LXI H, 12
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MVI M, 0
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    MVI M, 0
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    MVI M, 0
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    MVI M, 0
-; CHECK-NEXT:    LXI H, 15
-; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MVI M, 0
 ; CHECK-NEXT:    MOV A, M
 ; CHECK-NEXT:    LXI H, 11
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    XRA M
 ; CHECK-NEXT:    ANI 128
 ; CHECK-NEXT:    JNZ LBB5_6
-; CHECK-NEXT:  LBB5_1:
-; CHECK-NEXT:    LXI H, 11
-; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:  ; %bb.1:
 ; CHECK-NEXT:    MOV A, M
 ; CHECK-NEXT:    LXI H, 15
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    CMP M
 ; CHECK-NEXT:    JC LBB5_8
 ; CHECK-NEXT:    JNZ LBB5_11
-; CHECK-NEXT:  LBB5_2:
+; CHECK-NEXT:  ; %bb.2:
 ; CHECK-NEXT:    LXI H, 10
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV A, M
@@ -785,7 +791,7 @@ define i1 @fcmp_lt_f32(float %a, float %b) {
 ; CHECK-NEXT:    CMP M
 ; CHECK-NEXT:    JC LBB5_8
 ; CHECK-NEXT:    JNZ LBB5_11
-; CHECK-NEXT:  LBB5_3:
+; CHECK-NEXT:  ; %bb.3:
 ; CHECK-NEXT:    LXI H, 9
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV A, M
@@ -794,7 +800,7 @@ define i1 @fcmp_lt_f32(float %a, float %b) {
 ; CHECK-NEXT:    CMP M
 ; CHECK-NEXT:    JC LBB5_8
 ; CHECK-NEXT:    JNZ LBB5_11
-; CHECK-NEXT:  LBB5_4:
+; CHECK-NEXT:  ; %bb.4:
 ; CHECK-NEXT:    LXI H, 8
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV A, M
@@ -807,8 +813,6 @@ define i1 @fcmp_lt_f32(float %a, float %b) {
 ; CHECK-NEXT:    MVI A, 0
 ; CHECK-NEXT:    JMP LBB5_9
 ; CHECK-NEXT:  LBB5_6:
-; CHECK-NEXT:    LXI H, 11
-; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV A, M
 ; CHECK-NEXT:    ANI 128
 ; CHECK-NEXT:    JZ LBB5_11
@@ -818,7 +822,7 @@ define i1 @fcmp_lt_f32(float %a, float %b) {
 ; CHECK-NEXT:    LXI H, 16
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    SPHL
-; CHECK-NEXT:    .cfi_adjust_cfa_offset 4294967280
+; CHECK-NEXT:    .cfi_adjust_cfa_offset -16
 ; CHECK-NEXT:    RET
   %r = fcmp olt float %a, %b
   ret i1 %r
@@ -827,7 +831,7 @@ define i1 @fcmp_lt_f32(float %a, float %b) {
 define i1 @fcmp_gt_f32(float %a, float %b) {
 ; CHECK-LABEL: fcmp_gt_f32:
 ; CHECK:         .cfi_startproc
-; CHECK-NEXT:  LBB6_0:
+; CHECK-NEXT:  ; %bb.0:
 ; CHECK-NEXT:    ; implicit-def: $iax
 ; CHECK-NEXT:    ; implicit-def: $ibx
 ; CHECK-NEXT:    LXI H, 65520
@@ -836,78 +840,62 @@ define i1 @fcmp_gt_f32(float %a, float %b) {
 ; CHECK-NEXT:    .cfi_adjust_cfa_offset 16
 ; CHECK-NEXT:    LXI H, 22
 ; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
+; CHECK-NEXT:    MOV B, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV C, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV D, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV E, M
 ; CHECK-NEXT:    LXI H, 8
 ; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    LXI H, 23
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
-; CHECK-NEXT:    LXI H, 9
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    LXI H, 24
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
-; CHECK-NEXT:    LXI H, 10
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    LXI H, 25
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
-; CHECK-NEXT:    LXI H, 11
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    LXI H, 8
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
+; CHECK-NEXT:    MOV M, B
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, C
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, D
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, E
+; CHECK-NEXT:    DCX H
+; CHECK-NEXT:    DCX H
+; CHECK-NEXT:    DCX H
+; CHECK-NEXT:    MOV B, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV C, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV D, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV E, M
 ; CHECK-NEXT:    LXI H, 4
 ; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    LXI H, 9
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
-; CHECK-NEXT:    LXI H, 5
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    LXI H, 10
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
-; CHECK-NEXT:    LXI H, 6
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    LXI H, 11
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
-; CHECK-NEXT:    LXI H, 7
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, A
+; CHECK-NEXT:    MOV M, B
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, C
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, D
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, E
 ; CHECK-NEXT:    LXI H, 18
 ; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
+; CHECK-NEXT:    MOV B, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV C, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV D, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV E, M
 ; CHECK-NEXT:    LXI H, 8
 ; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    LXI H, 19
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
-; CHECK-NEXT:    LXI H, 9
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    LXI H, 20
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
-; CHECK-NEXT:    LXI H, 10
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    LXI H, 21
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
-; CHECK-NEXT:    LXI H, 11
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    LXI H, 8
-; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    MOV M, B
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, C
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, D
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, E
+; CHECK-NEXT:    DCX H
+; CHECK-NEXT:    DCX H
+; CHECK-NEXT:    DCX H
 ; CHECK-NEXT:    MOV A, M
 ; CHECK-NEXT:    LXI H, 0
 ; CHECK-NEXT:    DAD SP
@@ -946,24 +934,21 @@ define i1 @fcmp_gt_f32(float %a, float %b) {
 ; CHECK-NEXT:    MOV M, E
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    MOV M, D
-; CHECK-NEXT:    LXI H, 12
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MVI M, 0
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    MVI M, 0
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    MVI M, 0
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    MVI M, 0
-; CHECK-NEXT:    LXI H, 15
-; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MVI M, 0
 ; CHECK-NEXT:    MOV A, M
 ; CHECK-NEXT:    LXI H, 11
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    XRA M
 ; CHECK-NEXT:    ANI 128
 ; CHECK-NEXT:    JNZ LBB6_6
-; CHECK-NEXT:  LBB6_1:
+; CHECK-NEXT:  ; %bb.1:
 ; CHECK-NEXT:    LXI H, 15
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV A, M
@@ -972,27 +957,30 @@ define i1 @fcmp_gt_f32(float %a, float %b) {
 ; CHECK-NEXT:    CMP M
 ; CHECK-NEXT:    JC LBB6_7
 ; CHECK-NEXT:    JNZ LBB6_11
-; CHECK-NEXT:  LBB6_2:
-; CHECK-NEXT:    LXI H, 14
-; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:  ; %bb.2:
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    MOV A, M
 ; CHECK-NEXT:    LXI H, 10
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    CMP M
 ; CHECK-NEXT:    JC LBB6_7
 ; CHECK-NEXT:    JNZ LBB6_11
-; CHECK-NEXT:  LBB6_3:
-; CHECK-NEXT:    LXI H, 13
-; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:  ; %bb.3:
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    MOV A, M
 ; CHECK-NEXT:    LXI H, 9
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    CMP M
 ; CHECK-NEXT:    JC LBB6_7
 ; CHECK-NEXT:    JNZ LBB6_11
-; CHECK-NEXT:  LBB6_4:
-; CHECK-NEXT:    LXI H, 12
-; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:  ; %bb.4:
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    MOV A, M
 ; CHECK-NEXT:    LXI H, 8
 ; CHECK-NEXT:    DAD SP
@@ -1003,8 +991,6 @@ define i1 @fcmp_gt_f32(float %a, float %b) {
 ; CHECK-NEXT:    MVI A, 0
 ; CHECK-NEXT:    JMP LBB6_8
 ; CHECK-NEXT:  LBB6_6:
-; CHECK-NEXT:    LXI H, 11
-; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV A, M
 ; CHECK-NEXT:    ANI 128
 ; CHECK-NEXT:    JNZ LBB6_11
@@ -1014,7 +1000,7 @@ define i1 @fcmp_gt_f32(float %a, float %b) {
 ; CHECK-NEXT:    LXI H, 16
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    SPHL
-; CHECK-NEXT:    .cfi_adjust_cfa_offset 4294967280
+; CHECK-NEXT:    .cfi_adjust_cfa_offset -16
 ; CHECK-NEXT:    RET
   %r = fcmp ogt float %a, %b
   ret i1 %r
@@ -1023,38 +1009,33 @@ define i1 @fcmp_gt_f32(float %a, float %b) {
 define float @sitofp_i32(i32 %a) {
 ; CHECK-LABEL: sitofp_i32:
 ; CHECK:         .cfi_startproc
-; CHECK-NEXT:  LBB7_0:
+; CHECK-NEXT:  ; %bb.0:
 ; CHECK-NEXT:    ; implicit-def: $iax
-; CHECK-NEXT:    LXI H, 65524
+; CHECK-NEXT:    LXI H, 65528
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    SPHL
-; CHECK-NEXT:    .cfi_adjust_cfa_offset 12
-; CHECK-NEXT:    LXI H, 14
+; CHECK-NEXT:    .cfi_adjust_cfa_offset 8
+; CHECK-NEXT:    LXI H, 10
 ; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
+; CHECK-NEXT:    MOV B, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV C, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV D, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV E, M
 ; CHECK-NEXT:    LXI H, 4
 ; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    LXI H, 15
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
-; CHECK-NEXT:    LXI H, 5
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    LXI H, 16
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
-; CHECK-NEXT:    LXI H, 6
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    LXI H, 17
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
-; CHECK-NEXT:    LXI H, 7
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    LXI H, 4
-; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    MOV M, B
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, C
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, D
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, E
+; CHECK-NEXT:    DCX H
+; CHECK-NEXT:    DCX H
+; CHECK-NEXT:    DCX H
 ; CHECK-NEXT:    MOV A, M
 ; CHECK-NEXT:    LXI H, 0
 ; CHECK-NEXT:    DAD SP
@@ -1084,10 +1065,28 @@ define float @sitofp_i32(i32 %a) {
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    MOV M, A
 ; CHECK-NEXT:    CALL __floatsisf
-; CHECK-NEXT:    LXI H, 12
+; CHECK-NEXT:    LXI H, 4
 ; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    MOV M, C
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, B
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, E
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, D
+; CHECK-NEXT:    DCX H
+; CHECK-NEXT:    DCX H
+; CHECK-NEXT:    DCX H
+; CHECK-NEXT:    MOV C, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV B, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV E, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV D, M
+; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    SPHL
-; CHECK-NEXT:    .cfi_adjust_cfa_offset 4294967284
+; CHECK-NEXT:    .cfi_adjust_cfa_offset -8
 ; CHECK-NEXT:    RET
   %r = sitofp i32 %a to float
   ret float %r
@@ -1096,38 +1095,33 @@ define float @sitofp_i32(i32 %a) {
 define float @uitofp_i32(i32 %a) {
 ; CHECK-LABEL: uitofp_i32:
 ; CHECK:         .cfi_startproc
-; CHECK-NEXT:  LBB8_0:
+; CHECK-NEXT:  ; %bb.0:
 ; CHECK-NEXT:    ; implicit-def: $iax
-; CHECK-NEXT:    LXI H, 65524
+; CHECK-NEXT:    LXI H, 65528
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    SPHL
-; CHECK-NEXT:    .cfi_adjust_cfa_offset 12
-; CHECK-NEXT:    LXI H, 14
+; CHECK-NEXT:    .cfi_adjust_cfa_offset 8
+; CHECK-NEXT:    LXI H, 10
 ; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
+; CHECK-NEXT:    MOV B, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV C, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV D, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV E, M
 ; CHECK-NEXT:    LXI H, 4
 ; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    LXI H, 15
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
-; CHECK-NEXT:    LXI H, 5
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    LXI H, 16
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
-; CHECK-NEXT:    LXI H, 6
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    LXI H, 17
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
-; CHECK-NEXT:    LXI H, 7
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    LXI H, 4
-; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    MOV M, B
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, C
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, D
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, E
+; CHECK-NEXT:    DCX H
+; CHECK-NEXT:    DCX H
+; CHECK-NEXT:    DCX H
 ; CHECK-NEXT:    MOV A, M
 ; CHECK-NEXT:    LXI H, 0
 ; CHECK-NEXT:    DAD SP
@@ -1157,10 +1151,28 @@ define float @uitofp_i32(i32 %a) {
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    MOV M, A
 ; CHECK-NEXT:    CALL __floatunsisf
-; CHECK-NEXT:    LXI H, 12
+; CHECK-NEXT:    LXI H, 4
 ; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    MOV M, C
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, B
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, E
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, D
+; CHECK-NEXT:    DCX H
+; CHECK-NEXT:    DCX H
+; CHECK-NEXT:    DCX H
+; CHECK-NEXT:    MOV C, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV B, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV E, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV D, M
+; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    SPHL
-; CHECK-NEXT:    .cfi_adjust_cfa_offset 4294967284
+; CHECK-NEXT:    .cfi_adjust_cfa_offset -8
 ; CHECK-NEXT:    RET
   %r = uitofp i32 %a to float
   ret float %r
@@ -1169,38 +1181,33 @@ define float @uitofp_i32(i32 %a) {
 define i32 @fptosi_i32(float %a) {
 ; CHECK-LABEL: fptosi_i32:
 ; CHECK:         .cfi_startproc
-; CHECK-NEXT:  LBB9_0:
+; CHECK-NEXT:  ; %bb.0:
 ; CHECK-NEXT:    ; implicit-def: $iax
-; CHECK-NEXT:    LXI H, 65524
+; CHECK-NEXT:    LXI H, 65528
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    SPHL
-; CHECK-NEXT:    .cfi_adjust_cfa_offset 12
-; CHECK-NEXT:    LXI H, 14
+; CHECK-NEXT:    .cfi_adjust_cfa_offset 8
+; CHECK-NEXT:    LXI H, 10
 ; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
+; CHECK-NEXT:    MOV B, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV C, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV D, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV E, M
 ; CHECK-NEXT:    LXI H, 4
 ; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    LXI H, 15
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
-; CHECK-NEXT:    LXI H, 5
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    LXI H, 16
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
-; CHECK-NEXT:    LXI H, 6
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    LXI H, 17
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
-; CHECK-NEXT:    LXI H, 7
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    LXI H, 4
-; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    MOV M, B
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, C
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, D
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, E
+; CHECK-NEXT:    DCX H
+; CHECK-NEXT:    DCX H
+; CHECK-NEXT:    DCX H
 ; CHECK-NEXT:    MOV A, M
 ; CHECK-NEXT:    LXI H, 0
 ; CHECK-NEXT:    DAD SP
@@ -1230,10 +1237,28 @@ define i32 @fptosi_i32(float %a) {
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    MOV M, A
 ; CHECK-NEXT:    CALL __fixsfsi
-; CHECK-NEXT:    LXI H, 12
+; CHECK-NEXT:    LXI H, 4
 ; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    MOV M, C
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, B
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, E
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, D
+; CHECK-NEXT:    DCX H
+; CHECK-NEXT:    DCX H
+; CHECK-NEXT:    DCX H
+; CHECK-NEXT:    MOV C, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV B, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV E, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV D, M
+; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    SPHL
-; CHECK-NEXT:    .cfi_adjust_cfa_offset 4294967284
+; CHECK-NEXT:    .cfi_adjust_cfa_offset -8
 ; CHECK-NEXT:    RET
   %r = fptosi float %a to i32
   ret i32 %r
@@ -1242,38 +1267,33 @@ define i32 @fptosi_i32(float %a) {
 define i32 @fptoui_i32(float %a) {
 ; CHECK-LABEL: fptoui_i32:
 ; CHECK:         .cfi_startproc
-; CHECK-NEXT:  LBB10_0:
+; CHECK-NEXT:  ; %bb.0:
 ; CHECK-NEXT:    ; implicit-def: $iax
-; CHECK-NEXT:    LXI H, 65524
+; CHECK-NEXT:    LXI H, 65528
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    SPHL
-; CHECK-NEXT:    .cfi_adjust_cfa_offset 12
-; CHECK-NEXT:    LXI H, 14
+; CHECK-NEXT:    .cfi_adjust_cfa_offset 8
+; CHECK-NEXT:    LXI H, 10
 ; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
+; CHECK-NEXT:    MOV B, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV C, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV D, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV E, M
 ; CHECK-NEXT:    LXI H, 4
 ; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    LXI H, 15
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
-; CHECK-NEXT:    LXI H, 5
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    LXI H, 16
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
-; CHECK-NEXT:    LXI H, 6
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    LXI H, 17
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV A, M
-; CHECK-NEXT:    LXI H, 7
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, A
-; CHECK-NEXT:    LXI H, 4
-; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    MOV M, B
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, C
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, D
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, E
+; CHECK-NEXT:    DCX H
+; CHECK-NEXT:    DCX H
+; CHECK-NEXT:    DCX H
 ; CHECK-NEXT:    MOV A, M
 ; CHECK-NEXT:    LXI H, 0
 ; CHECK-NEXT:    DAD SP
@@ -1303,10 +1323,28 @@ define i32 @fptoui_i32(float %a) {
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    MOV M, A
 ; CHECK-NEXT:    CALL __fixunssfsi
-; CHECK-NEXT:    LXI H, 12
+; CHECK-NEXT:    LXI H, 4
 ; CHECK-NEXT:    DAD SP
+; CHECK-NEXT:    MOV M, C
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, B
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, E
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV M, D
+; CHECK-NEXT:    DCX H
+; CHECK-NEXT:    DCX H
+; CHECK-NEXT:    DCX H
+; CHECK-NEXT:    MOV C, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV B, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV E, M
+; CHECK-NEXT:    INX H
+; CHECK-NEXT:    MOV D, M
+; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    SPHL
-; CHECK-NEXT:    .cfi_adjust_cfa_offset 4294967284
+; CHECK-NEXT:    .cfi_adjust_cfa_offset -8
 ; CHECK-NEXT:    RET
   %r = fptoui float %a to i32
   ret i32 %r

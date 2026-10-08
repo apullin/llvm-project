@@ -15,6 +15,7 @@
 
 #include "llvm/Analysis/TargetTransformInfo.h"
 #include "llvm/IR/DataLayout.h"
+#include "llvm/Passes/PassBuilder.h"
 #include "llvm/Target/TargetMachine.h"
 
 #include "I8085FrameLowering.h"
@@ -40,7 +41,10 @@ public:
     return this->TLOF.get();
   }
 
+  bool useIPRA() const override { return true; }
+
   TargetPassConfig *createPassConfig(PassManagerBase &PM) override;
+  void registerPassBuilderCallbacks(PassBuilder &PB) override;
   TargetTransformInfo getTargetTransformInfo(const Function &F) const override;
 
   MachineFunctionInfo *

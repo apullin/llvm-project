@@ -18,6 +18,8 @@
 #include "I8085TargetMachine.h"
 #include "MCTargetDesc/I8085MCTargetDesc.h"
 
+#include "llvm/ADT/SmallPtrSet.h"
+#include "llvm/ADT/SmallVector.h"
 #include "llvm/CodeGen/MachineFrameInfo.h"
 #include "llvm/CodeGen/MachineFunction.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
@@ -38,9 +40,6 @@ I8085FrameLowering::I8085FrameLowering()
     : TargetFrameLowering(TargetFrameLowering::StackGrowsDown, Align(1), -2) {}
 
 static Align getStackRealignAlignment(const MachineFunction &MF) {
-  if (!MF.getFunction().hasFnAttribute("stackrealign"))
-    return Align(1);
-
   const MachineFrameInfo &MFI = MF.getFrameInfo();
   Align MaxAlign = MFI.getMaxAlign();
   Align StackAlign = MF.getSubtarget<I8085Subtarget>()
@@ -154,6 +153,11 @@ void I8085FrameLowering::emitPrologue(MachineFunction &MF,
 
   const MachineFrameInfo &MFI = MF.getFrameInfo();
   unsigned FrameSize = MFI.getStackSize() - AFI->getCalleeSavedFrameSize();
+  // Realignment establishes an aligned CFA origin, not the entry SP (which
+  // is two bytes below its CFA). Keep frame-index offsets relative to that
+  // origin, including the local-area and callee-save portions of the layout.
+  if (AFI->hasStackRealign())
+    FrameSize = MFI.getStackSize() - getOffsetOfLocalArea();
 
   // Skip the callee-saved push instructions.
   while (
@@ -163,6 +167,12 @@ void I8085FrameLowering::emitPrologue(MachineFunction &MF,
   
   /*Prologue sequence for 8085 processor */ 
   bool NeedsBasePtr = MFI.hasVarSizedObjects();
+  bool SaveIncomingBC = AFI->hasStackRealign() &&
+      llvm::any_of(AFI->getIncomingRegSaveSlots(), [](auto Slot) {
+        return Slot.first == I8085::BC || Slot.first == I8085::C;
+      });
+  if (SaveIncomingBC)
+    BuildMI(MBB, MBBI, DL, TII.get(I8085::PUSH)).addReg(I8085::BC);
   if (AFI->hasStackRealign()) {
     Align Realign = getStackRealignAlignment(MF);
     unsigned AlignBytes = Realign.value();
@@ -181,6 +191,10 @@ void I8085FrameLowering::emitPrologue(MachineFunction &MF,
         .addReg(I8085::H);
     BuildMI(MBB, MBBI, DL, TII.get(I8085::MOV), ScratchLow)
         .addReg(I8085::L);
+    if (SaveIncomingBC) {
+      BuildMI(MBB, MBBI, DL, TII.get(I8085::INX), I8085::BC);
+      BuildMI(MBB, MBBI, DL, TII.get(I8085::INX), I8085::BC);
+    }
     BuildMI(MBB, MBBI, DL, TII.get(I8085::MOV), I8085::A)
         .addReg(I8085::L);
     BuildMI(MBB, MBBI, DL, TII.get(I8085::ANI)).addImm(Mask);
@@ -201,6 +215,32 @@ void I8085FrameLowering::emitPrologue(MachineFunction &MF,
 
   }
 
+  auto FrameOffset = [&](int FI) {
+    return MFI.getObjectOffset(FI) + MFI.getStackSize() - getOffsetOfLocalArea();
+  };
+  if (AFI->hasStackRealignSaveFI()) {
+    BuildMI(MBB, MBBI, DL, TII.get(I8085::STORE_16))
+        .addReg(I8085::SP)
+        .addImm(FrameOffset(AFI->getStackRealignSaveFI()))
+        .addReg(I8085::BC);
+  }
+  if (SaveIncomingBC) {
+    BuildMI(MBB, MBBI, DL, TII.get(I8085::MOV), I8085::H).addReg(I8085::B);
+    BuildMI(MBB, MBBI, DL, TII.get(I8085::MOV), I8085::L).addReg(I8085::C);
+    BuildMI(MBB, MBBI, DL, TII.get(I8085::DCX), I8085::HL);
+    BuildMI(MBB, MBBI, DL, TII.get(I8085::DCX), I8085::HL);
+    BuildMI(MBB, MBBI, DL, TII.get(I8085::MOV_FROM_M), I8085::A);
+    BuildMI(MBB, MBBI, DL, TII.get(I8085::INX), I8085::HL);
+    BuildMI(MBB, MBBI, DL, TII.get(I8085::MOV_FROM_M), I8085::B);
+    BuildMI(MBB, MBBI, DL, TII.get(I8085::MOV), I8085::C).addReg(I8085::A);
+  }
+  for (auto [Reg, FI] : AFI->getIncomingRegSaveSlots()) {
+    MBB.addLiveIn(Reg);
+    unsigned Opc = MFI.getObjectSize(FI) == 1 ? I8085::STORE_8 : I8085::STORE_16;
+    BuildMI(MBB, MBBI, DL, TII.get(Opc))
+        .addReg(I8085::SP).addImm(FrameOffset(FI)).addReg(Reg);
+  }
+
   if (NeedsBasePtr) {
     BuildMI(MBB, MBBI, DL, TII.get(I8085::LXI), I8085::HL).addImm(0);
     BuildMI(MBB, MBBI, DL, TII.get(I8085::DAD)).addReg(I8085::SP);
@@ -208,13 +248,6 @@ void I8085FrameLowering::emitPrologue(MachineFunction &MF,
         .addReg(I8085::H);
     BuildMI(MBB, MBBI, DL, TII.get(I8085::MOV), I8085::E)
         .addReg(I8085::L);
-  }
-
-  if (AFI->hasStackRealignSaveFI()) {
-    BuildMI(MBB, MBBI, DL, TII.get(I8085::STORE_16))
-        .addFrameIndex(AFI->getStackRealignSaveFI())
-        .addImm(0)
-        .addReg(I8085::BC);
   }
 
   if (EmitCFI) {
@@ -285,18 +318,70 @@ void I8085FrameLowering::emitEpilogue(MachineFunction &MF,
   MBBI = FirstCSPop;
   DL = MBBI->getDebugLoc();
 
+  // An i32 return overwrites DE, which is also the fixed-frame base in a VLA
+  // function. Return lowering places this marker before materializing BC:DE.
+  // Save the base on the dynamic stack and recover it after the return value
+  // is ready, avoiding assumptions about the register allocator's copy shape.
+  bool BaseSavedForReturn = false;
+  if (MFI.hasVarSizedObjects()) {
+    MachineBasicBlock::iterator SaveMarker = MBB.end();
+    for (auto I = MBB.begin(); I != MBBI; ++I) {
+      if (I->getOpcode() != I8085::SAVE_VLA_BASE_FOR_RET)
+        continue;
+      assert(SaveMarker == MBB.end() &&
+             "multiple VLA base-save markers in one return block");
+      SaveMarker = I;
+    }
+    if (SaveMarker != MBB.end()) {
+      BuildMI(MBB, SaveMarker, SaveMarker->getDebugLoc(), TII.get(I8085::PUSH))
+          .addReg(I8085::DE);
+      MBB.erase(SaveMarker);
+      BaseSavedForReturn = true;
+    }
+  }
+
   if (AFI->hasStackRealignSaveFI()) {
-    BuildMI(MBB, MBBI, DL, TII.get(I8085::LOAD_16_WITH_ADDR), I8085::HL)
-        .addFrameIndex(AFI->getStackRealignSaveFI())
-        .addImm(0);
+    if (BaseSavedForReturn) {
+      // Recover the fixed-frame base without clobbering either half of the
+      // BC:DE return value, then load the pre-realignment SP directly via HL.
+      BuildMI(MBB, MBBI, DL, TII.get(I8085::POP), I8085::HL);
+
+      int64_t Offset = MFI.getObjectOffset(AFI->getStackRealignSaveFI());
+      Offset += MFI.getStackSize() - getOffsetOfLocalArea();
+      if (!isInt<16>(Offset))
+        report_fatal_error("I8085 stack-realignment save offset out of range");
+      if (Offset != 0) {
+        uint16_t EncodedOffset = static_cast<uint16_t>(Offset);
+        BuildMI(MBB, MBBI, DL, TII.get(I8085::MOV), I8085::A).addReg(I8085::L);
+        BuildMI(MBB, MBBI, DL, TII.get(I8085::ADI))
+            .addImm(EncodedOffset & 0xff);
+        BuildMI(MBB, MBBI, DL, TII.get(I8085::MOV), I8085::L).addReg(I8085::A);
+        BuildMI(MBB, MBBI, DL, TII.get(I8085::MOV), I8085::A).addReg(I8085::H);
+        BuildMI(MBB, MBBI, DL, TII.get(I8085::ACI)).addImm(EncodedOffset >> 8);
+        BuildMI(MBB, MBBI, DL, TII.get(I8085::MOV), I8085::H).addReg(I8085::A);
+      }
+      BuildMI(MBB, MBBI, DL, TII.get(I8085::MOV_FROM_M), I8085::A);
+      BuildMI(MBB, MBBI, DL, TII.get(I8085::INX), I8085::HL)
+          .addReg(I8085::HL, RegState::Implicit);
+      BuildMI(MBB, MBBI, DL, TII.get(I8085::MOV_FROM_M), I8085::H);
+      BuildMI(MBB, MBBI, DL, TII.get(I8085::MOV), I8085::L).addReg(I8085::A);
+    } else {
+      BuildMI(MBB, MBBI, DL, TII.get(I8085::LOAD_16_WITH_ADDR), I8085::HL)
+          .addFrameIndex(AFI->getStackRealignSaveFI())
+          .addImm(0);
+    }
     BuildMI(MBB, MBBI, DL, TII.get(I8085::SPHL));
     restoreStatusRegister(MF, MBB);
     return;
   }
 
   if (MFI.hasVarSizedObjects()) {
-    BuildMI(MBB, MBBI, DL, TII.get(I8085::MOV), I8085::H).addReg(I8085::D);
-    BuildMI(MBB, MBBI, DL, TII.get(I8085::MOV), I8085::L).addReg(I8085::E);
+    if (BaseSavedForReturn) {
+      BuildMI(MBB, MBBI, DL, TII.get(I8085::POP), I8085::HL);
+    } else {
+      BuildMI(MBB, MBBI, DL, TII.get(I8085::MOV), I8085::H).addReg(I8085::D);
+      BuildMI(MBB, MBBI, DL, TII.get(I8085::MOV), I8085::L).addReg(I8085::E);
+    }
     BuildMI(MBB, MBBI, DL, TII.get(I8085::SPHL));
   }
 
@@ -306,7 +391,8 @@ void I8085FrameLowering::emitEpilogue(MachineFunction &MF,
         .setMIFlag(MachineInstr::FrameDestroy);
     if (EmitCFI) {
       buildCFI(MBB, MBBI, DL,
-               MCCFIInstruction::createAdjustCfaOffset(nullptr, -FrameSize),
+               MCCFIInstruction::createAdjustCfaOffset(
+                   nullptr, -static_cast<int64_t>(FrameSize)),
                MachineInstr::FrameDestroy, TII);
     }
   }
@@ -337,8 +423,8 @@ void I8085FrameLowering::processFunctionBeforeFrameFinalized(
   MachineFrameInfo &MFI = MF.getFrameInfo();
 
   if (needsStackRealign(MF)) {
-    int FI = MFI.CreateStackObject(2, Align(1), false);
-    FuncInfo->setStackRealignSaveFI(FI);
+    if (!FuncInfo->hasStackRealignSaveFI())
+      FuncInfo->setStackRealignSaveFI(MFI.CreateStackObject(2, Align(1), false));
     FuncInfo->setHasStackRealign(true);
     FuncInfo->setHasSpills(true);
   }
@@ -391,63 +477,16 @@ void I8085FrameLowering::processFunctionBeforeFrameFinalized(
   FuncInfo->setHasSpills(true);
 }
 
-// Return true if the specified function should have a dedicated frame
-// pointer register. This is true if the function meets any of the following
-// conditions:
-//  - a register has been spilled
-//  - has allocas
-//  - input arguments are passed using the stack
-//  - stack realignment is required
-//  - variable sized objects exist
-//
-// However, if the user explicitly requests -fomit-frame-pointer (via the
-// "frame-pointer" attribute set to "none"), we can eliminate the frame pointer
-// for leaf functions with small frames that don't need dynamic stack access.
-//
-// Notice that strictly this is not a frame pointer because it contains SP after
-// frame allocation instead of having the original SP in function entry.
+// This target addresses fixed frames through SP, not a dedicated FP register.
+// hasFP also controls frame allocation, so frame-pointer=none must never
+// suppress storage for spills, allocas, or GR32 pseudo registers.
 bool I8085FrameLowering::hasFP(const MachineFunction &MF) const {
   const MachineFrameInfo &MFI = MF.getFrameInfo();
-  const I8085MachineFunctionInfo *FuncInfo = MF.getInfo<I8085MachineFunctionInfo>();
-  const Function &F = MF.getFunction();
-
-  // Always need FP for stack realignment or variable-sized objects
-  if (FuncInfo->hasStackRealign() || MFI.hasVarSizedObjects())
-    return true;
-
-  // Check if the user requested frame pointer omission
-  // The "frame-pointer" attribute can be "all", "non-leaf", or "none"
-  Attribute FPAttr = F.getFnAttribute("frame-pointer");
-  StringRef FPKind = FPAttr.isValid() ? FPAttr.getValueAsString() : "";
-
-  // If frame-pointer=none, try to eliminate the frame pointer when possible
-  if (FPKind == "none") {
-    // We can omit the frame pointer if:
-    // 1. No spills are needed (or only callee-saved register saves via PUSH)
-    // 2. No allocas
-    // 3. No stack arguments are accessed
-    // 4. The frame is small enough that SP-relative addressing works
-
-    // For leaf functions with no local variables, we can definitely omit FP
-    if (!FuncInfo->getHasAllocas() && !FuncInfo->getHasStackArgs() &&
-        MFI.getStackSize() == 0 && !FuncInfo->getHasSpills()) {
-      return false;
-    }
-
-    // For functions with a small fixed frame (up to 255 bytes for efficient
-    // SP-relative addressing via LXI+DAD SP), we can also potentially omit FP
-    // if there are no allocas or stack args that need frame-relative access
-    if (!FuncInfo->getHasAllocas() && !FuncInfo->getHasStackArgs() &&
-        MFI.getStackSize() <= 255) {
-      // The i8085 uses SP-relative addressing (LXI H, offset; DAD SP)
-      // which works well without a dedicated frame pointer
-      return false;
-    }
-  }
-
-  // Default: need FP if there are spills, allocas, or stack args
-  return (FuncInfo->getHasSpills() || FuncInfo->getHasAllocas() ||
-          FuncInfo->getHasStackArgs());
+  const auto *FuncInfo = MF.getInfo<I8085MachineFunctionInfo>();
+  return FuncInfo->hasStackRealign() || MFI.hasVarSizedObjects() ||
+         FuncInfo->getHasSpills() || FuncInfo->getHasAllocas() ||
+         FuncInfo->getHasStackArgs() ||
+         MFI.getStackSize() > FuncInfo->getCalleeSavedFrameSize();
 }
 
 bool I8085FrameLowering::spillCalleeSavedRegisters(
@@ -522,6 +561,60 @@ bool I8085FrameLowering::restoreCalleeSavedRegisters(
   return true;
 }
 
+namespace {
+
+struct CallFrameRegion {
+  bool ContainsCall = false;
+  SmallVector<MachineInstr *, 2> Destroys;
+};
+
+// Call lowering may place a call-frame setup before target pseudos that later
+// split the block. Follow the active call-frame region through the CFG rather
+// than assuming its call and teardown remain in the setup block.
+static CallFrameRegion analyzeCallFrameRegion(MachineInstr &Setup,
+                                              const TargetInstrInfo &TII) {
+  using WorkItem = std::pair<MachineBasicBlock *, MachineBasicBlock::iterator>;
+
+  CallFrameRegion Region;
+  MachineBasicBlock *SetupMBB = Setup.getParent();
+  SmallVector<WorkItem, 4> Worklist;
+  SmallPtrSet<MachineBasicBlock *, 8> Visited;
+  Worklist.emplace_back(SetupMBB, std::next(Setup.getIterator()));
+  Visited.insert(SetupMBB);
+
+  while (!Worklist.empty()) {
+    WorkItem Item = Worklist.pop_back_val();
+    MachineBasicBlock *MBB = Item.first;
+    auto I = Item.second;
+    bool FoundDestroy = false;
+
+    for (auto E = MBB->end(); I != E; ++I) {
+      if (I->isCall()) {
+        Region.ContainsCall = true;
+      }
+
+      if (I->getOpcode() != TII.getCallFrameDestroyOpcode())
+        continue;
+
+      Region.Destroys.push_back(&*I);
+      FoundDestroy = true;
+      break;
+    }
+
+    if (FoundDestroy)
+      continue;
+
+    for (MachineBasicBlock *Succ : MBB->successors()) {
+      if (Visited.insert(Succ).second)
+        Worklist.emplace_back(Succ, Succ->begin());
+    }
+  }
+
+  return Region;
+}
+
+} // end anonymous namespace
+
 MachineBasicBlock::iterator I8085FrameLowering::eliminateCallFramePseudoInstr(
     MachineFunction &MF, MachineBasicBlock &MBB,
     MachineBasicBlock::iterator MI) const {
@@ -539,6 +632,66 @@ MachineBasicBlock::iterator I8085FrameLowering::eliminateCallFramePseudoInstr(
   DebugLoc DL = MI->getDebugLoc();
   unsigned int Opcode = MI->getOpcode();
   int Amount = TII.getFrameSize(*MI);
+  CallFrameRegion Region;
+  if (Opcode == TII.getCallFrameSetupOpcode() &&
+      MF.getFrameInfo().hasVarSizedObjects())
+    Region = analyzeCallFrameRegion(*MI, TII);
+
+  const bool PreserveBasePointer =
+      Region.ContainsCall && !Region.Destroys.empty();
+
+  // DE is reserved as the stable base for fixed frame objects when SP moves
+  // for dynamic allocas.  It is otherwise caller-clobbered by the ABI, so save
+  // it outside the outgoing argument area around every call sequence.
+  if (PreserveBasePointer) {
+    BuildMI(MBB, MI, DL, TII.get(I8085::PUSH)).addReg(I8085::DE);
+    for (MachineInstr *CallFrameDestroy : Region.Destroys) {
+      MachineBasicBlock &RestoreMBB = *CallFrameDestroy->getParent();
+      auto DestroyAt = CallFrameDestroy->getIterator();
+      auto RestoreAt = std::next(DestroyAt);
+      auto ResultCapture = RestoreAt;
+      while (ResultCapture != RestoreMBB.end() && ResultCapture->isDebugInstr())
+        ++ResultCapture;
+
+      // Fast register allocation can insert a reload immediately after CALL,
+      // before CALLSEQ_END. Such a reload will use DE as its frame base after
+      // PEI, but DE still contains the callee clobber at that point. The DAG
+      // always places CALLSEQ_END before post-call work, so move these
+      // allocator-inserted instructions back across the teardown. For an i32
+      // result, place them after the atomic BC:DE capture as well.
+      MachineBasicBlock::iterator CallAt = RestoreMBB.end();
+      for (auto I = DestroyAt; I != RestoreMBB.begin();) {
+        --I;
+        if (I->isCall()) {
+          CallAt = I;
+          break;
+        }
+        if (I->getOpcode() == TII.getCallFrameSetupOpcode())
+          break;
+      }
+
+      if (CallAt != RestoreMBB.end() && std::next(CallAt) != DestroyAt) {
+        auto MoveBefore =
+            ResultCapture != RestoreMBB.end() &&
+                    ResultCapture->getOpcode() == I8085::PACK_BCDE_TO_32
+                ? std::next(ResultCapture)
+                : RestoreAt;
+        RestoreMBB.splice(MoveBefore, &RestoreMBB, std::next(CallAt),
+                          DestroyAt);
+      }
+
+      if (ResultCapture != RestoreMBB.end() &&
+          ResultCapture->getOpcode() == I8085::PACK_BCDE_TO_32) {
+        BuildMI(RestoreMBB, std::next(ResultCapture),
+                ResultCapture->getDebugLoc(),
+                TII.get(I8085::RESTORE_VLA_BASE_AFTER_PACK));
+      } else {
+        BuildMI(RestoreMBB, std::next(DestroyAt),
+                CallFrameDestroy->getDebugLoc(), TII.get(I8085::POP),
+                I8085::DE);
+      }
+    }
+  }
 
   // ADJCALLSTACKUP and ADJCALLSTACKDOWN are converted to adiw/subi
   // instructions to read and write the stack pointer in I/O space.

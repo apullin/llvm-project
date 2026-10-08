@@ -1,0 +1,292 @@
+# RUN: llc -O2 -mtriple=i8085-unknown-elf -run-pass=i8085-static-scratch -i8085-static-scratch-bytes=8 %s -o - | FileCheck %s
+# RUN: llc -O2 -mtriple=i8085-unknown-elf -run-pass=i8085-static-scratch -i8085-static-scratch-bytes=8 -i8085-static-scratch-skip-function=spill8 %s -o - | FileCheck %s --check-prefix=SKIP
+# RUN: llc -O2 -mtriple=i8085-unknown-elf -run-pass=i8085-static-scratch -i8085-static-scratch-bytes=8 -i8085-static-scratch-only-function=spill8 %s -o - | FileCheck %s --check-prefix=ONLY
+# RUN: llc -O2 -mtriple=i8085-unknown-elf -run-pass=i8085-static-scratch -i8085-static-scratch-bytes=8 -i8085-static-scratch-only-frame-index=1 %s -o - | FileCheck %s --check-prefix=ONLYFI
+# RUN: llc -O2 -mtriple=i8085-unknown-elf -run-pass=i8085-static-scratch -i8085-static-scratch-bytes=8 -i8085-static-scratch-assume-nonreentrant-function=unknown_call_mixed -i8085-static-scratch-assume-nonreentrant-function=direct_recursive %s -o - | FileCheck %s --check-prefix=ASSUME
+# RUN: llc -O2 -mtriple=i8085-unknown-elf -run-pass=i8085-static-scratch -i8085-static-scratch-bytes=8 -i8085-static-scratch-assume-nonreentrant %s -o - | FileCheck %s --check-prefix=GLOBAL
+# RUN: llc -O2 -mtriple=i8085-unknown-elf -run-pass=i8085-static-scratch -i8085-static-scratch-bytes=8 -i8085-static-scratch-unsafe-recursive %s -o - | FileCheck %s --check-prefix=UNSAFE
+# RUN: llc -O2 -mtriple=i8085-unknown-elf -run-pass=i8085-static-scratch -i8085-static-scratch-bytes=8 -i8085-static-scratch-unsafe-recursive -i8085-static-scratch-allow-known-recursive %s -o - | FileCheck %s --check-prefix=ALLOW
+
+# CHECK: @__i8085_static_scratch.spill8.0 = private global [1 x i8] zeroinitializer, section ".bss.i8085.scratch", align 1
+
+--- |
+  target triple = "i8085-unknown-elf"
+
+  define void @spill8() #0 { ret void }
+  define void @spill16() #0 { ret void }
+  define void @two_slots() #0 { ret void }
+  define void @unknown_nonrecursive() { ret void }
+  define void @unknown_call_mixed() {
+    call void @external_callee()
+    ret void
+  }
+  define void @unknown_attr_nonreentrant() #1 {
+    call void @external_callee()
+    ret void
+  }
+  define void @norecurse_live_across_call() #0 {
+    call void @external_callee()
+    ret void
+  }
+  declare void @external_callee()
+  define void @direct_recursive() {
+    call void @direct_recursive()
+    ret void
+  }
+  define void @mutual_a() {
+    call void @mutual_b()
+    ret void
+  }
+  define void @mutual_b() {
+    call void @mutual_a()
+    ret void
+  }
+
+  attributes #0 = { norecurse }
+  attributes #1 = { "i8085-nonreentrant" }
+...
+
+---
+name:            spill8
+tracksRegLiveness: true
+stack:
+  - { id: 0, type: spill-slot, size: 1, alignment: 1 }
+body:             |
+  bb.0:
+    liveins: $a
+
+    ; CHECK-LABEL: name:            spill8
+    ; CHECK: STORE_8_STATIC_ADDR @__i8085_static_scratch.spill8.0
+    ; CHECK: $a = LOAD_8_STATIC_ADDR @__i8085_static_scratch.spill8.0
+    ; CHECK-NOT: %stack.0
+    ; SKIP-LABEL: name:            spill8
+    ; SKIP: STORE_8 %stack.0
+    ; SKIP: $a = LOAD_8_WITH_ADDR %stack.0
+    ; ONLY-LABEL: name:            spill8
+    ; ONLY: STORE_8_STATIC_ADDR @__i8085_static_scratch.spill8.0
+    ; ONLY: $a = LOAD_8_STATIC_ADDR @__i8085_static_scratch.spill8.0
+    ; ONLYFI-LABEL: name:            spill8
+    ; ONLYFI: STORE_8 %stack.0
+    ; ONLYFI: $a = LOAD_8_WITH_ADDR %stack.0
+    STORE_8 %stack.0, 0, killed $a, implicit $sp
+    $a = LOAD_8_WITH_ADDR %stack.0, 0, implicit $sp
+    RET implicit $sp, implicit-def $sp
+...
+
+---
+name:            spill16
+tracksRegLiveness: true
+stack:
+  - { id: 0, type: spill-slot, size: 2, alignment: 1 }
+body:             |
+  bb.0:
+    liveins: $bc
+
+    ; CHECK-LABEL: name:            spill16
+    ; CHECK: STORE_16_STATIC_ADDR @__i8085_static_scratch.spill16.0
+    ; CHECK: $de = LOAD_16_STATIC_ADDR @__i8085_static_scratch.spill16.0
+    ; CHECK-NOT: %stack.0
+    ; SKIP-LABEL: name:            spill16
+    ; SKIP: STORE_16_STATIC_ADDR @__i8085_static_scratch.spill16.0
+    ; SKIP: $de = LOAD_16_STATIC_ADDR @__i8085_static_scratch.spill16.0
+    ; SKIP-NOT: %stack.0
+    ; ONLY-LABEL: name:            spill16
+    ; ONLY: STORE_16 %stack.0
+    ; ONLY: $de = LOAD_16_WITH_ADDR %stack.0
+    ; ONLYFI-LABEL: name:            spill16
+    ; ONLYFI: STORE_16 %stack.0
+    ; ONLYFI: $de = LOAD_16_WITH_ADDR %stack.0
+    STORE_16 %stack.0, 0, killed $bc, implicit $sp
+    $de = LOAD_16_WITH_ADDR %stack.0, 0, implicit $sp
+    RET implicit $sp, implicit-def $sp
+...
+
+---
+name:            two_slots
+tracksRegLiveness: true
+stack:
+  - { id: 0, type: spill-slot, size: 1, alignment: 1 }
+  - { id: 1, type: spill-slot, size: 1, alignment: 1 }
+body:             |
+  bb.0:
+    liveins: $a, $c
+
+    ; ONLYFI-LABEL: name:            two_slots
+    ; ONLYFI: STORE_8 %stack.0
+    ; ONLYFI: $a = LOAD_8_WITH_ADDR %stack.0
+    ; ONLYFI: STORE_8_STATIC_ADDR @__i8085_static_scratch.two_slots.1
+    ; ONLYFI: $c = LOAD_8_STATIC_ADDR @__i8085_static_scratch.two_slots.1
+    STORE_8 %stack.0, 0, killed $a, implicit $sp
+    $a = LOAD_8_WITH_ADDR %stack.0, 0, implicit $sp
+    STORE_8 %stack.1, 0, killed $c, implicit $sp
+    $c = LOAD_8_WITH_ADDR %stack.1, 0, implicit $sp
+    RET implicit $sp, implicit-def $sp
+...
+
+---
+name:            unknown_nonrecursive
+tracksRegLiveness: true
+stack:
+  - { id: 0, type: spill-slot, size: 1, alignment: 1 }
+body:             |
+  bb.0:
+    liveins: $a
+
+    ; CHECK-LABEL: name:            unknown_nonrecursive
+    ; CHECK: STORE_8_STATIC_ADDR @__i8085_static_scratch.unknown_nonrecursive.0
+    ; CHECK: $a = LOAD_8_STATIC_ADDR @__i8085_static_scratch.unknown_nonrecursive.0
+    ; SKIP-LABEL: name:            unknown_nonrecursive
+    ; UNSAFE-LABEL: name:            unknown_nonrecursive
+    ; UNSAFE: STORE_8_STATIC_ADDR @__i8085_static_scratch.unknown_nonrecursive.0
+    ; UNSAFE: $a = LOAD_8_STATIC_ADDR @__i8085_static_scratch.unknown_nonrecursive.0
+    STORE_8 %stack.0, 0, killed $a, implicit $sp
+    $a = LOAD_8_WITH_ADDR %stack.0, 0, implicit $sp
+    RET implicit $sp, implicit-def $sp
+...
+
+---
+name:            unknown_call_mixed
+tracksRegLiveness: true
+stack:
+  - { id: 0, type: spill-slot, size: 1, alignment: 1 }
+  - { id: 1, type: spill-slot, size: 1, alignment: 1 }
+body:             |
+  bb.0:
+    liveins: $a
+
+    ; CHECK-LABEL: name:            unknown_call_mixed
+    ; CHECK: STORE_8 %stack.0
+    ; CHECK: CALL @external_callee
+    ; CHECK: $a = LOAD_8_WITH_ADDR %stack.0
+    ; CHECK: STORE_8_STATIC_ADDR @__i8085_static_scratch.unknown_call_mixed.1
+    ; CHECK: $c = LOAD_8_STATIC_ADDR @__i8085_static_scratch.unknown_call_mixed.1
+    ; UNSAFE-LABEL: name:            unknown_call_mixed
+    ; UNSAFE: STORE_8_STATIC_ADDR @__i8085_static_scratch.unknown_call_mixed.0
+    ; UNSAFE: CALL @external_callee
+    ; UNSAFE: $a = LOAD_8_STATIC_ADDR @__i8085_static_scratch.unknown_call_mixed.0
+    ; UNSAFE: STORE_8_STATIC_ADDR @__i8085_static_scratch.unknown_call_mixed.1
+    ; UNSAFE: $c = LOAD_8_STATIC_ADDR @__i8085_static_scratch.unknown_call_mixed.1
+    ; ASSUME-LABEL: name:            unknown_call_mixed
+    ; ASSUME: STORE_8_STATIC_ADDR @__i8085_static_scratch.unknown_call_mixed.0
+    ; ASSUME: CALL @external_callee
+    ; ASSUME: $a = LOAD_8_STATIC_ADDR @__i8085_static_scratch.unknown_call_mixed.0
+    ; ASSUME: STORE_8_STATIC_ADDR @__i8085_static_scratch.unknown_call_mixed.1
+    ; ASSUME: $c = LOAD_8_STATIC_ADDR @__i8085_static_scratch.unknown_call_mixed.1
+    STORE_8 %stack.0, 0, killed $a, implicit $sp
+    CALL @external_callee, csr_normal, implicit-def $sp, implicit-def dead $a, implicit-def dead $b, implicit-def dead $c, implicit-def dead $d, implicit-def dead $e, implicit-def dead $h, implicit-def dead $l, implicit $sp
+    $a = LOAD_8_WITH_ADDR %stack.0, 0, implicit $sp
+    $c = MVI 7
+    STORE_8 %stack.1, 0, killed $c, implicit $sp
+    $c = LOAD_8_WITH_ADDR %stack.1, 0, implicit $sp
+    RET implicit $sp, implicit-def $sp
+...
+
+---
+name:            unknown_attr_nonreentrant
+tracksRegLiveness: true
+stack:
+  - { id: 0, type: spill-slot, size: 1, alignment: 1 }
+body:             |
+  bb.0:
+    liveins: $a
+
+    ; CHECK-LABEL: name:            unknown_attr_nonreentrant
+    ; CHECK: STORE_8_STATIC_ADDR @__i8085_static_scratch.unknown_attr_nonreentrant.0
+    ; CHECK: CALL @external_callee
+    ; CHECK: $a = LOAD_8_STATIC_ADDR @__i8085_static_scratch.unknown_attr_nonreentrant.0
+    STORE_8 %stack.0, 0, killed $a, implicit $sp
+    CALL @external_callee, csr_normal, implicit-def $sp, implicit-def dead $a, implicit-def dead $b, implicit-def dead $c, implicit-def dead $d, implicit-def dead $e, implicit-def dead $h, implicit-def dead $l, implicit $sp
+    $a = LOAD_8_WITH_ADDR %stack.0, 0, implicit $sp
+    RET implicit $sp, implicit-def $sp
+...
+
+---
+name:            norecurse_live_across_call
+tracksRegLiveness: true
+stack:
+  - { id: 0, type: spill-slot, size: 1, alignment: 1 }
+body:             |
+  bb.0:
+    liveins: $a
+
+    ; CHECK-LABEL: name:            norecurse_live_across_call
+    ; CHECK: STORE_8 %stack.0
+    ; CHECK: CALL @external_callee
+    ; CHECK: $a = LOAD_8_WITH_ADDR %stack.0
+    ; GLOBAL-LABEL: name:            norecurse_live_across_call
+    ; GLOBAL: STORE_8_STATIC_ADDR @__i8085_static_scratch.norecurse_live_across_call.0
+    ; GLOBAL: CALL @external_callee
+    ; GLOBAL: $a = LOAD_8_STATIC_ADDR @__i8085_static_scratch.norecurse_live_across_call.0
+    STORE_8 %stack.0, 0, killed $a, implicit $sp
+    CALL @external_callee, csr_normal, implicit-def $sp, implicit-def dead $a, implicit-def dead $b, implicit-def dead $c, implicit-def dead $d, implicit-def dead $e, implicit-def dead $h, implicit-def dead $l, implicit $sp
+    $a = LOAD_8_WITH_ADDR %stack.0, 0, implicit $sp
+    RET implicit $sp, implicit-def $sp
+...
+
+---
+name:            direct_recursive
+tracksRegLiveness: true
+stack:
+  - { id: 0, type: spill-slot, size: 1, alignment: 1 }
+body:             |
+  bb.0:
+    liveins: $a
+
+    ; ASSUME-LABEL: name:            direct_recursive
+    ; ASSUME: STORE_8 %stack.0
+    ; ASSUME: CALL @direct_recursive
+    ; ASSUME: $a = LOAD_8_WITH_ADDR %stack.0
+    ; GLOBAL-LABEL: name:            direct_recursive
+    ; GLOBAL: STORE_8 %stack.0
+    ; GLOBAL: CALL @direct_recursive
+    ; GLOBAL: $a = LOAD_8_WITH_ADDR %stack.0
+    ; UNSAFE-LABEL: name:            direct_recursive
+    ; UNSAFE: STORE_8 %stack.0
+    ; UNSAFE: $a = LOAD_8_WITH_ADDR %stack.0
+    ; ALLOW-LABEL: name:            direct_recursive
+    ; ALLOW: STORE_8_STATIC_ADDR @__i8085_static_scratch.direct_recursive.0
+    ; ALLOW: CALL @direct_recursive
+    ; ALLOW: $a = LOAD_8_STATIC_ADDR @__i8085_static_scratch.direct_recursive.0
+    STORE_8 %stack.0, 0, killed $a, implicit $sp
+    CALL @direct_recursive, csr_normal, implicit-def $sp, implicit-def dead $a, implicit-def dead $b, implicit-def dead $c, implicit-def dead $d, implicit-def dead $e, implicit-def dead $h, implicit-def dead $l, implicit $sp
+    $a = LOAD_8_WITH_ADDR %stack.0, 0, implicit $sp
+    RET implicit $sp, implicit-def $sp
+...
+
+---
+name:            mutual_a
+tracksRegLiveness: true
+stack:
+  - { id: 0, type: spill-slot, size: 1, alignment: 1 }
+body:             |
+  bb.0:
+    liveins: $a
+
+    ; UNSAFE-LABEL: name:            mutual_a
+    ; UNSAFE: STORE_8 %stack.0
+    ; UNSAFE: CALL @mutual_b
+    ; UNSAFE: $a = LOAD_8_WITH_ADDR %stack.0
+    STORE_8 %stack.0, 0, killed $a, implicit $sp
+    CALL @mutual_b, csr_normal, implicit-def $sp, implicit-def dead $a, implicit-def dead $b, implicit-def dead $c, implicit-def dead $d, implicit-def dead $e, implicit-def dead $h, implicit-def dead $l, implicit $sp
+    $a = LOAD_8_WITH_ADDR %stack.0, 0, implicit $sp
+    RET implicit $sp, implicit-def $sp
+...
+
+---
+name:            mutual_b
+tracksRegLiveness: true
+stack:
+  - { id: 0, type: spill-slot, size: 1, alignment: 1 }
+body:             |
+  bb.0:
+    liveins: $a
+
+    ; UNSAFE-LABEL: name:            mutual_b
+    ; UNSAFE: STORE_8 %stack.0
+    ; UNSAFE: CALL @mutual_a
+    ; UNSAFE: $a = LOAD_8_WITH_ADDR %stack.0
+    STORE_8 %stack.0, 0, killed $a, implicit $sp
+    CALL @mutual_a, csr_normal, implicit-def $sp, implicit-def dead $a, implicit-def dead $b, implicit-def dead $c, implicit-def dead $d, implicit-def dead $e, implicit-def dead $h, implicit-def dead $l, implicit $sp
+    $a = LOAD_8_WITH_ADDR %stack.0, 0, implicit $sp
+    RET implicit $sp, implicit-def $sp
+...

@@ -397,6 +397,17 @@ bool InputSectionDescription::matchesFile(const InputFile *file) const {
   return matchesFileCache->second;
 }
 
+bool InputSectionDescription::matchesFile(const InputSectionBase *sec) const {
+  if (sec)
+    if (StringRef file = getLtoScriptFileForLinkerScript(sec); !file.empty())
+      return filePat.isTrivialMatchAll() || filePat.match(file);
+  return matchesFile(sec ? sec->file : nullptr);
+}
+
+bool InputSectionDescription::matchesFile(StringRef file) const {
+  return filePat.isTrivialMatchAll() || filePat.match(file);
+}
+
 bool SectionPattern::excludesFile(const InputFile *file) const {
   if (excludedFilePat.empty())
     return false;
@@ -407,13 +418,37 @@ bool SectionPattern::excludesFile(const InputFile *file) const {
   return excludesFileCache->second;
 }
 
+bool SectionPattern::excludesFile(const InputSectionBase *sec) const {
+  if (excludedFilePat.empty())
+    return false;
+  if (sec)
+    if (StringRef file = getLtoScriptFileForLinkerScript(sec); !file.empty())
+      return excludedFilePat.match(file);
+  return excludesFile(sec ? sec->file : nullptr);
+}
+
+bool SectionPattern::excludesFile(StringRef file) const {
+  return !excludedFilePat.empty() && excludedFilePat.match(file);
+}
+
 bool LinkerScript::shouldKeep(InputSectionBase *s) {
   for (InputSectionDescription *id : keptSections)
-    if (id->matchesFile(s->file))
+    if (id->matchesFile(s))
       for (SectionPattern &p : id->sectionPatterns)
-        if (p.sectionPat.match(s->name) &&
+        if (p.sectionPat.match(s->name) && !p.excludesFile(s) &&
             (s->flags & id->withFlags) == id->withFlags &&
             (s->flags & id->withoutFlags) == 0)
+          return true;
+  return false;
+}
+
+bool LinkerScript::shouldKeep(StringRef file, StringRef section, uint64_t flags) {
+  for (InputSectionDescription *id : keptSections)
+    if (id->matchesFile(file))
+      for (SectionPattern &p : id->sectionPatterns)
+        if (p.sectionPat.match(section) && !p.excludesFile(file) &&
+            (flags & id->withFlags) == id->withFlags &&
+            (flags & id->withoutFlags) == 0)
           return true;
   return false;
 }
@@ -528,7 +563,7 @@ LinkerScript::computeInputSections(const InputSectionDescription *cmd,
       if (!pat.sectionPat.match(sec->name))
         continue;
 
-      if (!cmd->matchesFile(sec->file) || pat.excludesFile(sec->file) ||
+      if (!cmd->matchesFile(sec) || pat.excludesFile(sec) ||
           (sec->flags & cmd->withFlags) != cmd->withFlags ||
           (sec->flags & cmd->withoutFlags) != 0)
         continue;

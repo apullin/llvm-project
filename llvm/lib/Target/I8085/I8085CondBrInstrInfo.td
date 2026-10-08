@@ -150,7 +150,7 @@ let isBarrier = 1, isBranch = 1, isTerminator = 1 in {
                                            "JMP $k", [(br bb: $k)]>; 
 }
 
-let isTerminator = 1, isReturn = 1, isBarrier = 1 in {
+let isTerminator = 1, isReturn = 1, Uses = [SP, SREG], Defs = [SP] in {
    def RNZ : F1<0b11000000,(outs),(ins),"RNZ", []>;
    def RZ  : F1<0b11001000,(outs),(ins),"RZ", []>;
    def RNC : F1<0b11010000,(outs),(ins),"RNC", []>;
@@ -172,6 +172,23 @@ let isCall = 1 in {
    def CM  : F6<0b11111100,(outs),(ins imm16Addr:$k),"CM $k", []>;
 }
 
+
+// Fused compare-immediate-and-branch pseudos for i8.
+// These bypass the SET_*_8 diamond + JMP_8_IF pattern entirely.
+let isBranch = 1, isTerminator = 1, Defs=[SREG, A] in {
+   def BR_CC_EQ_8_IMM : I8085Pseudo<(outs),
+       (ins GR8:$lhs, I8085Imm8:$rhs, addressTarget:$k),
+       "BR_CC_EQ_8_IMM $lhs, $rhs, $k", []>;
+   def BR_CC_NE_8_IMM : I8085Pseudo<(outs),
+       (ins GR8:$lhs, I8085Imm8:$rhs, addressTarget:$k),
+       "BR_CC_NE_8_IMM $lhs, $rhs, $k", []>;
+   def BR_CC_ULT_8_IMM : I8085Pseudo<(outs),
+       (ins GR8:$lhs, I8085Imm8:$rhs, addressTarget:$k),
+       "BR_CC_ULT_8_IMM $lhs, $rhs, $k", []>;
+   def BR_CC_UGE_8_IMM : I8085Pseudo<(outs),
+       (ins GR8:$lhs, I8085Imm8:$rhs, addressTarget:$k),
+       "BR_CC_UGE_8_IMM $lhs, $rhs, $k", []>;
+}
 
 let isBranch = 1, isTerminator = 1, Defs=[SREG, A] in {
    def JMP_8_IF : I8085Pseudo<(outs),(ins GR8NoHL: $reg, addressTarget:$k),

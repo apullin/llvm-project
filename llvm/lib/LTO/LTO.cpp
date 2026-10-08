@@ -733,6 +733,13 @@ Error LTO::addModule(InputFile &Input, unsigned ModI,
   if (!LTOInfo)
     return LTOInfo.takeError();
 
+  if (Conf.PreLinkModuleHook &&
+      (LTOInfo->IsThinLTO || LTOInfo->UnifiedLTO ||
+       LTOMode == LTOK_UnifiedRegular || LTOMode == LTOK_UnifiedThin))
+    return make_error<StringError>(
+        "--lto-linker-scripts requires full LTO; "
+        "ThinLTO/unified LTO is not supported", inconvertibleErrorCode());
+
   if (EnableSplitLTOUnit) {
     // If only some modules were split, flag this in the index so that
     // we can skip or error on optimizations that need consistently split
@@ -770,7 +777,10 @@ Error LTO::addModule(InputFile &Input, unsigned ModI,
   if (!ModOrErr)
     return ModOrErr.takeError();
 
-  if (!LTOInfo->HasSummary)
+  // The hook may add KEEP roots that are absent from the original summary.
+  // In this full-LTO-only mode, link IR directly and let the updated used lists
+  // drive retention instead of pruning from the stale summary index.
+  if (!LTOInfo->HasSummary || Conf.PreLinkModuleHook)
     return linkRegularLTO(std::move(*ModOrErr), /*LivenessFromIndex=*/false);
 
   // Regular LTO module summaries are added to a dummy module that represents
@@ -829,6 +839,13 @@ LTO::addRegularLTO(BitcodeModule BM, ArrayRef<InputFile::Symbol> Syms,
 
   if (Error Err = M.materializeMetadata())
     return std::move(Err);
+
+  if (Conf.PreLinkModuleHook) {
+    if (Error Err = M.materializeAll())
+      return std::move(Err);
+    if (Error Err = Conf.PreLinkModuleHook(BM.getModuleIdentifier(), M))
+      return std::move(Err);
+  }
 
   // If cfi.functions is present and we are in regular LTO mode, LowerTypeTests
   // will rename local functions in the merged module as "<function name>.1".

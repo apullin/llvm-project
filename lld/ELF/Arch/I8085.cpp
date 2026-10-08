@@ -37,9 +37,16 @@ I8085::I8085() {
 RelExpr I8085::getRelExpr(RelType type, const Symbol &,
                           const uint8_t *) const {
   switch (type) {
+  case R_I8085_PC8:
+  case R_I8085_PC16:
+  case R_I8085_PC32:
+  case R_I8085_PC64:
+    return R_PC;
   case R_I8085_8:
     return R_ABS;
   case R_I8085_16:
+  case R_I8085_32:
+  case R_I8085_64:
     return R_ABS;
   case R_I8085_LO8:
   case R_I8085_HI8:
@@ -63,12 +70,23 @@ void I8085::relocate(uint8_t *loc, const Relocation &rel, uint64_t val) const {
   case R_I8085_NONE:
     return;
   case R_I8085_8:
+  case R_I8085_PC8:
     checkIntUInt(loc, val, 8, rel);
     *loc = static_cast<uint8_t>(val);
     return;
   case R_I8085_16:
+  case R_I8085_PC16:
     checkIntUInt(loc, val, 16, rel);
     write16le(loc, val);
+    return;
+  case R_I8085_32:
+  case R_I8085_PC32:
+    checkIntUInt(loc, val, 32, rel);
+    write32le(loc, val);
+    return;
+  case R_I8085_64:
+  case R_I8085_PC64:
+    write64le(loc, val);
     return;
   case R_I8085_LO8:
     checkUInt(loc, val, 32, rel);

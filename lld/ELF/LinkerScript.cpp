@@ -446,7 +446,7 @@ bool LinkerScript::shouldKeep(StringRef name, InputFile *file) {
   for (InputSectionDescription *id : keptSections)
     if (id->matchesFile(*file))
       for (SectionPattern &p : id->sectionPatterns)
-        if (p.sectionPat.match(name))
+        if (p.sectionPat.match(name) && !p.excludesFile(*file))
           return true;
   return false;
 }

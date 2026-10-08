@@ -9,6 +9,7 @@
 #include "LTO.h"
 #include "Config.h"
 #include "InputFiles.h"
+#include "InputSection.h"
 #include "LinkerScript.h"
 #include "SymbolTable.h"
 #include "Symbols.h"
@@ -208,6 +209,10 @@ BitcodeCompiler::BitcodeCompiler(Ctx &ctx) : ctx(ctx) {
         Err(ctx) << file->getName() << ": " << llvm::toString(flags.takeError());
         continue;
       }
+      // Match the flags the native InputSectionBase constructor exposes,
+      // including group resolution in final/--force-group-allocation links.
+      for (uint64_t &flag : *flags)
+        flag = getInputSectionFlags(ctx, flag);
       sectionFlags[file] = std::move(*flags);
     }
   ltoObj = std::make_unique<lto::LTO>(std::move(config), backend,

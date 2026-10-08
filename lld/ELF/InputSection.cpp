@@ -88,7 +88,7 @@ InputSectionBase::InputSectionBase(InputFile *file, StringRef name,
 // SHF_INFO_LINK and SHF_GROUP are normally resolved and not copied to the
 // output section. However, for relocatable linking without
 // --force-group-allocation, the SHF_GROUP flag and section groups are retained.
-static uint64_t getFlags(Ctx &ctx, uint64_t flags) {
+uint64_t elf::getInputSectionFlags(Ctx &ctx, uint64_t flags) {
   flags &= ~(uint64_t)SHF_INFO_LINK;
   if (ctx.arg.resolveGroups)
     flags &= ~(uint64_t)SHF_GROUP;
@@ -100,7 +100,7 @@ InputSectionBase::InputSectionBase(ObjFile<ELFT> &file,
                                    const typename ELFT::Shdr &hdr,
                                    StringRef name, Kind sectionKind)
     : InputSectionBase(&file, name, hdr.sh_type,
-                       getFlags(file.ctx, hdr.sh_flags), hdr.sh_link,
+                       getInputSectionFlags(file.ctx, hdr.sh_flags), hdr.sh_link,
                        hdr.sh_info, hdr.sh_addralign, hdr.sh_entsize,
                        getSectionContents(file, hdr), sectionKind) {
   // We reject object files having insanely large alignments even though

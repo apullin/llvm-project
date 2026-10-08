@@ -33,6 +33,9 @@ class SyntheticSection;
 template <class ELFT> class ObjFile;
 class OutputSection;
 
+// Flags visible to linker-script matching after native input processing.
+uint64_t getInputSectionFlags(Ctx &ctx, uint64_t flags);
+
 // Returned by InputSectionBase::relsOrRelas. At least two members are empty.
 template <class ELFT> struct RelsOrRelas {
   Relocs<typename ELFT::Rel> rels;

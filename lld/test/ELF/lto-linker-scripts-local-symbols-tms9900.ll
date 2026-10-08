@@ -2,7 +2,8 @@
 ; RUN: rm -rf %t && split-file %s %t && cd %t
 ; RUN: llvm-as a.ll -o a.o
 ; RUN: llvm-as b.ll -o b.o
-; RUN: ld.lld --lto-linker-scripts --lto-O0 -T script.ld a.o b.o -o out
+; RUN: ld.lld --lto-linker-scripts --lto-O0 --save-temps -T script.ld a.o b.o -o out
+; RUN: FileCheck %s --check-prefix=RES < out.resolution.txt
 ; RUN: llvm-objdump -s -j .a -j .b out | FileCheck %s
 ; RUN: ld.lld --lto-linker-scripts --lto-O0 -T script.ld b.o a.o -o reverse
 ; RUN: llvm-objdump -s -j .a -j .b reverse | FileCheck %s
@@ -30,6 +31,10 @@
 ; CHECK-NEXT: 6100 00220044
 ; THIN: Contents of section .values:
 ; THIN-NEXT: 6000 00110033 00220044
+; RES: -r=a.o,shared,plxk{{$}}
+; RES: -r=a.o,collision,plxk{{$}}
+; RES: -r=b.o,shared,plxk{{$}}
+; RES: -r=b.o,collision,plxk{{$}}
 ; UNDEF: undefined symbol: only_local
 
 ;--- a.ll

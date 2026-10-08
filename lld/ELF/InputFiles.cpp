@@ -1759,8 +1759,10 @@ static void createBitcodeSymbol(Ctx &ctx, Symbol *&sym,
   // with definitions or references from other files.
   if (!objSym.isGlobal()) {
     objSym.Name = ctx.uniqueSaver.save(objSym.getName());
-    sym = make<Defined>(ctx, &f, objSym.getName(), STB_LOCAL, visibility, type,
-                        0, 0, nullptr);
+    // Defined's constructor does not initialize the persistent Symbol flags.
+    // Use the same zeroed symbol storage as native locals/standalone symbols.
+    sym = makeDefined(ctx, &f, objSym.getName(), STB_LOCAL, visibility, type, 0, 0,
+                      nullptr);
     return;
   }
 

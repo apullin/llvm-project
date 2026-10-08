@@ -25,6 +25,7 @@
 #include "llvm/Analysis/CaptureTracking.h"
 #include "llvm/Analysis/CtxProfAnalysis.h"
 #include "llvm/Analysis/IndirectCallVisitor.h"
+#include "llvm/Analysis/InlineCost.h"
 #include "llvm/Analysis/InstructionSimplify.h"
 #include "llvm/Analysis/MemoryProfileInfo.h"
 #include "llvm/Analysis/ObjCARCAnalysisUtils.h"
@@ -2475,6 +2476,11 @@ llvm::InlineResult llvm::InlineFunction(CallBase &CB, InlineFunctionInfo &IFI,
   if (!CalledFunc ||               // Can't inline external function or indirect
       CalledFunc->isDeclaration()) // call!
     return InlineResult::failure("external or indirect");
+
+  // Mandatory and other utility inliners bypass inline-cost analysis. They
+  // must still obey TU-aware linker-script placement before moving any code.
+  if (!haveCompatibleLinkerScriptSections(*CB.getCaller(), *CalledFunc))
+    return InlineResult::failure("caller and callee in different sections");
 
   // The inliner does not know how to inline through calls with operand bundles
   // in general ...

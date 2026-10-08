@@ -240,6 +240,12 @@ struct InlineParams {
 
 std::optional<int> getStringFnAttrAsInt(CallBase &CB, StringRef AttrKind);
 
+/// Whether inlining preserves linker-script section constraints. Output
+/// placement keys are mandatory; the diagnostic override can relax only the
+/// preliminary input-section annotations, before output placement is known.
+bool haveCompatibleLinkerScriptSections(const Function &Caller,
+                                      const Function &Callee);
+
 /// Generate the parameters to tune the inline cost analysis based only on the
 /// commandline options.
 InlineParams getInlineParams();

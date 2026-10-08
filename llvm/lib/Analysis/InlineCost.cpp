@@ -2928,14 +2928,18 @@ static bool functionsHaveCompatibleAttributes(
          AttributeFuncs::areInlineCompatible(*Caller, *Callee);
 }
 
-static Attribute getLinkerSectionAttribute(Function *F) {
-  Attribute OutputSection = F->getFnAttribute("linker_output_section");
+static Attribute getLinkerSectionAttribute(const Function &F) {
+  Attribute OutputSection = F.getFnAttribute("linker_output_section");
   return OutputSection.isValid() ? OutputSection
-                                 : F->getFnAttribute("linker_input_section");
+                                 : F.getFnAttribute("linker_input_section");
 }
 
-static bool functionsHaveMatchingLinkerSections(Function *Caller,
-                                                Function *Callee) {
+bool llvm::haveCompatibleLinkerScriptSections(const Function &Caller,
+                                            const Function &Callee) {
+  if (!InlineOnlyWithinSection &&
+      !Caller.hasFnAttribute("linker_output_section") &&
+      !Callee.hasFnAttribute("linker_output_section"))
+    return true;
   Attribute CallerSec = getLinkerSectionAttribute(Caller);
   Attribute CalleeSec = getLinkerSectionAttribute(Callee);
   if (CallerSec.isValid() != CalleeSec.isValid())
@@ -3060,6 +3064,10 @@ std::optional<InlineResult> llvm::getAttributeBasedInliningDecision(
                                      " address space");
     }
 
+  Function *Caller = Call.getCaller();
+  if (!haveCompatibleLinkerScriptSections(*Caller, *Callee))
+    return InlineResult::failure("caller and callee in different sections");
+
   // Calls to functions with always-inline attributes should be inlined
   // whenever possible.
   if (Call.hasFnAttr(Attribute::AlwaysInline)) {
@@ -3074,11 +3082,6 @@ std::optional<InlineResult> llvm::getAttributeBasedInliningDecision(
 
   // Never inline functions with conflicting attributes (unless callee has
   // always-inline attribute).
-  Function *Caller = Call.getCaller();
-  if (InlineOnlyWithinSection &&
-      !functionsHaveMatchingLinkerSections(Caller, Callee))
-    return InlineResult::failure("caller and callee in different sections");
-
   if (!functionsHaveCompatibleAttributes(Caller, Callee, CalleeTTI, GetTLI))
     return InlineResult::failure("conflicting attributes");
 

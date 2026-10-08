@@ -21,6 +21,7 @@
 #define LLD_ELF_LTO_H
 
 #include "lld/Common/LLVM.h"
+#include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/SmallString.h"
 #include "llvm/Support/raw_ostream.h"
@@ -54,6 +55,7 @@ private:
   llvm::DenseSet<StringRef> usedStartStop;
   std::unique_ptr<llvm::raw_fd_ostream> indexFile;
   llvm::DenseSet<StringRef> thinIndices;
+  llvm::DenseMap<BitcodeFile *, SmallVector<uint64_t, 0>> sectionFlags;
 };
 } // namespace lld::elf
 

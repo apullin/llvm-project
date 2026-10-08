@@ -823,8 +823,17 @@ static MCSection *selectExplicitSectionGlobal(const GlobalObject *GO,
                                               bool Retain, bool ForceUnique) {
   StringRef SectionName = handlePragmaClangSection(GO, Kind);
 
+  // Linker-script-aware LTO suffixes section names with the owning TU. Keep
+  // classification based on the original spelling, without interpreting
+  // arbitrary user section names containing the suffix delimiter.
+  StringRef KindName = SectionName;
+  if (MDNode *MD = GO->getMetadata("llvm.linker.script.input.section"))
+    if (MD->getNumOperands() == 1)
+      if (auto *Name = dyn_cast<MDString>(MD->getOperand(0)))
+        KindName = Name->getString();
+
   // Infer section flags from the section name if we can.
-  Kind = getELFKindForNamedSection(SectionName, Kind);
+  Kind = getELFKindForNamedSection(KindName, Kind);
 
   unsigned Flags = getELFSectionFlags(Kind);
   auto [Group, IsComdat, ExtraFlags] = getGlobalObjectInfo(GO, TM);
@@ -837,7 +846,7 @@ static MCSection *selectExplicitSectionGlobal(const GlobalObject *GO,
 
   const MCSymbolELF *LinkedToSym = getLinkedToSymbol(GO, TM);
   MCSectionELF *Section = Ctx.getELFSection(
-      SectionName, getELFSectionType(SectionName, Kind), Flags, EntrySize,
+      SectionName, getELFSectionType(KindName, Kind), Flags, EntrySize,
       Group, IsComdat, UniqueID, LinkedToSym);
   // Make sure that we did not get some other section with incompatible sh_link.
   // This should not be possible due to UniqueID code above.

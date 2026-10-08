@@ -21,11 +21,14 @@
 #include "llvm/Bitcode/BitcodeReader.h"
 #include "llvm/Bitcode/BitcodeWriter.h"
 #include "llvm/CGData/CodeGenData.h"
+#include "llvm/IR/GlobalAlias.h"
 #include "llvm/IR/LLVMRemarkStreamer.h"
 #include "llvm/IR/LegacyPassManager.h"
 #include "llvm/IR/PassManager.h"
 #include "llvm/IR/Verifier.h"
 #include "llvm/LTO/LTO.h"
+#include "llvm/MC/MCContext.h"
+#include "llvm/MC/MCSectionELF.h"
 #include "llvm/MC/TargetRegistry.h"
 #include "llvm/Object/ModuleSymbolTable.h"
 #include "llvm/Passes/PassBuilder.h"
@@ -41,6 +44,7 @@
 #include "llvm/Support/VirtualFileSystem.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Target/TargetMachine.h"
+#include "llvm/Target/TargetLoweringObjectFile.h"
 #include "llvm/TargetParser/SubtargetFeature.h"
 #include "llvm/Transforms/IPO/WholeProgramDevirt.h"
 #include "llvm/Transforms/Scalar/LoopPassManager.h"
@@ -546,6 +550,40 @@ Error lto::finalizeOptimizationRemarks(
   DiagOutputFile->keep();
   DiagOutputFile->os().flush();
   return Error::success();
+}
+
+Expected<SmallVector<uint64_t, 0>>
+lto::getELFSectionFlags(const Config &Conf, Module &Mod,
+                       ArrayRef<StringRef> Names) {
+  auto T = initAndLookupTarget(Conf, Mod);
+  if (!T)
+    return T.takeError();
+  if (!Triple(Mod.getTargetTriple()).isOSBinFormatELF())
+    return make_error<StringError>("ELF section query requires an ELF target",
+                                   inconvertibleErrorCode());
+  auto TM = createTargetMachine(Conf, *T, Mod);
+  Mod.setDataLayout(TM->createDataLayout());
+  MCContext Context(TM->getTargetTriple(), TM->getMCAsmInfo(),
+                    TM->getMCRegisterInfo(), TM->getMCSubtargetInfo(), nullptr,
+                    &TM->Options.MCOptions);
+  auto *Lowering = TM->getObjFileLowering();
+  Context.setObjectFileInfo(Lowering);
+  Lowering->Initialize(Context, *TM);
+  Lowering->getModuleMetadata(Mod);
+  SmallVector<uint64_t, 0> Flags;
+  for (StringRef Name : Names) {
+    const GlobalValue *GV = Mod.getNamedValue(Name);
+    if (auto *Alias = dyn_cast_or_null<GlobalAlias>(GV))
+      GV = Alias->getAliaseeObject();
+    auto *GO = dyn_cast_or_null<GlobalObject>(GV);
+    if (!GO || GO->isDeclarationForLinker()) {
+      Flags.push_back(0);
+      continue;
+    }
+    auto *Section = cast<MCSectionELF>(Lowering->SectionForGlobal(GO, *TM));
+    Flags.push_back(Section->getFlags());
+  }
+  return Flags;
 }
 
 Error lto::backend(const Config &C, AddStreamFn AddStream,

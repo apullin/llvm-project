@@ -618,6 +618,27 @@ BitcodeModule &InputFile::getSingleBitcodeModule() {
   return Mods[0];
 }
 
+Expected<SmallVector<uint64_t, 0>>
+InputFile::getELFSectionFlags(const Config &Conf) {
+  SmallVector<uint64_t, 0> Flags;
+  for (size_t I = 0; I != Mods.size(); ++I) {
+    LLVMContext Context;
+    auto M = Mods[I].getLazyModule(Context, /*ShouldLazyLoadMetadata=*/false,
+                                  /*IsImporting=*/false);
+    if (!M)
+      return M.takeError();
+    auto [Begin, End] = ModuleSymIndices[I];
+    SmallVector<StringRef, 0> Names;
+    for (const Symbol &Sym : ArrayRef(Symbols).slice(Begin, End - Begin))
+      Names.push_back(Sym.getIRName());
+    auto ModuleFlags = lto::getELFSectionFlags(Conf, **M, Names);
+    if (!ModuleFlags)
+      return ModuleFlags.takeError();
+    llvm::append_range(Flags, *ModuleFlags);
+  }
+  return Flags;
+}
+
 LTO::RegularLTOState::RegularLTOState(unsigned ParallelCodeGenParallelismLevel,
                                       const Config &Conf)
     : ParallelCodeGenParallelismLevel(ParallelCodeGenParallelismLevel),
@@ -997,9 +1018,16 @@ LTO::addRegularLTO(BitcodeModule BM, ArrayRef<InputFile::Symbol> Syms,
 
       if (Mod.IncludeLocalSymbols)
         if (auto *GO = dyn_cast<GlobalObject>(GV))
-          if (GO->hasSection() && !M.getModuleIdentifier().empty())
+          if (GO->hasSection() && !M.getModuleIdentifier().empty()) {
+            // The TU suffix must not change magic-name section kinds/types
+            // (e.g. .bss, .tbss, .init_array, .llvmcmd) in ELF lowering.
+            GO->setMetadata(
+                "llvm.linker.script.input.section",
+                MDNode::get(M.getContext(),
+                            MDString::get(M.getContext(), GO->getSection())));
             GO->setSection((GO->getSection() + "^^" +
                             M.getModuleIdentifier()).str());
+          }
 
       if (Res.LinkerScriptKeep)
         LinkerScriptKeep.push_back(GV);

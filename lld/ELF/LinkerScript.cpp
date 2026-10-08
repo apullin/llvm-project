@@ -442,24 +442,28 @@ bool LinkerScript::shouldKeep(InputSectionBase *s) {
   return false;
 }
 
-bool LinkerScript::shouldKeep(StringRef name, InputFile *file) {
+bool LinkerScript::shouldKeep(StringRef name, InputFile *file, uint64_t flags) {
   for (InputSectionDescription *id : keptSections)
     if (id->matchesFile(*file))
       for (SectionPattern &p : id->sectionPatterns)
-        if (p.sectionPat.match(name) && !p.excludesFile(*file))
+        if (p.sectionPat.match(name) && !p.excludesFile(*file) &&
+            (flags & id->withFlags) == id->withFlags &&
+            (flags & id->withoutFlags) == 0)
           return true;
   return false;
 }
 
 StringRef LinkerScript::mapLTOSectionName(StringRef inputSection,
-                                          InputFile *file) {
+                                        InputFile *file, uint64_t flags) {
   for (SectionCommand *base : sectionCommands) {
     auto *outDesc = dyn_cast<OutputDesc>(base);
     if (!outDesc)
       continue;
     for (SectionCommand *cmd : outDesc->osec.commands) {
       auto *isd = dyn_cast<InputSectionDescription>(cmd);
-      if (!isd || !isd->matchesFile(*file))
+      if (!isd || !isd->matchesFile(*file) ||
+          (flags & isd->withFlags) != isd->withFlags ||
+          (flags & isd->withoutFlags) != 0)
         continue;
       for (const SectionPattern &pat : isd->sectionPatterns)
         if (pat.sectionPat.match(inputSection) && !pat.excludesFile(*file))

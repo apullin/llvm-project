@@ -170,6 +170,11 @@ public:
   /// A range over the symbols in this InputFile.
   ArrayRef<Symbol> symbols() const { return Symbols; }
 
+  /// Query input ELF section flags with the same target lowering as codegen.
+  /// Results correspond to symbols(); declarations and asm-only symbols are
+  /// zero. Used by linker-script-aware LTO before optimization/preservation.
+  Expected<SmallVector<uint64_t, 0>> getELFSectionFlags(const Config &Conf);
+
   /// Returns linker options specified in the input file.
   StringRef getCOFFLinkerOpts() const { return COFFLinkerOpts; }
 

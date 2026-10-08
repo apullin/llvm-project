@@ -376,8 +376,9 @@ public:
   bool needsInterpSection();
 
   bool shouldKeep(InputSectionBase *s);
-  bool shouldKeep(StringRef name, InputFile *file);
-  StringRef mapLTOSectionName(StringRef inputSection, InputFile *file);
+  bool shouldKeep(StringRef name, InputFile *file, uint64_t flags);
+  StringRef mapLTOSectionName(StringRef inputSection, InputFile *file,
+                            uint64_t flags);
   std::pair<const OutputSection *, const Defined *> assignAddresses();
   bool spillSections();
   void erasePotentialSpillSections();

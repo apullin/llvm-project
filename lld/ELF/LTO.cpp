@@ -199,9 +199,19 @@ BitcodeCompiler::BitcodeCompiler(Ctx &ctx) : ctx(ctx) {
     {llvm::lto::LTO::LTOKind::LTOK_UnifiedThin,
      llvm::lto::LTO::LTOKind::LTOK_UnifiedRegular,
      llvm::lto::LTO::LTOKind::LTOK_Default};
-  ltoObj = std::make_unique<lto::LTO>(createConfig(ctx), backend,
-                                      ctx.arg.ltoPartitions,
-                                      ltoModes[ctx.arg.ltoKind]);
+  lto::Config config = createConfig(ctx);
+  if (ctx.arg.ltoLinkerScripts && ctx.script)
+    for (BitcodeFile *file : ctx.bitcodeFiles) {
+      auto flags = file->obj->getELFSectionFlags(config);
+      if (!flags) {
+        Err(ctx) << file->getName() << ": " << llvm::toString(flags.takeError());
+        continue;
+      }
+      sectionFlags[file] = std::move(*flags);
+    }
+  ltoObj = std::make_unique<lto::LTO>(std::move(config), backend,
+                                    ctx.arg.ltoPartitions,
+                                    ltoModes[ctx.arg.ltoKind]);
 
   // Initialize usedStartStop.
   if (ctx.bitcodeFiles.empty())
@@ -219,6 +229,10 @@ BitcodeCompiler::BitcodeCompiler(Ctx &ctx) : ctx(ctx) {
 BitcodeCompiler::~BitcodeCompiler() = default;
 
 void BitcodeCompiler::add(BitcodeFile &f) {
+  // A failed property query has already diagnosed the input; don't index an
+  // absent result while the driver finishes collecting errors.
+  if (ctx.arg.ltoLinkerScripts && ctx.script && !sectionFlags.count(&f))
+    return;
   lto::InputFile &obj = *f.obj;
   bool isExec = !ctx.arg.shared && !ctx.arg.relocatable;
 
@@ -260,9 +274,10 @@ void BitcodeCompiler::add(BitcodeFile &f) {
 
     StringRef inputSection = objSym.getSectionName();
     if (!inputSection.empty() && ctx.arg.ltoLinkerScripts && ctx.script) {
-      r.LinkerScriptKeep = ctx.script->shouldKeep(inputSection, &f);
+      uint64_t flags = sectionFlags[&f][i];
+      r.LinkerScriptKeep = ctx.script->shouldKeep(inputSection, &f, flags);
       r.VisibleToRegularObj |= r.LinkerScriptKeep;
-      r.OutputSectionName = ctx.script->mapLTOSectionName(inputSection, &f);
+      r.OutputSectionName = ctx.script->mapLTOSectionName(inputSection, &f, flags);
     }
 
     // Identify symbols exported dynamically, and that therefore could be

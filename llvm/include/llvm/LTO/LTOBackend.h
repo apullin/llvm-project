@@ -33,6 +33,12 @@ class Target;
 
 namespace lto {
 
+/// Select ELF sections for the named IR definitions without compiling their
+/// function bodies. This uses target section kinds, explicit names, comdats,
+/// TLS and module metadata, rather than guessing flags from symbol names.
+Expected<SmallVector<uint64_t, 0>>
+getELFSectionFlags(const Config &Conf, Module &Mod, ArrayRef<StringRef> Names);
+
 /// Runs middle-end LTO optimizations on \p Mod.
 bool opt(const Config &Conf, TargetMachine *TM, unsigned Task, Module &Mod,
          bool IsThinLTO, ModuleSummaryIndex *ExportSummary,

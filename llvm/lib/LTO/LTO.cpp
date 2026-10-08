@@ -847,6 +847,12 @@ Error LTO::addModule(InputFile &Input, unsigned ModI,
 
   bool IsThinLTO = LTOInfo->IsThinLTO && (LTOMode != LTOK_UnifiedRegular);
 
+  if (Conf.LinkerScriptAware && IsThinLTO)
+    return make_error<StringError>(
+        "linker-script-aware LTO requires full LTO; recompile '" +
+            BM.getModuleIdentifier() + "' with -flto=full",
+        inconvertibleErrorCode());
+
   auto ModSyms = Input.module_symbols(ModI);
   addModuleToGlobalRes(ModSyms, {ResI, ResE},
                        IsThinLTO ? ThinLTO.ModuleMap.size() + 1 : 0,

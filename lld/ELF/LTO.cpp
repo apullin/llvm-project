@@ -108,6 +108,7 @@ static lto::Config createConfig(Ctx &ctx) {
   c.DiagHandler = diagnosticHandler;
   c.OptLevel = ctx.arg.ltoo;
   c.OptimizeSize = ctx.arg.ltoOptimizeSize;
+  c.LinkerScriptAware = ctx.arg.ltoLinkerScripts;
   c.CPU = getCPUStr();
   c.MAttrs = getMAttrs();
   c.CGOptLevel = ctx.arg.ltoCgo;

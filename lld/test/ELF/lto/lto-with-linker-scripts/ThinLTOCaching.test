@@ -3,49 +3,18 @@
 # RUN: opt -module-hash -module-summary %t/1.ll -o %t/1.1.o
 # RUN: opt -module-hash -module-summary %t/2.ll -o %t/1.2.o
 # RUN: llvm-mc -filetype=obj -triple=aarch64-unknown-linux-gnu %t/3.s -o %t/1.3.o
-# RUN: cp -f %t/script.t %t/1.script.t
-# RUN: rm -Rf %t/1.cache && mkdir %t/1.cache
-# RUN: ld.lld -m aarch64elf --lto-linker-scripts --gc-sections --thinlto-cache-dir=%t/1.cache \
-# RUN:   -plugin-opt=-function-sections -e main -T %t/1.script.t %t/1.1.o %t/1.2.o %t/1.3.o -o %t/1.out
-# RUN: llvm-readelf -S -W %t/1.out | FileCheck --check-prefix=SECTIONS %s
-# RUN: ls %t/1.cache | FileCheck --check-prefix=LLVMCACHE-TWO --check-prefix=LLVMCACHE %s
-# RUN: ld.lld -m aarch64elf --lto-linker-scripts --gc-sections --thinlto-cache-dir=%t/1.cache \
-# RUN:   -plugin-opt=-function-sections -e main -T %t/1.script.t %t/1.1.o %t/1.2.o %t/1.3.o -o %t/1.out
-# RUN: ls %t/1.cache | FileCheck --check-prefix=LLVMCACHE-TWO --check-prefix=LLVMCACHE %s
-# RUN: llvm-readelf -S -W %t/1.out | FileCheck --check-prefix=SECTIONS %s
-# RUN: cp -f %t/script2.t %t/1.script.t
-# RUN: ld.lld -m aarch64elf --lto-linker-scripts --gc-sections --thinlto-cache-dir=%t/1.cache \
-# RUN:   -plugin-opt=-function-sections -e main -T %t/1.script.t %t/1.1.o %t/1.2.o %t/1.3.o -o %t/1.out
-# RUN: llvm-readelf -S -W %t/1.out | FileCheck --check-prefix=SECTIONS %s
-# RUN: ls %t/1.cache | FileCheck --check-prefix=LLVMCACHE-TWO --check-prefix=LLVMCACHE %s
-# RUN: cp -f %t/script2a.t %t/1.script.t
-# RUN: ld.lld -m aarch64elf --lto-linker-scripts --gc-sections --thinlto-cache-dir=%t/1.cache \
-# RUN:   -plugin-opt=-function-sections -e main -T %t/1.script.t %t/1.1.o %t/1.2.o %t/1.3.o -o %t/1.out
-# RUN: llvm-readelf -S -W %t/1.out | FileCheck --check-prefix=SECTIONS2 %s
-# RUN: ls %t/1.cache | FileCheck --check-prefix=LLVMCACHE-TWO --check-prefix=LLVMCACHE %s
-# RUN: llvm-ar cr %t/1.lib.a %t/1.3.o
-# RUN: llvm-ar cr %t/1.lib.a %t/1.2.o
-# RUN: llvm-ar cr %t/1.lib.a %t/1.1.o
-# RUN: cp -f %t/script3.t %t/1.script.t
-# RUN: rm -Rf %t/1.cache && mkdir %t/1.cache
-# RUN: ld.lld -m aarch64elf --lto-linker-scripts --gc-sections --thinlto-cache-dir=%t/1.cache \
-# RUN:   -plugin-opt=-function-sections -e main -T %t/1.script.t %t/1.lib.a -o %t/1.out
-# RUN: ls %t/1.cache | FileCheck --check-prefix=LLVMCACHE-TWO --check-prefix=LLVMCACHE %s
-# RUN: rm %t/1.lib.a
-# RUN: llvm-ar cr %t/1.lib.a %t/1.1.o
-# RUN: llvm-ar cr %t/1.lib.a %t/1.2.o
-# RUN: llvm-ar cr %t/1.lib.a %t/1.3.o
-# RUN: ld.lld -m aarch64elf --lto-linker-scripts --gc-sections --thinlto-cache-dir=%t/1.cache \
-# RUN:   -e main -T %t/1.script.t %t/1.lib.a -o %t/1.out
-# RUN: ls %t/1.cache | FileCheck --check-prefix=LLVMCACHE-TWO --check-prefix=LLVMCACHE %s
-
-# SECTIONS: .alltext
-# SECTIONS-NOT: ] .text
-
-# SECTIONS2-NOT: .special
-
-# LLVMCACHE-TWO-COUNT-2: llvmcache-[[X:[[:xdigit:]]+]]
-# LLVMCACHE-NOT:         llvmcache-[[X:[[:xdigit:]]+]]
+# RUN: not ld.lld -m aarch64elf --lto-linker-scripts --gc-sections --thinlto-cache-dir=%t/cache \
+# RUN:   -e main -T %t/script.t %t/1.1.o %t/1.2.o %t/1.3.o -o %t/out 2>&1 | FileCheck %s
+# RUN: not ld.lld -m aarch64elf --lto-linker-scripts --gc-sections --thinlto-cache-dir=%t/cache \
+# RUN:   -e main -T %t/script2a.t %t/1.1.o %t/1.2.o %t/1.3.o -o %t/out 2>&1 | FileCheck %s
+# RUN: llvm-ar cr %t/lib.a %t/1.3.o %t/1.2.o %t/1.1.o
+# RUN: not ld.lld -m aarch64elf --lto-linker-scripts --gc-sections --thinlto-cache-dir=%t/cache \
+# RUN:   -e main -T %t/script3.t %t/lib.a -o %t/out 2>&1 | FileCheck %s
+#
+# A ThinLTO cache cannot be reused safely without making script placement and
+# KEEP decisions part of its key. Reject the mode before running the backend.
+# Reference module/script fixtures remain for future implementation.
+# CHECK: linker-script-aware LTO requires full LTO
 
 #--- 1.ll
 target datalayout = "e-m:e-p270:32:32-p271:32:32-p272:64:64-i8:8:32-i16:16:32-i64:64-i128:128-n32:64-S128-Fn32"

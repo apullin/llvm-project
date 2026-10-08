@@ -70,6 +70,10 @@ struct Config {
   /// Disable entirely the optimizer, including importing for ThinLTO
   bool CodeGenOnly = false;
 
+  /// Honor TU input-section matching and placement constraints in full LTO.
+  /// ThinLTO needs equivalent index/import/cache handling before it is safe.
+  bool LinkerScriptAware = false;
+
   /// Run PGO context sensitive IR instrumentation.
   bool RunCSIRInstr = false;
 

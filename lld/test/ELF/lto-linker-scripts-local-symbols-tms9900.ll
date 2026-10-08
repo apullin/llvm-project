@@ -12,7 +12,8 @@
 ; RUN: llvm-objdump -s -j .a -j .b archive-out | FileCheck %s
 ; RUN: opt -module-summary a.ll -o thin-a.o
 ; RUN: opt -module-summary b.ll -o thin-b.o
-; RUN: ld.lld --lto-linker-scripts --lto-O0 --thinlto-jobs=1 -T thin.ld thin-a.o thin-b.o -o thin-out
+; RUN: not ld.lld --lto-linker-scripts --lto-O0 --thinlto-jobs=1 -T thin.ld thin-a.o thin-b.o -o thin-bad 2>&1 | FileCheck %s --check-prefix=THIN-ERROR
+; RUN: ld.lld --lto-O0 --thinlto-jobs=1 -T thin.ld thin-a.o thin-b.o -o thin-out
 ; RUN: llvm-objdump -s -j .values thin-out | FileCheck %s --check-prefix=THIN
 ; RUN: llvm-as archive-main.ll -o archive-main.o
 ; RUN: llvm-as archive-local.ll -o archive-local.o
@@ -31,6 +32,7 @@
 ; CHECK-NEXT: 6100 00220044
 ; THIN: Contents of section .values:
 ; THIN-NEXT: 6000 00110033 00220044
+; THIN-ERROR: linker-script-aware LTO requires full LTO
 ; RES: -r=a.o,shared,plxk{{$}}
 ; RES: -r=a.o,collision,plxk{{$}}
 ; RES: -r=b.o,shared,plxk{{$}}

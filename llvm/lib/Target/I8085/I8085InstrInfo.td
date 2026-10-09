@@ -579,6 +579,14 @@ let Defs=[A] in def LOAD_16_ADDR_CONTENT : I8085Pseudo<(outs GR16: $dst),
                        (ins GR16: $src),
                        "LOAD_16_ADDR_CONTENT $dst, $src", [(set i16: $dst, (load i16: $src))]>;
 
+// A read/modify/write address competes with values for scarce register pairs.
+// Exposing HL as scratch lets regalloc keep that address in BC/DE instead of
+// keeping HL live across every subsequent spill and saving it at expansion.
+let Defs=[HL, A], mayLoad = 1 in
+def LOAD_16_ADDR_CONTENT_SCRATCH : I8085Pseudo<(outs GR16BD: $dst),
+                       (ins GR16: $src),
+                       "LOAD_16_ADDR_CONTENT_SCRATCH $dst, $src", []>;
+
 let Defs=[HL, A] in def STORE_8_ADDR_CONTENT : I8085Pseudo<(outs),
                        (ins GR16: $addr, GR8NoHL: $src),
                        "STORE_8_ADDR_CONTENT $addr, $src",

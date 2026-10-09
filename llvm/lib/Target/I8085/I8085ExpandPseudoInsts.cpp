@@ -646,6 +646,12 @@ bool I8085ExpandPseudo::expand<I8085::STORE_8_ADDR_CONTENT>(Block &MBB, BlockIt 
 }
 
 template <>
+bool I8085ExpandPseudo::expand<I8085::LOAD_16_ADDR_CONTENT_SCRATCH>(
+    Block &MBB, BlockIt MBBI) {
+  return expand<I8085::LOAD_16_ADDR_CONTENT>(MBB, MBBI);
+}
+
+template <>
 bool I8085ExpandPseudo::expand<I8085::STORE_16_ADDR_CONTENT>(Block &MBB, BlockIt MBBI) {
   MachineInstr &MI = *MBBI;
 
@@ -3695,6 +3701,7 @@ bool I8085ExpandPseudo::expandMI(Block &MBB, BlockIt MBBI) {
 
   switch (Opcode) {
     EXPAND(I8085::LOAD_16_ADDR_CONTENT);
+    EXPAND(I8085::LOAD_16_ADDR_CONTENT_SCRATCH);
     EXPAND(I8085::LOAD_8_ADDR_CONTENT);
     EXPAND(I8085::STORE_16_AT_OFFSET_WITH_SP);
     EXPAND(I8085::STORE_8_AT_OFFSET_WITH_SP);

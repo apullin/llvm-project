@@ -17,6 +17,7 @@
 #include "MCTargetDesc/I8085MCTargetDesc.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
+#include "llvm/IR/Function.h"
 
 using namespace llvm;
 
@@ -30,7 +31,37 @@ public:
 
   bool runOnMachineFunction(MachineFunction &MF) override {
     MachineRegisterInfo &MRI = MF.getRegInfo();
+    const auto *TII = MF.getSubtarget<I8085Subtarget>().getInstrInfo();
+    const bool PreferSmallCode = MF.getFunction().hasOptSize();
     bool Changed = false;
+
+    // Read/modify/write addresses can stay live into a conditional store in
+    // another block. Expose HL scratch before regalloc so those addresses do
+    // not occupy HL across spills that need it, forcing late push/pop pairs.
+    // Do not restrict read-only loads: keeping their results in HL is useful.
+    // This trades some allocation flexibility for smaller spill expansions;
+    // speed-optimized functions keep the unrestricted form.
+    for (auto &MBB : MF) {
+      for (auto &MI : MBB) {
+        if (!PreferSmallCode || MI.getOpcode() != I8085::LOAD_16_ADDR_CONTENT)
+          continue;
+        Register Addr = MI.getOperand(1).getReg();
+        Register Value = MI.getOperand(0).getReg();
+        if (!Addr.isVirtual() || !Value.isVirtual())
+          continue;
+        bool HasStore = llvm::any_of(
+            MRI.use_nodbg_operands(Addr), [&](const MachineOperand &Use) {
+              const MachineInstr *User = Use.getParent();
+              return User->getOpcode() == I8085::STORE_16_ADDR_CONTENT &&
+                     User->getOperand(0).getReg() == Addr;
+            });
+        if (!HasStore || !MRI.constrainRegClass(Value, &I8085::GR16BDRegClass))
+          continue;
+        MI.setDesc(TII->get(I8085::LOAD_16_ADDR_CONTENT_SCRATCH));
+        MI.addOperand(MF, MachineOperand::CreateReg(I8085::HL, true, true));
+        Changed = true;
+      }
+    }
 
     auto addHintIfLegal = [&](Register VReg, MCRegister Pref) {
       if (!VReg.isVirtual())
@@ -61,6 +92,7 @@ public:
           Prefs.push_back(I8085::BC);
           break;
         case I8085::LOAD_16_ADDR_CONTENT:
+        case I8085::LOAD_16_ADDR_CONTENT_SCRATCH:
           AddrIdx = 1;
           if (IsVolatileMem) {
             Prefs.push_back(I8085::BC);

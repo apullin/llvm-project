@@ -7,6 +7,7 @@
   define void @load16_de() { ret void }
   define void @load16_bc_self() { ret void }
   define void @load16_bc_self_preserve_hl() { ret void }
+  define void @load16_scratch_bc_self() { ret void }
   define void @load16_sp_preserve_carry() { ret void }
   define void @store8_bc() { ret void }
   define void @store16_bc() { ret void }
@@ -100,6 +101,25 @@ body:             |
     ; CHECK-NEXT: $a = MOV $h
     $bc = LOAD_16_ADDR_CONTENT $bc, implicit-def $a, implicit $sp
     $a = MOV $h
+    RET implicit $sp, implicit-def $sp
+...
+
+---
+name:            load16_scratch_bc_self
+tracksRegLiveness: true
+body:             |
+  bb.0:
+    liveins: $bc
+    ; CHECK-LABEL: name: load16_scratch_bc_self
+    ; CHECK-NOT: PUSH
+    ; CHECK: $h = MOV $b
+    ; CHECK-NEXT: $l = MOV $c
+    ; CHECK-NEXT: $c = MOV_FROM_M
+    ; CHECK-NEXT: $hl = INX
+    ; CHECK-NEXT: $b = MOV_FROM_M
+    ; CHECK-NOT: POP
+    ; CHECK: RET
+    $bc = LOAD_16_ADDR_CONTENT_SCRATCH $bc, implicit-def $hl, implicit-def $a, implicit $sp
     RET implicit $sp, implicit-def $sp
 ...
 

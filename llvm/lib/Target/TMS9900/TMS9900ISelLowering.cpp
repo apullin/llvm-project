@@ -605,6 +605,40 @@ bool TMS9900TargetLowering::getPostIndexedAddressParts(
   return true;
 }
 
+bool TMS9900TargetLowering::isLegalAddressingMode(const DataLayout &DL,
+                                                  const AddrMode &AM, Type *Ty,
+                                                  unsigned AS,
+                                                  Instruction *I) const {
+  // TMS9900 addressing modes:
+  //   *Rb          (BaseReg, Scale=0, Offs=0, no GV)
+  //   @off(Rb)     (BaseReg, Scale=0, 16-bit Offs or GV)
+  //   @sym+off     (no BaseReg, Scale=0, 16-bit Offs or GV)
+  //   @sym+off(Ri) (no BaseReg, Scale=1, 16-bit Offs or GV)
+  // Register + Register (BaseReg && Scale != 0) and scaled indexing (Scale > 1)
+  // do NOT exist in hardware.
+  if (AM.ScalableOffset != 0)
+    return false;
+
+  if (!isInt<16>(AM.BaseOffs) && !isUInt<16>(AM.BaseOffs))
+    return false;
+
+  if (AM.Scale == 0)
+    return true;
+
+  if (AM.Scale == 1 && !AM.HasBaseReg)
+    return true;
+
+  return false;
+}
+
+bool TMS9900TargetLowering::isLegalICmpImmediate(int64_t Imm) const {
+  return isInt<16>(Imm) || isUInt<16>(Imm);
+}
+
+bool TMS9900TargetLowering::isLegalAddImmediate(int64_t Imm) const {
+  return isInt<16>(Imm) || isUInt<16>(Imm);
+}
+
 SDValue TMS9900TargetLowering::LowerGlobalAddress(SDValue Op,
                                                    SelectionDAG &DAG) const {
   SDLoc DL(Op);

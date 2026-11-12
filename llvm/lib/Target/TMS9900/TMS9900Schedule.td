@@ -30,9 +30,10 @@ def TMS9900Unit : ProcResource<1> { let BufferSize = 0; }
 //===----------------------------------------------------------------------===//
 
 def TMS9900Model : SchedMachineModel {
-  // LoadLatency: cycles for a load to produce a value
-  // MOV *Rx,Rd = 14 base + 4 (indirect) = 18 cycles
-  let LoadLatency = 18;
+  // TMS9900 is strictly non-pipelined (each instruction completes before the
+  // next begins), so reordering cannot hide latency; inflating LoadLatency or
+  // running PostRAScheduler only stretches live ranges and clobbers ST flags.
+  let LoadLatency = 1;
 
   // HighLatency: threshold for "high latency" instructions
   // DIV can take up to 124 cycles
@@ -52,8 +53,8 @@ def TMS9900Model : SchedMachineModel {
   // (especially with all addressing mode combinations)
   let CompleteModel = 0;
 
-  // Enable post-RA scheduling to optimize instruction order
-  let PostRAScheduler = 1;
+  // Disable post-RA latency scheduling to preserve ST flag adjacency.
+  let PostRAScheduler = 0;
 
   // No itineraries - use SchedWrite/SchedRead model
   let Itineraries = NoItineraries;

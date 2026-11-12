@@ -23,10 +23,10 @@ merge:
 }
 
 ; --- Simple counted loop ---
-; Uses C for comparison and a conditional jump to loop back.
+; LSR transforms the loop counter into a countdown DEC + JNE without an explicit C.
 ; CHECK-LABEL: counted_loop:
-; CHECK: C{{[ \t]+}}R{{[0-9]+}},R{{[0-9]+}}
-; CHECK: JNE
+; CHECK: DEC{{[ \t]+}}R0
+; CHECK-NEXT: JNE
 ; CHECK: B{{[ \t]+}}*R11
 
 define i16 @counted_loop(i16 %n) {

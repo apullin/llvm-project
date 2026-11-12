@@ -14,6 +14,7 @@
 #include "TMS9900.h"
 #include "TMS9900MachineFunctionInfo.h"
 #include "TMS9900TargetObjectFile.h"
+#include "TMS9900TargetTransformInfo.h"
 #include "TargetInfo/TMS9900TargetInfo.h"
 #include "llvm/CodeGen/Passes.h"
 #include "llvm/CodeGen/TargetLoweringObjectFileImpl.h"
@@ -100,6 +101,11 @@ public:
 
 TargetPassConfig *TMS9900TargetMachine::createPassConfig(PassManagerBase &PM) {
   return new TMS9900PassConfig(*this, PM);
+}
+
+TargetTransformInfo
+TMS9900TargetMachine::getTargetTransformInfo(const Function &F) const {
+  return TargetTransformInfo(TMS9900TTIImpl(this, F));
 }
 
 MachineFunctionInfo *TMS9900TargetMachine::createMachineFunctionInfo(

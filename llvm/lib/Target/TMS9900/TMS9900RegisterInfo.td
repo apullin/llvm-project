@@ -70,18 +70,18 @@ def ST : TMS9900Reg<0, "ST">, DwarfRegNum<[18]> {
 //===----------------------------------------------------------------------===//
 
 // General purpose registers - all workspace registers usable for computation
-// Allocation order prioritizes R0-R9 (caller-saved), then R13-R15 (callee-saved)
+// Allocation order prioritizes caller-saved R0-R9 and R12 before callee-saved R13-R15
 def GR16 : RegisterClass<"TMS9900", [i16], 16,
   (add R0, R1, R2, R3, R4, R5, R6, R7, R8, R9,
-       R13, R14, R15,  // Callee-saved, usable with care
-       R10,            // SP - usually reserved
-       R11,            // LR - usually reserved
-       R12)>;          // CRU base - usually reserved
+       R12,            // Caller-saved unless -mattr=+reserve-cru
+       R13, R14, R15,  // Callee-saved
+       R10,            // SP - reserved
+       R11)>;          // LR - reserved
 
-// Registers usable for general allocation (excludes SP, LR, CRU)
+// Registers usable for general allocation (excludes SP, LR)
 def GPR : RegisterClass<"TMS9900", [i16], 16,
   (add R0, R1, R2, R3, R4, R5, R6, R7, R8, R9,
-       R13, R14, R15)>;
+       R12, R13, R14, R15)>;
 
 // Argument/return registers
 def ArgRegs : RegisterClass<"TMS9900", [i16], 16,

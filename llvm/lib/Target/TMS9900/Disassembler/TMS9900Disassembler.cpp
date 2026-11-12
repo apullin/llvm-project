@@ -80,7 +80,8 @@ static DecodeStatus decodeBranchTarget(MCInst &MI, uint64_t Bits,
                                        uint64_t Address,
                                        const MCDisassembler *Decoder) {
   int8_t Disp = static_cast<int8_t>(Bits & 0xFF);
-  int64_t Target = static_cast<int64_t>(Address) + 2 + (Disp * 2);
+  uint16_t Target =
+      static_cast<uint16_t>(static_cast<int64_t>(Address) + 2 + (Disp * 2));
   MI.addOperand(MCOperand::createImm(Target));
   return MCDisassembler::Success;
 }
@@ -201,6 +202,6 @@ DecodeStatus TMS9900Disassembler::getInstruction(MCInst &MI, uint64_t &Size,
 
   DecodeStatus Result =
       decodeInstruction(DecoderTable, MI, Insn, Address, this, STI);
-  Size = RequiredBytes;
+  Size = (Result == MCDisassembler::Success) ? RequiredBytes : 2;
   return Result;
 }

@@ -215,8 +215,12 @@ void TMS9900AsmBackend::applyFixup(const MCAssembler &Asm, const MCFixup &Fixup,
 
 bool TMS9900AsmBackend::writeNopData(raw_ostream &OS, uint64_t Count,
                                       const MCSubtargetInfo *STI) const {
-  if ((Count % 2) != 0)
-    return false;
+  // Pad an odd byte boundary (e.g. after BYTE/TEXT data in .text) with zero
+  // before emitting 16-bit NOP words.
+  if (Count & 1) {
+    OS.write("\x00", 1);
+    --Count;
+  }
 
   // TMS9900 NOP is typically "JMP $+2" (jump to next instruction)
   // Encoding: 0x1000 (JMP with 0 displacement)

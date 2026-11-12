@@ -96,11 +96,25 @@ public:
   ArrayRef<const char *> getGCCRegNames() const override;
 
   ArrayRef<TargetInfo::GCCRegAlias> getGCCRegAliases() const override {
-    // TMS9900 register aliases
+    // TMS9900 register aliases (including TI-standard uppercase register names)
     // R10 = SP (stack pointer), R11 = LR (link register)
     static const TargetInfo::GCCRegAlias GCCRegAliases[] = {
-        {{"sp"}, "r10"},
-        {{"lr"}, "r11"},
+        {{"R0"}, "r0"},
+        {{"R1"}, "r1"},
+        {{"R2"}, "r2"},
+        {{"R3"}, "r3"},
+        {{"R4"}, "r4"},
+        {{"R5"}, "r5"},
+        {{"R6"}, "r6"},
+        {{"R7"}, "r7"},
+        {{"R8"}, "r8"},
+        {{"R9"}, "r9"},
+        {{"R10", "sp", "SP"}, "r10"},
+        {{"R11", "lr", "LR"}, "r11"},
+        {{"R12"}, "r12"},
+        {{"R13"}, "r13"},
+        {{"R14"}, "r14"},
+        {{"R15"}, "r15"},
     };
     return llvm::ArrayRef(GCCRegAliases);
   }

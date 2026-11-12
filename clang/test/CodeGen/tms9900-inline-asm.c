@@ -41,3 +41,15 @@ void memory_store(volatile u16 *pointer, u16 value) {
 void global_store(u16 value) {
   __asm__ volatile("MOV %1,%0" : "=m"(global_word) : "r"(value));
 }
+
+// CHECK-LABEL: uppercase_reg_aliases:
+// CHECK:       MOV R0,R12
+// CHECK:       ;APP
+// CHECK:       MOV R12,R0
+// CHECK:       ;NO_APP
+u16 uppercase_reg_aliases(u16 value) {
+  register u16 r12_val __asm__("R12") = value;
+  u16 out;
+  __asm__ volatile("MOV %1,%0" : "=r"(out) : "r"(r12_val) : "R4", "SP", "LR");
+  return out;
+}

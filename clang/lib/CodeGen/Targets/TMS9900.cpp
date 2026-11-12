@@ -51,10 +51,14 @@ public:
 
   RValue EmitVAArg(CodeGenFunction &CGF, Address VAListAddr, QualType Ty,
                    AggValueSlot Slot) const override {
-    return CGF.EmitLoadOfAnyValue(
-        CGF.MakeAddrLValue(
-            EmitVAArgInstr(CGF, VAListAddr, Ty, classifyArgumentType(Ty)), Ty),
-        Slot);
+    // CC_TMS9900_VarArg places every variadic argument on the stack in 2-byte
+    // aligned slots (no higher dynamic alignment rounding). Aggregates are
+    // passed indirectly via a 2-byte pointer to a caller stack copy.
+    bool IsIndirect = classifyArgumentType(Ty).isIndirect();
+    return emitVoidPtrVAArg(CGF, VAListAddr, Ty, IsIndirect,
+                            getContext().getTypeInfoInChars(Ty),
+                            CharUnits::fromQuantity(2),
+                            /*AllowHigherAlign=*/false, Slot);
   }
 };
 

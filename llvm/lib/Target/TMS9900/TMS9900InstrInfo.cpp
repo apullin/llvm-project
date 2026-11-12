@@ -163,13 +163,25 @@ static bool isPureTMS9900OutlinerOpcode(unsigned Opcode) {
   }
 }
 
-static bool isTMS9900OutlinerMemoryOpcode(unsigned Opcode) {
-  switch (Opcode) {
+static bool isTMS9900OutlinerMemoryOpcode(const MachineInstr &MI) {
+  switch (MI.getOpcode()) {
   case TMS9900::MOVxm:
   case TMS9900::MOVmx:
   case TMS9900::MOVBxm:
   case TMS9900::MOVBmx:
+  case TMS9900::CLR_idx:
+  case TMS9900::SETO_idx:
     return true;
+  case TMS9900::MOVim:
+  case TMS9900::MOVBim:
+    return MI.getOperand(1).isReg() &&
+           MI.getOperand(1).getReg() == TMS9900::R10;
+  case TMS9900::MOVmi:
+  case TMS9900::MOVBmi:
+  case TMS9900::CLR_ind:
+  case TMS9900::SETO_ind:
+    return MI.getOperand(0).isReg() &&
+           MI.getOperand(0).getReg() == TMS9900::R10;
   default:
     return false;
   }
@@ -209,11 +221,13 @@ TMS9900InstrInfo::getOutliningCandidateInfo(
     // The MachineOutliner runs after prologue/epilogue insertion. On TMS9900,
     // BL writes the return address to R11. Leaf functions still hold their own
     // incoming return address in R11 at this point, so inserting a BL would
-    // corrupt the final B *R11 return. Functions that already had calls have
-    // already saved/restored R11 in their prologue/epilogue, so BL-based
-    // outlining is safe there.
-    llvm::erase_if(RepeatedSequenceLocs, [](outliner::Candidate &C) {
-      return !C.getMF()->getFrameInfo().hasCalls();
+    // corrupt the final B *R11 return. Even inside non-leaf functions, R11 may
+    // be live across a candidate (e.g. inline assembly or epilogue restore),
+    // so verify R11 is available across and out of the sequence.
+    llvm::erase_if(RepeatedSequenceLocs, [this](outliner::Candidate &C) {
+      if (!C.getMF()->getFrameInfo().hasCalls())
+        return true;
+      return !C.isAvailableAcrossAndOutOfSeq(TMS9900::R11, RI);
     });
 
     if (RepeatedSequenceLocs.size() < MinRepeats)
@@ -268,12 +282,17 @@ outliner::InstrType TMS9900InstrInfo::getOutliningTypeImpl(
   if (MI.getDesc().isPseudo())
     return outliner::InstrType::Illegal;
 
-  if ((MI.mayLoad() || MI.mayStore()) &&
-      !isTMS9900OutlinerMemoryOpcode(MI.getOpcode()))
-    return outliner::InstrType::Illegal;
+  if (MI.mayLoad() || MI.mayStore()) {
+    bool HasOrderedMMO =
+        llvm::any_of(MI.memoperands(), [](const MachineMemOperand *MMO) {
+          return !MMO->isUnordered();
+        });
+    if (HasOrderedMMO || !isTMS9900OutlinerMemoryOpcode(MI))
+      return outliner::InstrType::Illegal;
+  }
 
   if (!isPureTMS9900OutlinerOpcode(MI.getOpcode()) &&
-      !isTMS9900OutlinerMemoryOpcode(MI.getOpcode()))
+      !isTMS9900OutlinerMemoryOpcode(MI))
     return outliner::InstrType::Illegal;
 
   // BL/B-based outlining leaves R10/SP alone, so stack-relative loads and

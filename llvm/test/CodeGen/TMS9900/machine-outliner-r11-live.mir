@@ -1,0 +1,52 @@
+# RUN: llc -mtriple=tms9900 -enable-machine-outliner=always -run-pass=machine-outliner -verify-machineinstrs -simplify-mir %s -o - | FileCheck %s
+
+--- |
+  define void @r11_live_across_a() { ret void }
+  define void @r11_live_across_b() { ret void }
+...
+
+---
+name: r11_live_across_a
+tracksRegLiveness: true
+frameInfo:
+  hasCalls: true
+body: |
+  bb.0:
+    liveins: $r0
+    ; CHECK-LABEL: name: r11_live_across_a
+    ; CHECK-NOT: BL_OUTLINE
+    ; CHECK: $r11 = MOVrr $r0
+    ; CHECK: $r0 = MOVrr $r11
+    $r11 = MOVrr $r0, implicit-def $st
+    $r1 = LI 111, implicit-def $st
+    $r2 = MOVrr $r1, implicit-def $st
+    $r2 = AI $r2, 222, implicit-def $st
+    $r3 = MOVrr $r2, implicit-def $st
+    $r3 = INCr $r3, implicit-def $st
+    $r4 = MOVrr $r3, implicit-def $st
+    $r0 = MOVrr $r11, implicit-def $st
+    RET
+...
+
+---
+name: r11_live_across_b
+tracksRegLiveness: true
+frameInfo:
+  hasCalls: true
+body: |
+  bb.0:
+    liveins: $r0
+    ; CHECK-LABEL: name: r11_live_across_b
+    ; CHECK-NOT: BL_OUTLINE
+    ; CHECK: $r11 = MOVrr $r0
+    ; CHECK: $r0 = MOVrr $r11
+    $r11 = MOVrr $r0, implicit-def $st
+    $r1 = LI 111, implicit-def $st
+    $r2 = MOVrr $r1, implicit-def $st
+    $r2 = AI $r2, 222, implicit-def $st
+    $r3 = MOVrr $r2, implicit-def $st
+    $r3 = INCr $r3, implicit-def $st
+    $r4 = MOVrr $r3, implicit-def $st
+    $r0 = MOVrr $r11, implicit-def $st
+    RET
+...

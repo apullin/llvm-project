@@ -4,8 +4,8 @@ declare void @escape(ptr)
 
 define i16 @word_stack_local(i16 %x) {
 ; CHECK-LABEL: word_stack_local:
-; CHECK:       MOV [[REG:R[0-9]+]],@{{[0-9]+}}(R10)
-; CHECK:       MOV @{{[0-9]+}}(R10),[[REG2:R[0-9]+]]
+; CHECK:       MOV [[REG:R[0-9]+]],@2(R10)
+; CHECK:       MOV *R10,[[REG2:R[0-9]+]]
   %store_slot = alloca i16, align 2
   %load_slot = alloca i16, align 2
   store volatile i16 %x, ptr %store_slot, align 2

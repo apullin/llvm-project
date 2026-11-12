@@ -121,9 +121,27 @@ static bool getFrameIndexAddress(SDValue Addr, int &FrameIndex,
 static bool getSingleUseFrameIndexAddress(SDValue Addr, int &FrameIndex,
                                           int64_t &Offset) {
   // Indexed memory operands cost 4 bytes, while an indirect access through a
-  // materialized address costs 2. Fold single-use addresses, but preserve a
-  // shared LEA when several accesses can amortize its setup cost.
-  return Addr.hasOneUse() && getFrameIndexAddress(Addr, FrameIndex, Offset);
+  // materialized address costs 2. Fold single-use addresses, and for bare
+  // FrameIndex nodes ignore ISD::ADD(FI, C) field-offset users (e.g. the low
+  // half of a split i32/i64 or struct field) so multi-word stack objects fold
+  // cleanly into @off(R10) instead of forcing an LEAfi + scratch register.
+  if (!getFrameIndexAddress(Addr, FrameIndex, Offset))
+    return false;
+
+  if (isa<FrameIndexSDNode>(Addr)) {
+    unsigned DirectUses = 0;
+    for (SDNode *User : Addr.getNode()->users()) {
+      if (User->getOpcode() == ISD::ADD &&
+          (isa<ConstantSDNode>(User->getOperand(0)) ||
+           isa<ConstantSDNode>(User->getOperand(1))))
+        continue;
+      if (++DirectUses > 1)
+        return false;
+    }
+    return DirectUses <= 1;
+  }
+
+  return Addr.hasOneUse();
 }
 
 void TMS9900DAGToDAGISel::SelectBR_CC(SDNode *N) {

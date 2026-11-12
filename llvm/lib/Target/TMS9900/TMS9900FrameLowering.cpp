@@ -80,12 +80,7 @@ static int64_t getFramePointerSaveOffset(const MachineFunction &MF) {
   int FI = FuncInfo->getFramePointerSaveIndex();
   assert(FI >= 0 && "frame-pointer save slot was not allocated");
 
-  int64_t Offset = MFI.getObjectOffset(FI) + MFI.getStackSize();
-  const Function &F = MF.getFunction();
-  const bool SavesLR = MFI.hasCalls() && !F.hasFnAttribute("interrupt");
-  if (SavesLR && MFI.getStackSize() > 0)
-    Offset += 2;
-  return Offset;
+  return MFI.getObjectOffset(FI) + MFI.getStackSize();
 }
 
 void TMS9900FrameLowering::emitPrologue(MachineFunction &MF,

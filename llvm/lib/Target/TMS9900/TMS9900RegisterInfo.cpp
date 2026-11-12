@@ -149,16 +149,20 @@ bool TMS9900RegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator MI,
     Offset = MFI.getObjectOffset(FrameIndex) + (HasFP ? 0 : SPAdj);
 
     // Add the offset from the ordinary fixed frame base (R10 normally, R13
-    // with an FP). LLVM's object offsets are relative to the incoming SP.
+    // with an FP). LLVM's object offsets are relative to a 4-byte-aligned
+    // local area base: S0 for leaf functions, or S0 - 4 (below the saved R11
+    // and its 2-byte alignment pad) for non-leaf functions. Since R10 is
+    // S0 - StackSize (leaf) or S0 - StackSize - 4 (non-leaf), local objects
+    // sit at R10 + StackSize + ObjectOffset in both cases, preserving Align(4).
+    // Incoming fixed stack arguments sit at S0 + ObjectOffset, above saved R11
+    // and the 2-byte alignment pad (+4 total) in non-leaf functions.
     int64_t StackAdj = MFI.getStackSize();
     const Function &F = MF.getFunction();
     bool IsNonLeaf = MFI.hasCalls() &&
                      !F.hasFnAttribute(Attribute::Naked) &&
                      !F.hasFnAttribute("interrupt");
-    if (IsNonLeaf)
-      StackAdj += 2; // alignment padding after the saved link register
     if (MFI.isFixedObjectIndex(FrameIndex) && IsNonLeaf)
-      StackAdj += 2; // saved return address
+      StackAdj += 4; // 2-byte alignment pad + 2-byte saved return address
     Offset += StackAdj;
   }
 
@@ -193,19 +197,54 @@ bool TMS9900RegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator MI,
     return true;
   }
 
-  // Handle frame-indexed word and byte moves with indexed addressing.
-  // These instructions have a memri operand: (register, immediate)
-  // The frame index is in operand FIOperandNum, and the offset is in FIOperandNum+1
+  // Handle frame-indexed word and byte moves: lower directly to real machine
+  // instructions so post-RA passes (peephole, MachineOutliner, sizing) see
+  // real opcodes, and shrink zero-offset accesses from @0(Rn) (4B) to *Rn (2B).
   if (Opc == TMS9900::MOV_FI_Load || Opc == TMS9900::MOV_FI_Store ||
       Opc == TMS9900::MOVB_FI_Load || Opc == TMS9900::MOVB_FI_Store) {
-    MI_ref.getOperand(FIOperandNum).ChangeToRegister(FrameReg, false);
+    int64_t FinalOffset = Offset + MI_ref.getOperand(FIOperandNum + 1).getImm();
+    bool STDead = MI_ref.registerDefIsDead(TMS9900::ST, &TRI);
+    MachineInstrBuilder MIB;
 
-    // Add the computed offset to the existing immediate offset
-    MachineOperand &OffsetOp = MI_ref.getOperand(FIOperandNum + 1);
-    int64_t ExistingOffset = OffsetOp.getImm();
-    OffsetOp.setImm(Offset + ExistingOffset);
+    if (Opc == TMS9900::MOV_FI_Load || Opc == TMS9900::MOVB_FI_Load) {
+      bool IsByte = (Opc == TMS9900::MOVB_FI_Load);
+      if (FinalOffset == 0) {
+        unsigned NewOpc = IsByte ? TMS9900::MOVBim : TMS9900::MOVim;
+        MIB = BuildMI(MBB, MI, DL, TII.get(NewOpc))
+                  .add(MI_ref.getOperand(0))
+                  .addReg(FrameReg);
+      } else {
+        unsigned NewOpc = IsByte ? TMS9900::MOVBxm : TMS9900::MOVxm;
+        MIB = BuildMI(MBB, MI, DL, TII.get(NewOpc))
+                  .add(MI_ref.getOperand(0))
+                  .addImm(FinalOffset)
+                  .addReg(FrameReg);
+      }
+    } else {
+      bool IsByte = (Opc == TMS9900::MOVB_FI_Store);
+      if (FinalOffset == 0) {
+        unsigned NewOpc = IsByte ? TMS9900::MOVBmi : TMS9900::MOVmi;
+        MIB = BuildMI(MBB, MI, DL, TII.get(NewOpc))
+                  .addReg(FrameReg)
+                  .add(MI_ref.getOperand(2));
+      } else {
+        unsigned NewOpc = IsByte ? TMS9900::MOVBmx : TMS9900::MOVmx;
+        MIB = BuildMI(MBB, MI, DL, TII.get(NewOpc))
+                  .addImm(FinalOffset)
+                  .addReg(FrameReg)
+                  .add(MI_ref.getOperand(2));
+      }
+    }
 
-    return false;
+    MIB.cloneMemRefs(MI_ref);
+    if (STDead) {
+      if (int STIdx = MIB->findRegisterDefOperandIdx(TMS9900::ST, &TRI);
+          STIdx != -1)
+        MIB->getOperand(STIdx).setIsDead();
+    }
+
+    MI_ref.eraseFromParent();
+    return true;
   }
 
   // For other instructions that just need a register with the address

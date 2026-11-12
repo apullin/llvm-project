@@ -24,7 +24,7 @@ define void @nonleaf() uwtable {
 }
 
 ; CHECK-LABEL: with_frame:
-; CHECK:      .cfi_offset 13, -4
+; CHECK:      .cfi_offset 13, -6
 ; CHECK:      MOV R10,R13
 ; CHECK:      .cfi_def_cfa 13, 8
 ; CHECK:      BL @callee
@@ -73,7 +73,7 @@ define void @realigned_frame() uwtable {
 ; FRAME: .eh_frame contents:
 ; FRAME: DW_CFA_offset: reg11 -2
 ; FRAME: DW_CFA_restore: reg11
-; FRAME: DW_CFA_offset: reg13 -4
+; FRAME: DW_CFA_offset: reg13 -6
 ; FRAME: DW_CFA_restore: reg13
 ; FRAME: DW_CFA_restore: reg11
 ; FRAME: DW_CFA_offset: reg13 -4

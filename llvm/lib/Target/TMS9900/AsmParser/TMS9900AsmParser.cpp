@@ -1032,6 +1032,9 @@ ParseStatus TMS9900AsmParser::parseOperand(OperandVector &Operands,
       if (!tryParseRegisterOperand(RegNo, RegStart, RegEnd).isSuccess()) {
         return Error(RegStart, "expected register in indexed addressing");
       }
+      if (RegNo == TMS9900::R0) {
+        return Error(RegStart, "R0 cannot be used as an index register");
+      }
       Operands.push_back(TMS9900Operand::createReg(RegNo, RegStart, RegEnd));
 
       if (Parser.getTok().isNot(AsmToken::RParen)) {
@@ -1108,6 +1111,9 @@ ParseStatus TMS9900AsmParser::parseMemOperand(OperandVector &Operands) {
 
     if (!tryParseRegisterOperand(Reg, RegStartLoc, RegEndLoc).isSuccess()) {
       return Error(RegStartLoc, "expected register in indexed addressing");
+    }
+    if (Reg == TMS9900::R0) {
+      return Error(RegStartLoc, "R0 cannot be used as an index register");
     }
 
     RegNo = Reg;

@@ -65,7 +65,24 @@ enum NodeType : unsigned {
   /// TAIL_CALL - Tail call to a function.
   /// Used for tail call optimization where the callee returns directly
   /// to our caller. Emitted as B @callee instead of BL @callee.
-  TAIL_CALL
+  TAIL_CALL,
+
+  /// UMUL_LOHI - 16x16->32 unsigned multiply returning (lo, hi)
+  UMUL_LOHI,
+
+  /// ADD32 / SUB32 - 32-bit add/sub using hardware Carry flag
+  /// (lhs_hi, lhs_lo, rhs_hi, rhs_lo) -> (res_hi, res_lo)
+  ADD32,
+  SUB32,
+
+  /// SHL32_1 / LSHR32_1 / ASHR32_1 - 1-bit 32-bit shifts via hardware Carry
+  /// (src_hi, src_lo) -> (res_hi, res_lo)
+  SHL32_1,
+  LSHR32_1,
+  ASHR32_1,
+
+  /// BR_CC32 - 32-bit conditional branch (chain, lhs_hi, lhs_lo, rhs_hi, rhs_lo, cc, dest)
+  BR_CC32
 };
 } // end namespace TMS9900ISD
 
@@ -82,6 +99,8 @@ public:
   /// legalization for nodes with Custom action.
   void ReplaceNodeResults(SDNode *N, SmallVectorImpl<SDValue> &Results,
                           SelectionDAG &DAG) const override;
+
+  SDValue PerformDAGCombine(SDNode *N, DAGCombinerInfo &DCI) const override;
 
   /// getTargetNodeName - This method returns the name of a target specific
   /// DAG node.
@@ -169,6 +188,14 @@ private:
   SDValue LowerShiftParts(SDValue Op, SelectionDAG &DAG,
                           bool IsLeft, bool IsArithmetic) const;
   SDValue LowerShift32(SDValue Op, SelectionDAG &DAG) const;
+  SDValue LowerShift64(SDValue Op, SelectionDAG &DAG) const;
+  SDValue LowerROT16(SDValue Op, SelectionDAG &DAG) const;
+  SDValue LowerArith32(SDValue Op, SelectionDAG &DAG) const;
+  SDValue LowerMUL32(SDValue Op, SelectionDAG &DAG) const;
+  SDValue LowerUMUL_LOHI(SDValue Op, SelectionDAG &DAG) const;
+  SDValue LowerBR_CC32(SDValue Chain, ISD::CondCode CC, SDValue LHS,
+                       SDValue RHS, SDValue Dest, const SDLoc &DL,
+                       SelectionDAG &DAG) const;
   SDValue LowerVASTART(SDValue Op, SelectionDAG &DAG) const;
   SDValue LowerRETURNADDR(SDValue Op, SelectionDAG &DAG) const;
   SDValue LowerFRAMEADDR(SDValue Op, SelectionDAG &DAG) const;

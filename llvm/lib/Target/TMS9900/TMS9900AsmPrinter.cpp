@@ -21,6 +21,8 @@
 #include "llvm/CodeGen/MachineFunctionPass.h"
 #include "llvm/CodeGen/MachineInstr.h"
 #include "llvm/MC/MCAsmInfo.h"
+#include "llvm/MC/MCContext.h"
+#include "llvm/MC/MCExpr.h"
 #include "llvm/MC/MCInst.h"
 #include "llvm/MC/MCStreamer.h"
 #include "llvm/MC/MCSymbol.h"
@@ -188,6 +190,85 @@ bool TMS9900AsmPrinter::PrintAsmMemoryOperand(const MachineInstr *MI,
 }
 
 void TMS9900AsmPrinter::emitInstruction(const MachineInstr *MI) {
+  unsigned Opc = MI->getOpcode();
+  if (Opc == TMS9900::INC_CARRY || Opc == TMS9900::DEC_BORROW) {
+    Register Reg = MI->getOperand(0).getReg();
+    MCSymbol *SkipSym = OutContext.createTempSymbol();
+
+    MCInst BrInst;
+    BrInst.setOpcode(Opc == TMS9900::INC_CARRY ? TMS9900::JNC : TMS9900::JOC);
+    BrInst.addOperand(
+        MCOperand::createExpr(MCSymbolRefExpr::create(SkipSym, OutContext)));
+    EmitToStreamer(*OutStreamer, BrInst);
+
+    MCInst AluInst;
+    AluInst.setOpcode(Opc == TMS9900::INC_CARRY ? TMS9900::INCr
+                                                : TMS9900::DECr);
+    AluInst.addOperand(MCOperand::createReg(Reg));
+    AluInst.addOperand(MCOperand::createReg(Reg));
+    EmitToStreamer(*OutStreamer, AluInst);
+
+    OutStreamer->emitLabel(SkipSym);
+    return;
+  }
+
+  if (Opc == TMS9900::ORI8000_CARRY) {
+    Register Reg = MI->getOperand(0).getReg();
+    MCSymbol *SkipSym = OutContext.createTempSymbol();
+
+    MCInst JncInst;
+    JncInst.setOpcode(TMS9900::JNC);
+    JncInst.addOperand(
+        MCOperand::createExpr(MCSymbolRefExpr::create(SkipSym, OutContext)));
+    EmitToStreamer(*OutStreamer, JncInst);
+
+    MCInst OriInst;
+    OriInst.setOpcode(TMS9900::ORI);
+    OriInst.addOperand(MCOperand::createReg(Reg));
+    OriInst.addOperand(MCOperand::createReg(Reg));
+    OriInst.addOperand(MCOperand::createImm(static_cast<int16_t>(0x8000)));
+    EmitToStreamer(*OutStreamer, OriInst);
+
+    OutStreamer->emitLabel(SkipSym);
+    return;
+  }
+
+  if (Opc == TMS9900::ADD_SELF_CARRY) {
+    Register Reg = MI->getOperand(0).getReg();
+    MCSymbol *SkipSym = OutContext.createTempSymbol();
+    MCSymbol *DoneSym = OutContext.createTempSymbol();
+
+    MCInst JncInst;
+    JncInst.setOpcode(TMS9900::JNC);
+    JncInst.addOperand(
+        MCOperand::createExpr(MCSymbolRefExpr::create(SkipSym, OutContext)));
+    EmitToStreamer(*OutStreamer, JncInst);
+
+    MCInst AddInst;
+    AddInst.setOpcode(TMS9900::Arr);
+    AddInst.addOperand(MCOperand::createReg(Reg));
+    AddInst.addOperand(MCOperand::createReg(Reg));
+    AddInst.addOperand(MCOperand::createReg(Reg));
+    EmitToStreamer(*OutStreamer, AddInst);
+
+    MCInst IncInst;
+    IncInst.setOpcode(TMS9900::INCr);
+    IncInst.addOperand(MCOperand::createReg(Reg));
+    IncInst.addOperand(MCOperand::createReg(Reg));
+    EmitToStreamer(*OutStreamer, IncInst);
+
+    MCInst JmpInst;
+    JmpInst.setOpcode(TMS9900::JMP);
+    JmpInst.addOperand(
+        MCOperand::createExpr(MCSymbolRefExpr::create(DoneSym, OutContext)));
+    EmitToStreamer(*OutStreamer, JmpInst);
+
+    OutStreamer->emitLabel(SkipSym);
+    EmitToStreamer(*OutStreamer, AddInst);
+    OutStreamer->emitLabel(DoneSym);
+    return;
+  }
+
   TMS9900MCInstLower MCInstLowering(OutContext, *this);
 
   MCInst TmpInst;

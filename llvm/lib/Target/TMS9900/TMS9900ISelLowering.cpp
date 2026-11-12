@@ -128,12 +128,12 @@ TMS9900TargetLowering::TMS9900TargetLowering(const TargetMachine &TM,
   setOperationAction(ISD::UDIVREM, MVT::i16, Expand);
 
   // Multiplication - we have MPY (16x16->32, result in Rd:Rd+1)
-  // Uses MUL16 pseudo instruction that expands via custom inserter
-  setOperationAction(ISD::MUL, MVT::i16, Legal);  // Uses MUL16 pseudo
+  // Uses MUL16/MULHU16/UMUL_LOHI16 pseudo instructions expanded via custom inserter
+  setOperationAction(ISD::MUL, MVT::i16, Legal);
   setOperationAction(ISD::MULHS, MVT::i16, Expand);
-  setOperationAction(ISD::MULHU, MVT::i16, Expand);  // Could implement later
+  setOperationAction(ISD::MULHU, MVT::i16, Legal);
   setOperationAction(ISD::SMUL_LOHI, MVT::i16, Expand);
-  setOperationAction(ISD::UMUL_LOHI, MVT::i16, Expand);
+  setOperationAction(ISD::UMUL_LOHI, MVT::i16, Custom);
 
   // No direct support for these
   setOperationAction(ISD::CTTZ, MVT::i16, Expand);
@@ -143,10 +143,10 @@ TMS9900TargetLowering::TMS9900TargetLowering(const TargetMachine &TM,
   // We have SWPB for byte swap
   setOperationAction(ISD::BSWAP, MVT::i16, Legal);
 
-  // Rotate - expand to shifts + or. SRC instruction only supports constant
-  // count; variable-count rotate needs expansion.
-  setOperationAction(ISD::ROTR, MVT::i16, Expand);
-  setOperationAction(ISD::ROTL, MVT::i16, Expand);
+  // Rotate - constant counts use native SRC (Shift Right Circular); variable
+  // counts expand to shifts + OR.
+  setOperationAction(ISD::ROTR, MVT::i16, Custom);
+  setOperationAction(ISD::ROTL, MVT::i16, Custom);
 
   // Shifts are supported
   setOperationAction(ISD::SHL, MVT::i16, Legal);
@@ -197,11 +197,18 @@ TMS9900TargetLowering::TMS9900TargetLowering(const TargetMachine &TM,
   // operations where possible, allowing the optimizer to work on them.
   // Division/remainder still use libcalls due to complexity.
 
-  // Arithmetic - expand to pairs of 16-bit ops
-  // Note: ADD/SUB expansion requires carry handling which we synthesize
-  setOperationAction(ISD::ADD, MVT::i32, Expand);
-  setOperationAction(ISD::SUB, MVT::i32, Expand);
-  setOperationAction(ISD::MUL, MVT::i32, Expand);    // Expands to UMUL_LOHI or partial products
+  // Arithmetic - custom lower ADD/SUB via hardware Carry, MUL via UMUL_LOHI / __mulsi3
+  setOperationAction(ISD::ADD, MVT::i32, Custom);
+  setOperationAction(ISD::SUB, MVT::i32, Custom);
+  setOperationAction(ISD::MUL, MVT::i32, Custom);
+
+  // 64-bit shifts - inline constant shifts, libcall (__ashldi3/__lshrdi3/__ashrdi3) for variable
+  setOperationAction(ISD::SHL, MVT::i64, Custom);
+  setOperationAction(ISD::SRA, MVT::i64, Custom);
+  setOperationAction(ISD::SRL, MVT::i64, Custom);
+
+  // Combine BRCOND(SETCC(i32)) before type legalization splits SETCC into booleans
+  setTargetDAGCombine(ISD::BRCOND);
 
   // Division/remainder - keep as libcalls (too complex to inline efficiently)
   setOperationAction(ISD::SDIV, MVT::i32, LibCall);  // __divsi3
@@ -310,6 +317,20 @@ const char *TMS9900TargetLowering::getTargetNodeName(unsigned Opcode) const {
     return "TMS9900ISD::BYTE_LOAD";
   case TMS9900ISD::TAIL_CALL:
     return "TMS9900ISD::TAIL_CALL";
+  case TMS9900ISD::UMUL_LOHI:
+    return "TMS9900ISD::UMUL_LOHI";
+  case TMS9900ISD::ADD32:
+    return "TMS9900ISD::ADD32";
+  case TMS9900ISD::SUB32:
+    return "TMS9900ISD::SUB32";
+  case TMS9900ISD::SHL32_1:
+    return "TMS9900ISD::SHL32_1";
+  case TMS9900ISD::LSHR32_1:
+    return "TMS9900ISD::LSHR32_1";
+  case TMS9900ISD::ASHR32_1:
+    return "TMS9900ISD::ASHR32_1";
+  case TMS9900ISD::BR_CC32:
+    return "TMS9900ISD::BR_CC32";
   }
   return nullptr;
 }
@@ -451,7 +472,19 @@ SDValue TMS9900TargetLowering::LowerOperation(SDValue Op,
   case ISD::SHL:
   case ISD::SRA:
   case ISD::SRL:
+    if (Op.getValueType() == MVT::i64)
+      return LowerShift64(Op, DAG);
     return LowerShift32(Op, DAG);
+  case ISD::ROTR:
+  case ISD::ROTL:
+    return LowerROT16(Op, DAG);
+  case ISD::ADD:
+  case ISD::SUB:
+    return LowerArith32(Op, DAG);
+  case ISD::MUL:
+    return LowerMUL32(Op, DAG);
+  case ISD::UMUL_LOHI:
+    return LowerUMUL_LOHI(Op, DAG);
   case ISD::VASTART:
     return LowerVASTART(Op, DAG);
   case ISD::RETURNADDR:
@@ -468,9 +501,33 @@ void TMS9900TargetLowering::ReplaceNodeResults(SDNode *N,
   switch (N->getOpcode()) {
   default:
     return; // Leave Results empty to fall through to default expansion
+  case ISD::ADD:
+  case ISD::SUB: {
+    if (N->getValueType(0) == MVT::i32) {
+      SDValue Res = LowerArith32(SDValue(N, 0), DAG);
+      if (Res.getNode())
+        Results.push_back(Res);
+    }
+    return;
+  }
+  case ISD::MUL: {
+    if (N->getValueType(0) == MVT::i32) {
+      SDValue Res = LowerMUL32(SDValue(N, 0), DAG);
+      if (Res.getNode())
+        Results.push_back(Res);
+    }
+    return;
+  }
   case ISD::SHL:
   case ISD::SRA:
   case ISD::SRL: {
+    EVT VT = N->getValueType(0);
+    if (VT == MVT::i64) {
+      SDValue Res = LowerShift64(SDValue(N, 0), DAG);
+      if (Res.getNode())
+        Results.push_back(Res);
+      return;
+    }
     // During type legalization, i32 shifts need custom expansion.
     // Delegate to LowerShift32 which correctly splits into i16 operations.
     SDValue Result = LowerShift32(SDValue(N, 0), DAG);
@@ -479,6 +536,24 @@ void TMS9900TargetLowering::ReplaceNodeResults(SDNode *N,
     return;
   }
   }
+}
+
+SDValue TMS9900TargetLowering::PerformDAGCombine(SDNode *N,
+                                                 DAGCombinerInfo &DCI) const {
+  if (N->getOpcode() == ISD::BRCOND && DCI.isBeforeLegalize()) {
+    SDValue Chain = N->getOperand(0);
+    SDValue Cond = N->getOperand(1);
+    SDValue Dest = N->getOperand(2);
+    if (Cond.getOpcode() == ISD::SETCC && Cond.hasOneUse()) {
+      SDValue LHS = Cond.getOperand(0);
+      SDValue RHS = Cond.getOperand(1);
+      if (LHS.getValueType() == MVT::i32) {
+        ISD::CondCode CC = cast<CondCodeSDNode>(Cond.getOperand(2))->get();
+        return LowerBR_CC32(Chain, CC, LHS, RHS, Dest, SDLoc(N), DCI.DAG);
+      }
+    }
+  }
+  return SDValue();
 }
 
 SDValue TMS9900TargetLowering::LowerLOAD(SDValue Op, SelectionDAG &DAG) const {
@@ -746,6 +821,18 @@ SDValue TMS9900TargetLowering::LowerShiftParts(SDValue Op, SelectionDAG &DAG,
       }
     }
 
+    // Shift by 1: transfer cross-word bit via hardware Carry instead of SLA/SRL 15
+    if (ShiftAmt == 1) {
+      unsigned NodeOpc = IsLeft
+                             ? TMS9900ISD::SHL32_1
+                             : (IsArithmetic ? TMS9900ISD::ASHR32_1
+                                             : TMS9900ISD::LSHR32_1);
+      SDValue Sh =
+          DAG.getNode(NodeOpc, DL, DAG.getVTList(VT, VT), Hi, Lo);
+      return DAG.getMergeValues({SDValue(Sh.getNode(), 1), SDValue(Sh.getNode(), 0)},
+                                DL);
+    }
+
     // Shift by < 16 - need to combine bits from both words
     SDValue ShiftAmtVal = DAG.getConstant(ShiftAmt, DL, VT);
     SDValue InvShiftAmt = DAG.getConstant(16 - ShiftAmt, DL, VT);
@@ -874,6 +961,18 @@ SDValue TMS9900TargetLowering::LowerShift32(SDValue Op, SelectionDAG &DAG) const
       return DAG.getNode(ISD::BUILD_PAIR, DL, MVT::i32, ResLo, ResHi);
     }
 
+    if (ShiftAmt == 1) {
+      unsigned NodeOpc =
+          Op.getOpcode() == ISD::SHL
+              ? TMS9900ISD::SHL32_1
+              : (Op.getOpcode() == ISD::SRA ? TMS9900ISD::ASHR32_1
+                                            : TMS9900ISD::LSHR32_1);
+      SDValue Sh =
+          DAG.getNode(NodeOpc, DL, DAG.getVTList(HalfVT, HalfVT), Hi, Lo);
+      return DAG.getNode(ISD::BUILD_PAIR, DL, MVT::i32,
+                         SDValue(Sh.getNode(), 1), SDValue(Sh.getNode(), 0));
+    }
+
     SDValue ShiftAmtVal = DAG.getConstant(ShiftAmt, DL, HalfVT);
     SDValue InvShiftAmt = DAG.getConstant(16 - ShiftAmt, DL, HalfVT);
 
@@ -978,6 +1077,198 @@ SDValue TMS9900TargetLowering::LowerFRAMEADDR(SDValue Op,
   return DAG.getCopyFromReg(DAG.getEntryNode(), DL, TMS9900::R13, VT);
 }
 
+SDValue TMS9900TargetLowering::LowerShift64(SDValue Op,
+                                            SelectionDAG &DAG) const {
+  if (Op.getValueType() != MVT::i64)
+    return SDValue();
+
+  SDValue Val = Op.getOperand(0);
+  SDValue Amt = Op.getOperand(1);
+  // Keep constant 64-bit shifts inline via default integer expansion.
+  if (isa<ConstantSDNode>(Amt))
+    return SDValue();
+
+  SDLoc DL(Op);
+  RTLIB::Libcall LC;
+  switch (Op.getOpcode()) {
+  default:
+    llvm_unreachable("Invalid i64 shift opcode");
+  case ISD::SHL:
+    LC = RTLIB::SHL_I64;
+    break;
+  case ISD::SRL:
+    LC = RTLIB::SRL_I64;
+    break;
+  case ISD::SRA:
+    LC = RTLIB::SRA_I64;
+    break;
+  }
+
+  Amt = DAG.getZExtOrTrunc(Amt, DL, MVT::i16);
+  TargetLowering::MakeLibCallOptions CallOptions;
+  return makeLibCall(DAG, LC, MVT::i64, {Val, Amt}, CallOptions, DL).first;
+}
+
+SDValue TMS9900TargetLowering::LowerROT16(SDValue Op, SelectionDAG &DAG) const {
+  if (Op.getValueType() != MVT::i16)
+    return SDValue();
+
+  SDValue Val = Op.getOperand(0);
+  SDValue Amt = Op.getOperand(1);
+  auto *CN = dyn_cast<ConstantSDNode>(Amt);
+  if (!CN)
+    return SDValue(); // Fall through to generic shift+or expansion
+
+  unsigned C = CN->getZExtValue() & 15U;
+  if (C == 0)
+    return Val;
+
+  SDLoc DL(Op);
+  if (Op.getOpcode() == ISD::ROTL)
+    C = (16U - C) & 15U;
+
+  return DAG.getNode(ISD::ROTR, DL, MVT::i16, Val,
+                     DAG.getConstant(C, DL, MVT::i16));
+}
+
+SDValue TMS9900TargetLowering::LowerUMUL_LOHI(SDValue Op,
+                                              SelectionDAG &DAG) const {
+  SDLoc DL(Op);
+  SDVTList VTs = DAG.getVTList(MVT::i16, MVT::i16);
+  return DAG.getNode(TMS9900ISD::UMUL_LOHI, DL, VTs, Op.getOperand(0),
+                     Op.getOperand(1));
+}
+
+SDValue TMS9900TargetLowering::LowerMUL32(SDValue Op, SelectionDAG &DAG) const {
+  if (Op.getValueType() != MVT::i32)
+    return SDValue();
+
+  // At -O1/-O2/-O3, expand inline using UMUL_LOHI16 + MUL16 partial products
+  // (zero call/stack overhead, and constant zero high-words simplify to 1-2 MPYs).
+  // At -Os/-Oz, prefer calling compact __mulsi3 unless both high halves are 0
+  // (in which case inline expansion is a single 16x16->32 MPY!).
+  const Function &F = DAG.getMachineFunction().getFunction();
+  if (!F.hasOptSize())
+    return SDValue();
+
+  SDValue LHS = Op.getOperand(0);
+  SDValue RHS = Op.getOperand(1);
+  KnownBits KL = DAG.computeKnownBits(LHS);
+  KnownBits KR = DAG.computeKnownBits(RHS);
+  if (KL.countMinLeadingZeros() >= 16 && KR.countMinLeadingZeros() >= 16)
+    return SDValue();
+
+  SDLoc DL(Op);
+  TargetLowering::MakeLibCallOptions CallOptions;
+  return makeLibCall(DAG, RTLIB::MUL_I32, MVT::i32, {LHS, RHS}, CallOptions, DL)
+      .first;
+}
+
+SDValue TMS9900TargetLowering::LowerArith32(SDValue Op,
+                                            SelectionDAG &DAG) const {
+  if (Op.getValueType() != MVT::i32)
+    return SDValue();
+
+  SDLoc DL(Op);
+  SDValue LHS = Op.getOperand(0);
+  SDValue RHS = Op.getOperand(1);
+  bool IsSub = (Op.getOpcode() == ISD::SUB);
+
+  if (!IsSub && isa<ConstantSDNode>(LHS) && !isa<ConstantSDNode>(RHS))
+    std::swap(LHS, RHS);
+
+  if (auto *CL = dyn_cast<ConstantSDNode>(LHS)) {
+    if (auto *CR = dyn_cast<ConstantSDNode>(RHS)) {
+      uint32_t LV = CL->getZExtValue();
+      uint32_t RV = CR->getZExtValue();
+      return DAG.getConstant(IsSub ? (LV - RV) : (LV + RV), DL, MVT::i32);
+    }
+  }
+
+  SDValue LHSLo = DAG.getNode(ISD::EXTRACT_ELEMENT, DL, MVT::i16, LHS,
+                              DAG.getConstant(0, DL, MVT::i16));
+  SDValue LHSHi = DAG.getNode(ISD::EXTRACT_ELEMENT, DL, MVT::i16, LHS,
+                              DAG.getConstant(1, DL, MVT::i16));
+
+  if (auto *CR = dyn_cast<ConstantSDNode>(RHS)) {
+    uint32_t Val = CR->getZExtValue();
+    if (IsSub)
+      Val = 0U - Val;
+    uint16_t Lo16 = static_cast<uint16_t>(Val & 0xFFFFU);
+    uint16_t Hi16 = static_cast<uint16_t>((Val >> 16) & 0xFFFFU);
+
+    if (Lo16 == 0) {
+      SDValue ResHi =
+          Hi16 == 0
+              ? LHSHi
+              : DAG.getNode(ISD::ADD, DL, MVT::i16, LHSHi,
+                            DAG.getSignedConstant(static_cast<int16_t>(Hi16),
+                                                  DL, MVT::i16));
+      return DAG.getNode(ISD::BUILD_PAIR, DL, MVT::i32, LHSLo, ResHi);
+    }
+
+    SDVTList VTs = DAG.getVTList(MVT::i16, MVT::i16);
+    SDValue Add = DAG.getNode(
+        TMS9900ISD::ADD32, DL, VTs, LHSHi, LHSLo,
+        DAG.getSignedConstant(static_cast<int16_t>(Hi16), DL, MVT::i16),
+        DAG.getSignedConstant(static_cast<int16_t>(Lo16), DL, MVT::i16));
+    return DAG.getNode(ISD::BUILD_PAIR, DL, MVT::i32, SDValue(Add.getNode(), 1),
+                       SDValue(Add.getNode(), 0));
+  }
+
+  SDValue RHSLo = DAG.getNode(ISD::EXTRACT_ELEMENT, DL, MVT::i16, RHS,
+                              DAG.getConstant(0, DL, MVT::i16));
+  SDValue RHSHi = DAG.getNode(ISD::EXTRACT_ELEMENT, DL, MVT::i16, RHS,
+                              DAG.getConstant(1, DL, MVT::i16));
+
+  SDVTList VTs = DAG.getVTList(MVT::i16, MVT::i16);
+  unsigned NodeOpc = IsSub ? TMS9900ISD::SUB32 : TMS9900ISD::ADD32;
+  SDValue Res =
+      DAG.getNode(NodeOpc, DL, VTs, LHSHi, LHSLo, RHSHi, RHSLo);
+  return DAG.getNode(ISD::BUILD_PAIR, DL, MVT::i32, SDValue(Res.getNode(), 1),
+                     SDValue(Res.getNode(), 0));
+}
+
+SDValue TMS9900TargetLowering::LowerBR_CC32(SDValue Chain, ISD::CondCode CC,
+                                            SDValue LHS, SDValue RHS,
+                                            SDValue Dest, const SDLoc &DL,
+                                            SelectionDAG &DAG) const {
+  if (isa<ConstantSDNode>(LHS) && !isa<ConstantSDNode>(RHS)) {
+    std::swap(LHS, RHS);
+    CC = ISD::getSetCCSwappedOperands(CC);
+  }
+
+  SDValue LHSLo = DAG.getNode(ISD::EXTRACT_ELEMENT, DL, MVT::i16, LHS,
+                              DAG.getConstant(0, DL, MVT::i16));
+  SDValue LHSHi = DAG.getNode(ISD::EXTRACT_ELEMENT, DL, MVT::i16, LHS,
+                              DAG.getConstant(1, DL, MVT::i16));
+
+  if (auto *CR = dyn_cast<ConstantSDNode>(RHS)) {
+    // Sign-bit tests need only the upper 16-bit word.
+    if ((CC == ISD::SETLT && CR->isZero()) ||
+        (CC == ISD::SETLE && CR->isAllOnes())) {
+      return DAG.getNode(ISD::BR_CC, DL, MVT::Other, Chain,
+                         DAG.getCondCode(ISD::SETLT), LHSHi,
+                         DAG.getConstant(0, DL, MVT::i16), Dest);
+    }
+    if ((CC == ISD::SETGE && CR->isZero()) ||
+        (CC == ISD::SETGT && CR->isAllOnes())) {
+      return DAG.getNode(ISD::BR_CC, DL, MVT::Other, Chain,
+                         DAG.getCondCode(ISD::SETGE), LHSHi,
+                         DAG.getConstant(0, DL, MVT::i16), Dest);
+    }
+  }
+
+  SDValue RHSLo = DAG.getNode(ISD::EXTRACT_ELEMENT, DL, MVT::i16, RHS,
+                              DAG.getConstant(0, DL, MVT::i16));
+  SDValue RHSHi = DAG.getNode(ISD::EXTRACT_ELEMENT, DL, MVT::i16, RHS,
+                              DAG.getConstant(1, DL, MVT::i16));
+
+  SDValue Ops[] = {Chain, LHSHi, LHSLo, RHSHi, RHSLo,
+                   DAG.getConstant(CC, DL, MVT::i16), Dest};
+  return DAG.getNode(TMS9900ISD::BR_CC32, DL, MVT::Other, Ops);
+}
+
 SDValue TMS9900TargetLowering::LowerBR_CC(SDValue Op, SelectionDAG &DAG) const {
   SDValue Chain = Op.getOperand(0);
   ISD::CondCode CC = cast<CondCodeSDNode>(Op.getOperand(1))->get();
@@ -986,10 +1277,8 @@ SDValue TMS9900TargetLowering::LowerBR_CC(SDValue Op, SelectionDAG &DAG) const {
   SDValue Dest = Op.getOperand(4);
   SDLoc DL(Op);
 
-  if (LHS.getValueType() == MVT::i32) {
-    SDValue Cond = DAG.getSetCC(DL, MVT::i16, LHS, RHS, CC);
-    return DAG.getNode(ISD::BRCOND, DL, MVT::Other, Chain, Cond, Dest);
-  }
+  if (LHS.getValueType() == MVT::i32)
+    return LowerBR_CC32(Chain, CC, LHS, RHS, Dest, DL, DAG);
 
   // Keep the compared value first for both C (C lhs,rhs) and CI (CI lhs,imm).
   // The TMS9900 sets comparison flags by comparing the first assembly operand
@@ -1181,19 +1470,236 @@ TMS9900TargetLowering::EmitInstrWithCustomInserter(MachineInstr &MI,
     Register LhsReg = MI.getOperand(1).getReg();
     Register RhsReg = MI.getOperand(2).getReg();
 
-    // MOV $lhs, R0
     BuildMI(*BB, MI, DL, TII.get(TMS9900::MOVrr), TMS9900::R0)
         .addReg(LhsReg);
-
-    // MPY $rhs,R0 (multiplicand in R0, result in R0:R1)
     BuildMI(*BB, MI, DL, TII.get(TMS9900::MPYrr_R0)).addReg(RhsReg);
-
-    // MOV R1, $dst (low 16 bits of result are in R1)
     BuildMI(*BB, MI, DL, TII.get(TMS9900::MOVrr), DstReg)
         .addReg(TMS9900::R1);
 
     MI.eraseFromParent();
     return BB;
+  }
+
+  case TMS9900::MULHU16: {
+    Register DstReg = MI.getOperand(0).getReg();
+    Register LhsReg = MI.getOperand(1).getReg();
+    Register RhsReg = MI.getOperand(2).getReg();
+
+    BuildMI(*BB, MI, DL, TII.get(TMS9900::MOVrr), TMS9900::R0)
+        .addReg(LhsReg);
+    BuildMI(*BB, MI, DL, TII.get(TMS9900::MPYrr_R0)).addReg(RhsReg);
+    BuildMI(*BB, MI, DL, TII.get(TMS9900::MOVrr), DstReg)
+        .addReg(TMS9900::R0);
+
+    MI.eraseFromParent();
+    return BB;
+  }
+
+  case TMS9900::UMUL_LOHI16: {
+    Register LoReg = MI.getOperand(0).getReg();
+    Register HiReg = MI.getOperand(1).getReg();
+    Register LhsReg = MI.getOperand(2).getReg();
+    Register RhsReg = MI.getOperand(3).getReg();
+
+    BuildMI(*BB, MI, DL, TII.get(TMS9900::MOVrr), TMS9900::R0)
+        .addReg(LhsReg);
+    BuildMI(*BB, MI, DL, TII.get(TMS9900::MPYrr_R0)).addReg(RhsReg);
+    BuildMI(*BB, MI, DL, TII.get(TMS9900::MOVrr), LoReg)
+        .addReg(TMS9900::R1);
+    BuildMI(*BB, MI, DL, TII.get(TMS9900::MOVrr), HiReg)
+        .addReg(TMS9900::R0);
+
+    MI.eraseFromParent();
+    return BB;
+  }
+
+  case TMS9900::BR_CC32: {
+    Register LHSHi = MI.getOperand(0).getReg();
+    Register LHSLo = MI.getOperand(1).getReg();
+    Register RHSHi = MI.getOperand(2).getReg();
+    Register RHSLo = MI.getOperand(3).getReg();
+    auto CC = static_cast<ISD::CondCode>(MI.getOperand(4).getImm());
+    MachineBasicBlock *TargetBB = MI.getOperand(5).getMBB();
+
+    MachineFunction *MF = BB->getParent();
+    MachineBasicBlock *StartBB = BB;
+    MachineBasicBlock *CheckLoBB = MF->CreateMachineBasicBlock();
+    MachineBasicBlock *DoneBB = MF->CreateMachineBasicBlock();
+
+    unsigned CallFrameSize = TII.getCallFrameSizeAt(MI);
+    CheckLoBB->setCallFrameSize(CallFrameSize);
+    DoneBB->setCallFrameSize(CallFrameSize);
+
+    // Record PHI incoming values in TargetBB that currently come from StartBB.
+    SmallVector<std::pair<MachineInstr *, Register>, 4> TargetPHIs;
+    for (MachineInstr &Phi : TargetBB->phis()) {
+      for (unsigned i = 1, e = Phi.getNumOperands(); i < e; i += 2) {
+        if (Phi.getOperand(i + 1).getMBB() == StartBB) {
+          TargetPHIs.emplace_back(&Phi, Phi.getOperand(i).getReg());
+          break;
+        }
+      }
+    }
+
+    // Identify the fallthrough/false successor of StartBB before splitting.
+    MachineBasicBlock *FalseSucc = nullptr;
+    for (MachineBasicBlock *Succ : StartBB->successors()) {
+      if (Succ != TargetBB) {
+        FalseSucc = Succ;
+        break;
+      }
+    }
+    if (!FalseSucc)
+      FalseSucc = TargetBB; // Both arms jump to the same block.
+
+    MachineFunction::iterator It = ++BB->getIterator();
+    MF->insert(It, CheckLoBB);
+    MF->insert(It, DoneBB);
+
+    DoneBB->splice(DoneBB->begin(), StartBB,
+                   std::next(MachineBasicBlock::iterator(MI)), StartBB->end());
+    MI.eraseFromParent();
+
+    // Remove StartBB's old successors and rewire FalseSucc's PHIs to DoneBB.
+    while (!StartBB->succ_empty())
+      StartBB->removeSuccessor(StartBB->succ_begin());
+    DoneBB->addSuccessor(FalseSucc);
+    if (FalseSucc != TargetBB)
+      FalseSucc->replacePhiUsesWith(StartBB, DoneBB);
+    else
+      TargetBB->replacePhiUsesWith(StartBB, DoneBB);
+
+    auto addTargetPhiEdge = [&](MachineBasicBlock *PredBB) {
+      if (FalseSucc != TargetBB && PredBB == StartBB)
+        return; // StartBB's original PHI operand is still present!
+      for (auto &[Phi, Reg] : TargetPHIs) {
+        Phi->addOperand(MachineOperand::CreateReg(Reg, false));
+        Phi->addOperand(MachineOperand::CreateMBB(PredBB));
+      }
+    };
+
+    if (CC == ISD::SETEQ) {
+      // High words unequal -> skip to DoneBB; else compare low words.
+      BuildMI(StartBB, DL, TII.get(TMS9900::CMPBRrr))
+          .addReg(LHSHi)
+          .addReg(RHSHi)
+          .addImm(ISD::SETNE)
+          .addMBB(DoneBB);
+      StartBB->addSuccessor(CheckLoBB);
+      StartBB->addSuccessor(DoneBB);
+
+      BuildMI(CheckLoBB, DL, TII.get(TMS9900::CMPBRrr))
+          .addReg(LHSLo)
+          .addReg(RHSLo)
+          .addImm(ISD::SETEQ)
+          .addMBB(TargetBB);
+      CheckLoBB->addSuccessor(TargetBB);
+      CheckLoBB->addSuccessor(DoneBB);
+
+      if (FalseSucc != TargetBB)
+        TargetBB->replacePhiUsesWith(StartBB, CheckLoBB);
+      else
+        addTargetPhiEdge(CheckLoBB);
+      return DoneBB;
+    }
+
+    if (CC == ISD::SETNE) {
+      // High words unequal -> TargetBB; else compare low words.
+      BuildMI(StartBB, DL, TII.get(TMS9900::CMPBRrr))
+          .addReg(LHSHi)
+          .addReg(RHSHi)
+          .addImm(ISD::SETNE)
+          .addMBB(TargetBB);
+      StartBB->addSuccessor(TargetBB);
+      StartBB->addSuccessor(CheckLoBB);
+
+      BuildMI(CheckLoBB, DL, TII.get(TMS9900::CMPBRrr))
+          .addReg(LHSLo)
+          .addReg(RHSLo)
+          .addImm(ISD::SETNE)
+          .addMBB(TargetBB);
+      CheckLoBB->addSuccessor(TargetBB);
+      CheckLoBB->addSuccessor(DoneBB);
+
+      addTargetPhiEdge(StartBB);
+      addTargetPhiEdge(CheckLoBB);
+      return DoneBB;
+    }
+
+    // Ordering comparisons:
+    //   StartBB:     if (LHSHi <strict_true> RHSHi) goto TargetBB
+    //   CheckHiEqBB: if (LHSHi != RHSHi) goto DoneBB
+    //   CheckLoBB:   if (LHSLo <unsigned_lo> RHSLo) goto TargetBB
+    ISD::CondCode StrictHiTrueCC;
+    ISD::CondCode LoCC;
+    switch (CC) {
+    case ISD::SETLT:
+      StrictHiTrueCC = ISD::SETLT;
+      LoCC = ISD::SETULT;
+      break;
+    case ISD::SETLE:
+      StrictHiTrueCC = ISD::SETLT;
+      LoCC = ISD::SETULE;
+      break;
+    case ISD::SETGT:
+      StrictHiTrueCC = ISD::SETGT;
+      LoCC = ISD::SETUGT;
+      break;
+    case ISD::SETGE:
+      StrictHiTrueCC = ISD::SETGT;
+      LoCC = ISD::SETUGE;
+      break;
+    case ISD::SETULT:
+      StrictHiTrueCC = ISD::SETULT;
+      LoCC = ISD::SETULT;
+      break;
+    case ISD::SETULE:
+      StrictHiTrueCC = ISD::SETULT;
+      LoCC = ISD::SETULE;
+      break;
+    case ISD::SETUGT:
+      StrictHiTrueCC = ISD::SETUGT;
+      LoCC = ISD::SETUGT;
+      break;
+    case ISD::SETUGE:
+      StrictHiTrueCC = ISD::SETUGT;
+      LoCC = ISD::SETUGE;
+      break;
+    default:
+      llvm_unreachable("Unsupported i32 BR_CC condition");
+    }
+
+    MachineBasicBlock *CheckHiEqBB = MF->CreateMachineBasicBlock();
+    CheckHiEqBB->setCallFrameSize(CallFrameSize);
+    MF->insert(CheckLoBB->getIterator(), CheckHiEqBB);
+
+    BuildMI(StartBB, DL, TII.get(TMS9900::CMPBRrr))
+        .addReg(LHSHi)
+        .addReg(RHSHi)
+        .addImm(StrictHiTrueCC)
+        .addMBB(TargetBB);
+    StartBB->addSuccessor(TargetBB);
+    StartBB->addSuccessor(CheckHiEqBB);
+
+    BuildMI(CheckHiEqBB, DL, TII.get(TMS9900::CMPBRrr))
+        .addReg(LHSHi)
+        .addReg(RHSHi)
+        .addImm(ISD::SETNE)
+        .addMBB(DoneBB);
+    CheckHiEqBB->addSuccessor(CheckLoBB);
+    CheckHiEqBB->addSuccessor(DoneBB);
+
+    BuildMI(CheckLoBB, DL, TII.get(TMS9900::CMPBRrr))
+        .addReg(LHSLo)
+        .addReg(RHSLo)
+        .addImm(LoCC)
+        .addMBB(TargetBB);
+    CheckLoBB->addSuccessor(TargetBB);
+    CheckLoBB->addSuccessor(DoneBB);
+
+    addTargetPhiEdge(StartBB);
+    addTargetPhiEdge(CheckLoBB);
+    return DoneBB;
   }
 
   case TMS9900::UDIV16: {

@@ -65,6 +65,33 @@ def TMS9900mpy : SDNode<"TMS9900ISD::MPY", SDTypeProfile<1, 2, [SDTCisVT<0, i32>
                                                                 SDTCisVT<1, i16>,
                                                                 SDTCisVT<2, i16>]>>;
 
+// Unsigned 16x16->32 multiply returning (lo, hi)
+def TMS9900umul_lohi : SDNode<"TMS9900ISD::UMUL_LOHI",
+                              SDTypeProfile<2, 2, [SDTCisVT<0, i16>,
+                                                   SDTCisVT<1, i16>,
+                                                   SDTCisVT<2, i16>,
+                                                   SDTCisVT<3, i16>]>>;
+
+// 32-bit Carry-based add/sub: (lhs_hi, lhs_lo, rhs_hi, rhs_lo) -> (res_hi, res_lo)
+def SDT_TMS9900Arith32 : SDTypeProfile<2, 4, [SDTCisVT<0, i16>, SDTCisVT<1, i16>,
+                                              SDTCisVT<2, i16>, SDTCisVT<3, i16>,
+                                              SDTCisVT<4, i16>, SDTCisVT<5, i16>]>;
+def TMS9900add32 : SDNode<"TMS9900ISD::ADD32", SDT_TMS9900Arith32>;
+def TMS9900sub32 : SDNode<"TMS9900ISD::SUB32", SDT_TMS9900Arith32>;
+
+def SDT_TMS9900Shift32_1 : SDTypeProfile<2, 2, [SDTCisVT<0, i16>, SDTCisVT<1, i16>,
+                                                SDTCisVT<2, i16>, SDTCisVT<3, i16>]>;
+def TMS9900shl32_1  : SDNode<"TMS9900ISD::SHL32_1", SDT_TMS9900Shift32_1>;
+def TMS9900lshr32_1 : SDNode<"TMS9900ISD::LSHR32_1", SDT_TMS9900Shift32_1>;
+def TMS9900ashr32_1 : SDNode<"TMS9900ISD::ASHR32_1", SDT_TMS9900Shift32_1>;
+
+// 32-bit conditional branch: (chain, lhs_hi, lhs_lo, rhs_hi, rhs_lo, cc, dest)
+def TMS9900brcc32 : SDNode<"TMS9900ISD::BR_CC32",
+                           SDTypeProfile<0, 6, [SDTCisVT<0, i16>, SDTCisVT<1, i16>,
+                                                SDTCisVT<2, i16>, SDTCisVT<3, i16>,
+                                                SDTCisVT<4, i16>, SDTCisVT<5, OtherVT>]>,
+                           [SDNPHasChain]>;
+
 // Select conditional node
 // (TMS9900selectcc trueval, falseval, condcode, lhs, rhs)
 // Returns trueval if (lhs condcode rhs), else falseval
@@ -302,7 +329,7 @@ let isCodeGenOnly = 1, isPseudo = 1 in {
 // Defs = [ST] is required because the expansion (INV, SZC, INV) all set
 // status flags. Without it, the scheduler may move ANDrr across
 // flag-dependent sequences, corrupting comparison results.
-let Defs = [ST] in
+let Defs = [ST], isCommutable = 1 in
 def ANDrr : Pseudo<(outs GR16:$rd), (ins GR16:$rs1, GR16:$rs2),
                    "# AND $rs1, $rs2",
                    [(set GR16:$rd, (and GR16:$rs1, GR16:$rs2))]> {
@@ -809,6 +836,7 @@ def Arr : Format1_Reg_TwoAddr<0b1010, 0, (outs GR16:$rd), (ins GR16:$rs1, GR16:$
                               "A\t$rs2,$rd",
                               [(set GR16:$rd, (add GR16:$rs1, GR16:$rs2))]> {
   let Constraints = "$rd = $rs1";
+  let isCommutable = 1;
 }
 
 // AB - Add Byte
@@ -816,6 +844,7 @@ def ABrr : Format1_Reg_TwoAddr<0b1010, 1, (outs GR16:$rd), (ins GR16:$rs1, GR16:
                                "AB\t$rs2,$rd",
                                []> {
   let Constraints = "$rd = $rs1";
+  let isCommutable = 1;
 }
 
 def Aim : Format1_IndLoad<0b1010, 0, (outs GR16:$rd), (ins GR16:$rs),
@@ -1193,6 +1222,7 @@ def SOCrr : Format1_Reg_TwoAddr<0b1110, 0, (outs GR16:$rd), (ins GR16:$rs1, GR16
                                 "SOC\t$rs2,$rd",
                                 [(set GR16:$rd, (or GR16:$rs1, GR16:$rs2))]> {
   let Constraints = "$rd = $rs1";
+  let isCommutable = 1;
 }
 
 // SOCB - Set Ones Corresponding Byte
@@ -1200,6 +1230,7 @@ def SOCBrr : Format1_Reg_TwoAddr<0b1110, 1, (outs GR16:$rd), (ins GR16:$rs1, GR1
                                  "SOCB\t$rs2,$rd",
                                  []> {
   let Constraints = "$rd = $rs1";
+  let isCommutable = 1;
 }
 
 def SOCim : Format1_IndLoad<0b1110, 0, (outs GR16:$rd), (ins GR16:$rs),
@@ -1320,6 +1351,7 @@ def XORrr : Format2_Reg_TwoAddr<0b001010, (outs GR16:$rd), (ins GR16:$rs1, GR16:
                                 "XOR\t$rs2,$rd",
                                 [(set GR16:$rd, (xor GR16:$rs1, GR16:$rs2))]> {
   let Constraints = "$rd = $rs1";
+  let isCommutable = 1;
 }
 
 // COC/CZC - Compare Ones/Zeros Corresponding
@@ -1533,6 +1565,30 @@ def CMPBRri : Pseudo<(outs),
                      (ins GR16:$lhs, i16imm:$rhs, i16imm:$cc, brtarget8:$target),
                      "# CMPBRri $lhs, $rhs, $cc, $target",
                      []>;
+}
+
+// Conditional 1-word carry/borrow adjustments (emitted as JNC/JOC $+4 + INC/DEC)
+let Uses = [ST], Defs = [ST] in {
+def INC_CARRY : Pseudo<(outs GR16:$dst), (ins GR16:$src),
+                       "# INC_CARRY $dst", []> {
+  let Constraints = "$dst = $src";
+  let Size = 4;
+}
+def DEC_BORROW : Pseudo<(outs GR16:$dst), (ins GR16:$src),
+                        "# DEC_BORROW $dst", []> {
+  let Constraints = "$dst = $src";
+  let Size = 4;
+}
+def ADD_SELF_CARRY : Pseudo<(outs GR16:$dst), (ins GR16:$src),
+                            "# ADD_SELF_CARRY $dst", []> {
+  let Constraints = "$dst = $src";
+  let Size = 8;
+}
+def ORI8000_CARRY : Pseudo<(outs GR16:$dst), (ins GR16:$src),
+                           "# ORI8000_CARRY $dst", []> {
+  let Constraints = "$dst = $src";
+  let Size = 6;
+}
 }
 
 //===----------------------------------------------------------------------===//
@@ -1974,10 +2030,83 @@ def TB : Format5<0b00011111, (outs), (ins cru_disp8:$disp),
 // 1. MOV $lhs, R0 (or other even register)
 // 2. MPY $rhs, R0
 // 3. MOV R1, $dst (get low 16 bits from R1)
-let usesCustomInserter = 1, Defs = [R0, R1, ST] in
+let usesCustomInserter = 1, Defs = [R0, R1, ST], isCommutable = 1 in
 def MUL16 : Pseudo<(outs GR16:$dst), (ins GR16:$lhs, GR16:$rhs),
                    "# MUL16 $lhs, $rhs -> $dst",
                    [(set GR16:$dst, (mul GR16:$lhs, GR16:$rhs))]>;
+
+// High 16 bits of unsigned 16x16->32 multiply (R0 output of MPY)
+let usesCustomInserter = 1, Defs = [R0, R1, ST], isCommutable = 1 in
+def MULHU16 : Pseudo<(outs GR16:$dst), (ins GR16:$lhs, GR16:$rhs),
+                     "# MULHU16 $lhs, $rhs -> $dst",
+                     [(set GR16:$dst, (mulhu GR16:$lhs, GR16:$rhs))]>;
+
+// Full 16x16->32 unsigned multiply returning (lo=R1, hi=R0)
+let usesCustomInserter = 1, Defs = [R0, R1, ST] in
+def UMUL_LOHI16 : Pseudo<(outs GR16:$lo, GR16:$hi), (ins GR16:$lhs, GR16:$rhs),
+                         "# UMUL_LOHI16 $lhs, $rhs -> $lo, $hi",
+                         [(set GR16:$lo, GR16:$hi,
+                           (TMS9900umul_lohi GR16:$lhs, GR16:$rhs))]>;
+
+// 32-bit Carry-based addition and subtraction pseudos (expanded post-RA)
+let Defs = [ST], Constraints = "$dst_hi = $lhs_hi, $dst_lo = $lhs_lo" in {
+def ADD32 : Pseudo<(outs GR16:$dst_hi, GR16:$dst_lo),
+                   (ins GR16:$lhs_hi, GR16:$lhs_lo, GR16:$rhs_hi, GR16:$rhs_lo),
+                   "# ADD32",
+                   [(set GR16:$dst_hi, GR16:$dst_lo,
+                     (TMS9900add32 GR16:$lhs_hi, GR16:$lhs_lo,
+                                   GR16:$rhs_hi, GR16:$rhs_lo))]> {
+  let Size = 10;
+}
+let AddedComplexity = 5 in
+def ADDI32 : Pseudo<(outs GR16:$dst_hi, GR16:$dst_lo),
+                    (ins GR16:$lhs_hi, GR16:$lhs_lo, i16imm:$rhs_hi, i16imm:$rhs_lo),
+                    "# ADDI32",
+                    [(set GR16:$dst_hi, GR16:$dst_lo,
+                      (TMS9900add32 GR16:$lhs_hi, GR16:$lhs_lo,
+                                    imm:$rhs_hi, imm:$rhs_lo))]> {
+  let Size = 12;
+}
+def SUB32 : Pseudo<(outs GR16:$dst_hi, GR16:$dst_lo),
+                   (ins GR16:$lhs_hi, GR16:$lhs_lo, GR16:$rhs_hi, GR16:$rhs_lo),
+                   "# SUB32",
+                   [(set GR16:$dst_hi, GR16:$dst_lo,
+                     (TMS9900sub32 GR16:$lhs_hi, GR16:$lhs_lo,
+                                   GR16:$rhs_hi, GR16:$rhs_lo))]> {
+  let Size = 10;
+}
+def SHL32_1 : Pseudo<(outs GR16:$dst_hi, GR16:$dst_lo),
+                     (ins GR16:$lhs_hi, GR16:$lhs_lo),
+                     "# SHL32_1",
+                     [(set GR16:$dst_hi, GR16:$dst_lo,
+                       (TMS9900shl32_1 GR16:$lhs_hi, GR16:$lhs_lo))]> {
+  let Size = 8;
+}
+def LSHR32_1 : Pseudo<(outs GR16:$dst_hi, GR16:$dst_lo),
+                      (ins GR16:$lhs_hi, GR16:$lhs_lo),
+                      "# LSHR32_1",
+                      [(set GR16:$dst_hi, GR16:$dst_lo,
+                        (TMS9900lshr32_1 GR16:$lhs_hi, GR16:$lhs_lo))]> {
+  let Size = 10;
+}
+def ASHR32_1 : Pseudo<(outs GR16:$dst_hi, GR16:$dst_lo),
+                      (ins GR16:$lhs_hi, GR16:$lhs_lo),
+                      "# ASHR32_1",
+                      [(set GR16:$dst_hi, GR16:$dst_lo,
+                        (TMS9900ashr32_1 GR16:$lhs_hi, GR16:$lhs_lo))]> {
+  let Size = 10;
+}
+}
+
+// 32-bit direct multi-word conditional branch
+let usesCustomInserter = 1, isBranch = 1, isTerminator = 1, Defs = [ST] in
+def BR_CC32 : Pseudo<(outs),
+                     (ins GR16:$lhs_hi, GR16:$lhs_lo, GR16:$rhs_hi, GR16:$rhs_lo,
+                          i16imm:$cc, brtarget8:$target),
+                     "# BR_CC32",
+                     [(TMS9900brcc32 GR16:$lhs_hi, GR16:$lhs_lo,
+                                     GR16:$rhs_hi, GR16:$rhs_lo,
+                                     imm:$cc, bb:$target)]>;
 
 // Pseudo instruction for unsigned divide (result = quotient)
 // Expands to:
@@ -2151,3 +2280,24 @@ def : Pat<(TMS9900byteload (add (TMS9900Wrapper tglobaladdr:$addr), GR16:$idx)),
 // Indexed byte store for global addresses: MOVB Rs,@global(Rx)
 def : Pat<(TMS9900bytestore GR16:$val, (add (TMS9900Wrapper tglobaladdr:$addr), GR16:$idx)),
           (MOVBmx tglobaladdr:$addr, GR16:$idx, GR16:$val)>;
+
+// Direct memory zero/ones stores using CLR and SETO (saves a register + 2B/14c)
+let AddedComplexity = 10 in {
+def : Pat<(store (i16 0), (TMS9900Wrapper tglobaladdr:$addr)),
+          (CLR_sym tglobaladdr:$addr)>;
+def : Pat<(store (i16 0), (add (TMS9900Wrapper tglobaladdr:$addr), IdxRegs:$idx)),
+          (CLR_idx tglobaladdr:$addr, IdxRegs:$idx)>;
+def : Pat<(store (i16 0), (add IdxRegs:$ri, (i16 imm:$offset))),
+          (CLR_idx imm:$offset, IdxRegs:$ri)>;
+def : Pat<(store (i16 0), GR16:$rs),
+          (CLR_ind GR16:$rs)>;
+
+def : Pat<(store (i16 -1), (TMS9900Wrapper tglobaladdr:$addr)),
+          (SETO_sym tglobaladdr:$addr)>;
+def : Pat<(store (i16 -1), (add (TMS9900Wrapper tglobaladdr:$addr), IdxRegs:$idx)),
+          (SETO_idx tglobaladdr:$addr, IdxRegs:$idx)>;
+def : Pat<(store (i16 -1), (add IdxRegs:$ri, (i16 imm:$offset))),
+          (SETO_idx imm:$offset, IdxRegs:$ri)>;
+def : Pat<(store (i16 -1), GR16:$rs),
+          (SETO_ind GR16:$rs)>;
+}

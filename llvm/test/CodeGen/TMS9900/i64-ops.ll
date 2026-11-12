@@ -93,28 +93,27 @@ define i64 @srem64(i64 %a, i64 %b) {
 ; Shift operations
 ; ==========================================================================
 
-; --- 64-bit shift left (variable, uses i32 shift libcalls) ---
-; The i64 shift is decomposed into i32 shift pairs.
+; --- 64-bit shift left (variable, uses i64 shift libcall) ---
 ; CHECK-LABEL: shl64:
-; CHECK: BL @__ashlsi3
+; CHECK: BL @__ashldi3
 ; CHECK: B{{[ \t]+}}*R11
 define i64 @shl64(i64 %a, i64 %b) {
   %r = shl i64 %a, %b
   ret i64 %r
 }
 
-; --- 64-bit logical shift right (variable, uses i32 shift libcalls) ---
+; --- 64-bit logical shift right (variable, uses i64 shift libcall) ---
 ; CHECK-LABEL: lshr64:
-; CHECK: BL @__lshrsi3
+; CHECK: BL @__lshrdi3
 ; CHECK: B{{[ \t]+}}*R11
 define i64 @lshr64(i64 %a, i64 %b) {
   %r = lshr i64 %a, %b
   ret i64 %r
 }
 
-; --- 64-bit arithmetic shift right (variable, uses i32 shift libcalls) ---
+; --- 64-bit arithmetic shift right (variable, uses i64 shift libcall) ---
 ; CHECK-LABEL: ashr64:
-; CHECK: BL @__ashrsi3
+; CHECK: BL @__ashrdi3
 ; CHECK: B{{[ \t]+}}*R11
 define i64 @ashr64(i64 %a, i64 %b) {
   %r = ashr i64 %a, %b

@@ -29,9 +29,10 @@ define i16 @udiv_by_8(i16 %x) {
   ret i16 %r
 }
 
-; --- Unsigned div by non-power-of-2 uses DIV instruction ---
+; --- Unsigned div by non-power-of-2 uses magic-number MPY strength reduction ---
 ; CHECK-LABEL: udiv_by_7:
-; CHECK: DIV
+; CHECK: MPY
+; CHECK: SRL
 ; CHECK: B{{[ \t]+}}*R11
 
 define i16 @udiv_by_7(i16 %x) {

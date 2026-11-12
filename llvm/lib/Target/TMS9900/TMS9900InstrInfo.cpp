@@ -712,6 +712,119 @@ bool TMS9900InstrInfo::expandPostRAPseudo(MachineInstr &MI) const {
   switch (MI.getOpcode()) {
   default:
     return false;
+  case TMS9900::ADD32: {
+    Register DstHi = MI.getOperand(0).getReg();
+    Register DstLo = MI.getOperand(1).getReg();
+    Register RHSHi = MI.getOperand(4).getReg();
+    Register RHSLo = MI.getOperand(5).getReg();
+
+    if (RHSLo != DstHi) {
+      BuildMI(MBB, MI, DL, get(TMS9900::Arr), DstHi)
+          .addReg(DstHi)
+          .addReg(RHSHi);
+      BuildMI(MBB, MI, DL, get(TMS9900::Arr), DstLo)
+          .addReg(DstLo)
+          .addReg(RHSLo);
+      BuildMI(MBB, MI, DL, get(TMS9900::INC_CARRY), DstHi).addReg(DstHi);
+    } else if (RHSHi != DstHi) {
+      BuildMI(MBB, MI, DL, get(TMS9900::Arr), DstLo)
+          .addReg(DstLo)
+          .addReg(RHSLo);
+      BuildMI(MBB, MI, DL, get(TMS9900::INC_CARRY), DstHi).addReg(DstHi);
+      BuildMI(MBB, MI, DL, get(TMS9900::Arr), DstHi)
+          .addReg(DstHi)
+          .addReg(RHSHi);
+    } else {
+      BuildMI(MBB, MI, DL, get(TMS9900::Arr), DstLo)
+          .addReg(DstLo)
+          .addReg(DstHi);
+      BuildMI(MBB, MI, DL, get(TMS9900::ADD_SELF_CARRY), DstHi).addReg(DstHi);
+    }
+
+    MBB.erase(MI);
+    return true;
+  }
+  case TMS9900::SUB32: {
+    Register DstHi = MI.getOperand(0).getReg();
+    Register DstLo = MI.getOperand(1).getReg();
+    Register RHSHi = MI.getOperand(4).getReg();
+    Register RHSLo = MI.getOperand(5).getReg();
+
+    if (RHSLo != DstHi) {
+      BuildMI(MBB, MI, DL, get(TMS9900::Srr), DstHi)
+          .addReg(DstHi)
+          .addReg(RHSHi);
+      BuildMI(MBB, MI, DL, get(TMS9900::Srr), DstLo)
+          .addReg(DstLo)
+          .addReg(RHSLo);
+      BuildMI(MBB, MI, DL, get(TMS9900::DEC_BORROW), DstHi).addReg(DstHi);
+    } else if (RHSHi != DstHi) {
+      BuildMI(MBB, MI, DL, get(TMS9900::Srr), DstLo)
+          .addReg(DstLo)
+          .addReg(RHSLo);
+      BuildMI(MBB, MI, DL, get(TMS9900::DEC_BORROW), DstHi).addReg(DstHi);
+      BuildMI(MBB, MI, DL, get(TMS9900::Srr), DstHi)
+          .addReg(DstHi)
+          .addReg(RHSHi);
+    } else {
+      BuildMI(MBB, MI, DL, get(TMS9900::Srr), DstLo)
+          .addReg(DstLo)
+          .addReg(DstHi);
+      BuildMI(MBB, MI, DL, get(TMS9900::CLRr), DstHi);
+      BuildMI(MBB, MI, DL, get(TMS9900::DEC_BORROW), DstHi).addReg(DstHi);
+    }
+
+    MBB.erase(MI);
+    return true;
+  }
+  case TMS9900::ADDI32: {
+    Register DstHi = MI.getOperand(0).getReg();
+    Register DstLo = MI.getOperand(1).getReg();
+    int16_t ImmHi = static_cast<int16_t>(MI.getOperand(4).getImm());
+    int16_t ImmLo = static_cast<int16_t>(MI.getOperand(5).getImm());
+
+    if (ImmHi == -1) {
+      BuildMI(MBB, MI, DL, get(TMS9900::AI), DstLo)
+          .addReg(DstLo)
+          .addImm(ImmLo);
+      BuildMI(MBB, MI, DL, get(TMS9900::DEC_BORROW), DstHi).addReg(DstHi);
+    } else {
+      if (ImmHi != 0) {
+        BuildMI(MBB, MI, DL, get(TMS9900::AI), DstHi)
+            .addReg(DstHi)
+            .addImm(ImmHi);
+      }
+      BuildMI(MBB, MI, DL, get(TMS9900::AI), DstLo)
+          .addReg(DstLo)
+          .addImm(ImmLo);
+      BuildMI(MBB, MI, DL, get(TMS9900::INC_CARRY), DstHi).addReg(DstHi);
+    }
+
+    MBB.erase(MI);
+    return true;
+  }
+  case TMS9900::SHL32_1: {
+    Register DstHi = MI.getOperand(0).getReg();
+    Register DstLo = MI.getOperand(1).getReg();
+    BuildMI(MBB, MI, DL, get(TMS9900::SLAri), DstHi).addReg(DstHi).addImm(1);
+    BuildMI(MBB, MI, DL, get(TMS9900::SLAri), DstLo).addReg(DstLo).addImm(1);
+    BuildMI(MBB, MI, DL, get(TMS9900::INC_CARRY), DstHi).addReg(DstHi);
+    MBB.erase(MI);
+    return true;
+  }
+  case TMS9900::LSHR32_1:
+  case TMS9900::ASHR32_1: {
+    bool IsArith = (MI.getOpcode() == TMS9900::ASHR32_1);
+    Register DstHi = MI.getOperand(0).getReg();
+    Register DstLo = MI.getOperand(1).getReg();
+    BuildMI(MBB, MI, DL, get(TMS9900::SRLri), DstLo).addReg(DstLo).addImm(1);
+    BuildMI(MBB, MI, DL, get(IsArith ? TMS9900::SRAri : TMS9900::SRLri), DstHi)
+        .addReg(DstHi)
+        .addImm(1);
+    BuildMI(MBB, MI, DL, get(TMS9900::ORI8000_CARRY), DstLo).addReg(DstLo);
+    MBB.erase(MI);
+    return true;
+  }
   case TMS9900::CMPBRrr:
   case TMS9900::CMPBRri: {
     bool IsImm = (MI.getOpcode() == TMS9900::CMPBRri);

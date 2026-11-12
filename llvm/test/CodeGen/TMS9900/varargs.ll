@@ -18,8 +18,8 @@ declare void @llvm.va_end(ptr)
 ; CHECK: AI{{[ \t]+}}R10,-4
 ; CHECK: MOV{{[ \t]+}}R10,[[AP:R[0-9]+]]
 ; CHECK-NEXT: AI{{[ \t]+}}[[AP]],6
-; CHECK: MOV{{[ \t]+}}*[[AP]],R0
 ; CHECK: MOV{{[ \t]+}}*[[AP]],R1
+; CHECK: MOV{{[ \t]+}}*[[AP]],R0
 ; CHECK: A{{[ \t]+}}R1,R0
 ; CHECK: B{{[ \t]+}}*R11
 

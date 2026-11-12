@@ -1,30 +1,25 @@
 ; RUN: llc -march=tms9900 -O2 < %s | FileCheck %s
 ;
 ; Test rotation operations.
-; TMS9900 expands rotates to shift+shift+or sequences.
-; LLVM recognizes (x << n) | (x >> (16-n)) patterns as rotates,
-; which then get expanded.
+; Constant 16-bit rotations lower directly to TMS9900's native SRC
+; (Shift Right Circular) instruction, with rotl(x, k) -> SRC x, (16 - k).
 
 declare i16 @llvm.fshl.i16(i16, i16, i16)
 
-; --- Rotate left by 4 via fshl intrinsic ---
+; --- Rotate left by 4 via fshl intrinsic -> SRC 12 ---
 ; CHECK-LABEL: rotl_4:
-; CHECK: SLA{{[ \t]}}
-; CHECK: SRL{{[ \t]}}
-; CHECK: SOC{{[ \t]}}
-; CHECK: B{{[ \t]+}}*R11
+; CHECK: SRC{{[ \t]+}}R0,12
+; CHECK-NEXT: B{{[ \t]+}}*R11
 
 define i16 @rotl_4(i16 %x) {
   %r = call i16 @llvm.fshl.i16(i16 %x, i16 %x, i16 4)
   ret i16 %r
 }
 
-; --- Rotate right by 4 via shift+or pattern ---
+; --- Rotate right by 4 via shift+or pattern -> SRC 4 ---
 ; CHECK-LABEL: rotr_4:
-; CHECK: SLA{{[ \t]}}
-; CHECK: SRL{{[ \t]}}
-; CHECK: SOC{{[ \t]}}
-; CHECK: B{{[ \t]+}}*R11
+; CHECK: SRC{{[ \t]+}}R0,4
+; CHECK-NEXT: B{{[ \t]+}}*R11
 
 define i16 @rotr_4(i16 %x) {
   %r = lshr i16 %x, 4
@@ -33,12 +28,10 @@ define i16 @rotr_4(i16 %x) {
   ret i16 %rot
 }
 
-; --- Rotate left by 5 via shift+or pattern ---
+; --- Rotate left by 5 via shift+or pattern -> SRC 11 ---
 ; CHECK-LABEL: rotl_pattern:
-; CHECK: SLA{{[ \t]}}
-; CHECK: SRL{{[ \t]}}
-; CHECK: SOC{{[ \t]}}
-; CHECK: B{{[ \t]+}}*R11
+; CHECK: SRC{{[ \t]+}}R0,11
+; CHECK-NEXT: B{{[ \t]+}}*R11
 
 define i16 @rotl_pattern(i16 %x) {
   %l = shl i16 %x, 5

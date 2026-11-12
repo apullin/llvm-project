@@ -100,6 +100,250 @@ static bool setsWordResultComparisonFlags(unsigned Opcode) {
   }
 }
 
+/// Return true when Opcode unconditionally overwrites all three comparison
+/// status bits (LGT, AGT, EQ) without reading ST. Excludes TB/COC/CZC (EQ only)
+/// and DIV (OV only).
+static bool overwritesComparisonFlags(unsigned Opcode) {
+  if (setsWordResultComparisonFlags(Opcode))
+    return true;
+  switch (Opcode) {
+  default:
+    return false;
+  case TMS9900::ABSr:
+  case TMS9900::Crr:
+  case TMS9900::CBrr:
+  case TMS9900::CI:
+  case TMS9900::Cim:
+  case TMS9900::Cam:
+  case TMS9900::Cxm:
+  case TMS9900::Cpim:
+  case TMS9900::Cmi:
+  case TMS9900::Cma:
+  case TMS9900::Cmx:
+  case TMS9900::Cmpi:
+  case TMS9900::MOVma:
+  case TMS9900::MOVmi:
+  case TMS9900::MOVmx:
+  case TMS9900::MOVmpi:
+  case TMS9900::MOV_FI_Store:
+  case TMS9900::MOVBrr:
+  case TMS9900::MOVBim:
+  case TMS9900::MOVBxm:
+  case TMS9900::MOVBam:
+  case TMS9900::MOVBpim:
+  case TMS9900::MOVBmi:
+  case TMS9900::MOVBmx:
+  case TMS9900::MOVBma:
+  case TMS9900::MOVBmpi:
+  case TMS9900::MOVB_FI_Load:
+  case TMS9900::MOVB_FI_Store:
+    return true;
+  }
+}
+
+/// Prove that LGT/AGT/EQ written by MI (an instruction like MOVrr/LI/XORrr/INVr
+/// that leaves C and OV untouched) cannot be observed before being overwritten.
+/// Post-RA copies and expansions often omit syntactic dead flags on implicit
+/// $st defs, so walk forward in the block when tracksLiveness() is active.
+static bool isComparisonStatusDeadAfter(const MachineInstr &MI,
+                                        const TargetRegisterInfo *TRI) {
+  if (MI.registerDefIsDead(TMS9900::ST, TRI))
+    return true;
+
+  const MachineBasicBlock &MBB = *MI.getParent();
+  if (!MBB.getParent()->getRegInfo().tracksLiveness())
+    return false;
+
+  for (const MachineInstr *Scan = MI.getNextNode(); Scan;
+       Scan = Scan->getNextNode()) {
+    if (Scan->isDebugInstr())
+      continue;
+    if (Scan->readsRegister(TMS9900::ST, TRI) || Scan->isCall() ||
+        Scan->isInlineAsm() || Scan->hasUnmodeledSideEffects())
+      return false;
+    if (overwritesComparisonFlags(Scan->getOpcode()))
+      return true;
+  }
+
+  return llvm::none_of(MBB.successors(), [](const MachineBasicBlock *Succ) {
+    return Succ->isLiveIn(TMS9900::ST);
+  });
+}
+
+static bool isRegDeadAfter(const MachineInstr &MI, Register Reg,
+                           const TargetRegisterInfo *TRI) {
+  if (MI.registerDefIsDead(Reg, TRI))
+    return true;
+  const MachineBasicBlock &MBB = *MI.getParent();
+  if (!MBB.getParent()->getRegInfo().tracksLiveness())
+    return false;
+  return MBB.computeRegisterLiveness(
+             TRI, Reg, std::next(MachineBasicBlock::const_iterator(MI)),
+             MBB.size()) == MachineBasicBlock::LQR_Dead;
+}
+
+static bool hasOrderedMMO(const MachineInstr &MI) {
+  return llvm::any_of(MI.memoperands(), [](const MachineMemOperand *MMO) {
+    return !MMO->isUnordered();
+  });
+}
+
+static bool isMovbLoadOpcode(unsigned Opcode) {
+  switch (Opcode) {
+  case TMS9900::MOVBim:
+  case TMS9900::MOVBxm:
+  case TMS9900::MOVBam:
+  case TMS9900::MOVBpim:
+  case TMS9900::MOVB_FI_Load:
+    return true;
+  default:
+    return false;
+  }
+}
+
+/// Fold MOV <mem>,Rx + INC/INCT/DEC/DECT/INV/NEG Rx + MOV Rx,<same_mem>
+/// into a single memory read-modify-write instruction when Rx is dead after
+/// the store and neither access is volatile/ordered.
+static bool tryFoldMemoryRMW(MachineInstr &AluMI,
+                             MachineBasicBlock::instr_iterator &It,
+                             const TargetInstrInfo *TII,
+                             const TargetRegisterInfo *TRI) {
+  unsigned SymOpc = 0, IdxOpc = 0, IndOpc = 0;
+  switch (AluMI.getOpcode()) {
+  default:
+    return false;
+  case TMS9900::INCr:
+    SymOpc = TMS9900::INC_sym; IdxOpc = TMS9900::INC_idx; IndOpc = TMS9900::INC_ind;
+    break;
+  case TMS9900::INCTr:
+    SymOpc = TMS9900::INCT_sym; IdxOpc = TMS9900::INCT_idx; IndOpc = TMS9900::INCT_ind;
+    break;
+  case TMS9900::DECr:
+    SymOpc = TMS9900::DEC_sym; IdxOpc = TMS9900::DEC_idx; IndOpc = TMS9900::DEC_ind;
+    break;
+  case TMS9900::DECTr:
+    SymOpc = TMS9900::DECT_sym; IdxOpc = TMS9900::DECT_idx; IndOpc = TMS9900::DECT_ind;
+    break;
+  case TMS9900::INVr:
+    SymOpc = TMS9900::INV_sym; IdxOpc = TMS9900::INV_idx; IndOpc = TMS9900::INV_ind;
+    break;
+  case TMS9900::NEGr:
+    SymOpc = TMS9900::NEG_sym; IdxOpc = TMS9900::NEG_idx; IndOpc = TMS9900::NEG_ind;
+    break;
+  }
+
+  Register Rx = AluMI.getOperand(0).getReg();
+  MachineInstr *LoadMI = AluMI.getPrevNode();
+  while (LoadMI && LoadMI->isDebugInstr())
+    LoadMI = LoadMI->getPrevNode();
+  MachineInstr *StoreMI = AluMI.getNextNode();
+  while (StoreMI && StoreMI->isDebugInstr())
+    StoreMI = StoreMI->getNextNode();
+  if (!LoadMI || !StoreMI)
+    return false;
+  if (hasOrderedMMO(*LoadMI) || hasOrderedMMO(*StoreMI))
+    return false;
+  if (!LoadMI->getOperand(0).isReg() || LoadMI->getOperand(0).getReg() != Rx)
+    return false;
+
+  MachineBasicBlock &MBB = *AluMI.getParent();
+  DebugLoc DL = AluMI.getDebugLoc();
+  MachineInstrBuilder MIB;
+
+  if (LoadMI->getOpcode() == TMS9900::MOVam &&
+      StoreMI->getOpcode() == TMS9900::MOVma &&
+      StoreMI->getOperand(1).getReg() == Rx &&
+      LoadMI->getOperand(1).isIdenticalTo(StoreMI->getOperand(0))) {
+    if (!StoreMI->getOperand(1).isKill() && !isRegDeadAfter(*StoreMI, Rx, TRI))
+      return false;
+    MIB = BuildMI(MBB, LoadMI, DL, TII->get(SymOpc)).add(StoreMI->getOperand(0));
+  } else if (LoadMI->getOpcode() == TMS9900::MOVxm &&
+             StoreMI->getOpcode() == TMS9900::MOVmx &&
+             StoreMI->getOperand(2).getReg() == Rx &&
+             LoadMI->getOperand(2).getReg() == StoreMI->getOperand(1).getReg() &&
+             LoadMI->getOperand(2).getReg() != Rx &&
+             LoadMI->getOperand(1).isIdenticalTo(StoreMI->getOperand(0))) {
+    if (!StoreMI->getOperand(2).isKill() && !isRegDeadAfter(*StoreMI, Rx, TRI))
+      return false;
+    MIB = BuildMI(MBB, LoadMI, DL, TII->get(IdxOpc))
+              .add(StoreMI->getOperand(0))
+              .add(StoreMI->getOperand(1));
+  } else if (LoadMI->getOpcode() == TMS9900::MOVim &&
+             StoreMI->getOpcode() == TMS9900::MOVmi &&
+             StoreMI->getOperand(1).getReg() == Rx &&
+             LoadMI->getOperand(1).getReg() == StoreMI->getOperand(0).getReg() &&
+             LoadMI->getOperand(1).getReg() != Rx) {
+    if (!StoreMI->getOperand(1).isKill() && !isRegDeadAfter(*StoreMI, Rx, TRI))
+      return false;
+    MIB = BuildMI(MBB, LoadMI, DL, TII->get(IndOpc)).add(StoreMI->getOperand(0));
+  } else {
+    return false;
+  }
+
+  MIB.cloneMergedMemRefs({LoadMI, StoreMI});
+  It = std::next(MachineBasicBlock::instr_iterator(StoreMI));
+  LoadMI->eraseFromParent();
+  AluMI.eraseFromParent();
+  StoreMI->eraseFromParent();
+  return true;
+}
+
+/// Fold CLRr/SETOr Rx + MOV Rx,<mem> -> CLR/SETO <mem> when Rx and ST are dead.
+static bool tryFoldClrSetoStore(MachineInstr &MI,
+                                MachineBasicBlock::instr_iterator &It,
+                                const TargetInstrInfo *TII,
+                                const TargetRegisterInfo *TRI) {
+  bool IsClr = (MI.getOpcode() == TMS9900::CLRr);
+  if (!IsClr && MI.getOpcode() != TMS9900::SETOr)
+    return false;
+
+  MachineInstr *StoreMI = MI.getNextNode();
+  while (StoreMI && StoreMI->isDebugInstr())
+    StoreMI = StoreMI->getNextNode();
+  if (!StoreMI || hasOrderedMMO(*StoreMI))
+    return false;
+  if (!isComparisonStatusDeadAfter(*StoreMI, TRI))
+    return false;
+
+  Register Rx = MI.getOperand(0).getReg();
+  MachineBasicBlock &MBB = *MI.getParent();
+  DebugLoc DL = StoreMI->getDebugLoc();
+  MachineInstrBuilder MIB;
+
+  if (StoreMI->getOpcode() == TMS9900::MOVma &&
+      StoreMI->getOperand(1).getReg() == Rx &&
+      (StoreMI->getOperand(1).isKill() || isRegDeadAfter(*StoreMI, Rx, TRI))) {
+    MIB = BuildMI(MBB, MI, DL,
+                  TII->get(IsClr ? TMS9900::CLR_sym : TMS9900::SETO_sym))
+              .add(StoreMI->getOperand(0));
+  } else if (StoreMI->getOpcode() == TMS9900::MOVmx &&
+             StoreMI->getOperand(2).getReg() == Rx &&
+             StoreMI->getOperand(1).getReg() != Rx &&
+             (StoreMI->getOperand(2).isKill() ||
+              isRegDeadAfter(*StoreMI, Rx, TRI))) {
+    MIB = BuildMI(MBB, MI, DL,
+                  TII->get(IsClr ? TMS9900::CLR_idx : TMS9900::SETO_idx))
+              .add(StoreMI->getOperand(0))
+              .add(StoreMI->getOperand(1));
+  } else if (StoreMI->getOpcode() == TMS9900::MOVmi &&
+             StoreMI->getOperand(1).getReg() == Rx &&
+             StoreMI->getOperand(0).getReg() != Rx &&
+             (StoreMI->getOperand(1).isKill() ||
+              isRegDeadAfter(*StoreMI, Rx, TRI))) {
+    MIB = BuildMI(MBB, MI, DL,
+                  TII->get(IsClr ? TMS9900::CLR_ind : TMS9900::SETO_ind))
+              .add(StoreMI->getOperand(0));
+  } else {
+    return false;
+  }
+
+  MIB.cloneMemRefs(*StoreMI);
+  It = std::next(MachineBasicBlock::instr_iterator(StoreMI));
+  MI.eraseFromParent();
+  StoreMI->eraseFromParent();
+  return true;
+}
+
 /// Prove that the comparison flags have only one observable use. Moving a
 /// zero-extended byte into the high lane preserves equality and unsigned
 /// ordering, but not signed ordering. Other consumers may also observe status
@@ -164,6 +408,25 @@ static bool tryFoldPostInc(MachineInstr &IncMI,
   if (!Prev)
     return false;
 
+  // Byte loads emit MOVB *Ra,Rv followed immediately by SRL/SRA Rv,8 before
+  // any pointer increment on Ra. Allow stepping across that lane shift when Rv
+  // does not alias Ra and ST after IncMI is dead.
+  MachineInstr *SkippedByteShift = nullptr;
+  if (IncAmount == 1 &&
+      (Prev->getOpcode() == TMS9900::SRLri ||
+       Prev->getOpcode() == TMS9900::SRAri) &&
+      Prev->getOperand(2).isImm() && Prev->getOperand(2).getImm() == 8 &&
+      Prev->getOperand(0).getReg() != IncMI.getOperand(0).getReg()) {
+    MachineInstr *BeforeShift = Prev->getPrevNode();
+    while (BeforeShift && BeforeShift->isDebugInstr())
+      BeforeShift = BeforeShift->getPrevNode();
+    if (BeforeShift && BeforeShift->getOpcode() == TMS9900::MOVBim &&
+        BeforeShift->getOperand(0).getReg() == Prev->getOperand(0).getReg()) {
+      SkippedByteShift = Prev;
+      Prev = BeforeShift;
+    }
+  }
+
   unsigned NewOpc = 0;
   bool IsLoad = false;
   bool IsByte = false;
@@ -221,9 +484,12 @@ static bool tryFoldPostInc(MachineInstr &IncMI,
 
   // The original sequence leaves the increment's status result in ST, while
   // the auto-increment instruction leaves the memory operation's status
-  // result.  They are interchangeable only when the final status is dead.
-  if (!IncMI.registerDefIsDead(TMS9900::ST, TRI))
+  // result (or the intervening shift's status result). They are
+  // interchangeable only when the final status after IncMI is dead.
+  if (!isRegDeadAfter(IncMI, TMS9900::ST, TRI))
     return false;
+
+  (void)SkippedByteShift;
 
   MachineBasicBlock &MBB = *IncMI.getParent();
   DebugLoc DL = Prev->getDebugLoc();
@@ -309,6 +575,58 @@ public:
         if (tryFoldPostInc(MI, TII, TRI)) {
           Changed = true;
           continue;
+        }
+
+        if (tryFoldMemoryRMW(MI, It, TII, TRI)) {
+          Changed = true;
+          continue;
+        }
+
+        if (tryFoldClrSetoStore(MI, It, TII, TRI)) {
+          Changed = true;
+          continue;
+        }
+
+        // MOVB <mem>, Rx + SRL/SRA Rx, 8 [+ CI Rx, 0] + Jcc -> delete shift
+        // (and redundant CI Rx, 0) when Rx is dead and Jcc only tests
+        // zero/signed-byte flags already set by MOVB.
+        if ((Opc == TMS9900::SRLri || Opc == TMS9900::SRAri) &&
+            MI.getOperand(2).isImm() && MI.getOperand(2).getImm() == 8) {
+          Register Rx = MI.getOperand(0).getReg();
+          MachineInstr *Prev = MI.getPrevNode();
+          while (Prev && Prev->isDebugInstr())
+            Prev = Prev->getPrevNode();
+          if (Prev && isMovbLoadOpcode(Prev->getOpcode()) &&
+              Prev->getOperand(0).isReg() &&
+              Prev->getOperand(0).getReg() == Rx) {
+            MachineInstr *Next = MI.getNextNode();
+            while (Next && Next->isDebugInstr())
+              Next = Next->getNextNode();
+            MachineInstr *OptCI = nullptr;
+            if (Next && Next->getOpcode() == TMS9900::CI &&
+                Next->getOperand(0).getReg() == Rx &&
+                Next->getOperand(1).isImm() &&
+                static_cast<int16_t>(Next->getOperand(1).getImm()) == 0) {
+              OptCI = Next;
+            }
+            const MachineInstr &BranchAnchor = OptCI ? *OptCI : MI;
+            if (isRegDeadAfter(BranchAnchor, Rx, TRI) &&
+                hasSingleComparisonBranchUse(
+                    BranchAnchor, TRI,
+                    /*AllowSigned=*/Opc == TMS9900::SRAri)) {
+              if (int STIdx = Prev->findRegisterDefOperandIdx(
+                      TMS9900::ST, TRI, /*isDead=*/true);
+                  STIdx != -1)
+                Prev->getOperand(STIdx).setIsDead(false);
+              if (OptCI) {
+                It = std::next(MachineBasicBlock::instr_iterator(OptCI));
+                OptCI->eraseFromParent();
+              }
+              MI.eraseFromParent();
+              Changed = true;
+              continue;
+            }
+          }
         }
 
         // Double INV cancellation: INV Rx followed by INV Rx -> delete both.
@@ -434,7 +752,7 @@ public:
           // CLR and SETO do NOT set status flags (TMS9900 Data Manual p.24),
           // but LI DOES set status flags (Data Manual p.26).  Only convert
           // when the LI's ST def is dead (flags not needed).
-          if (!MI.registerDefIsDead(TMS9900::ST, TRI))
+          if (!isComparisonStatusDeadAfter(MI, TRI))
             continue;
 
           DebugLoc DL = MI.getDebugLoc();
@@ -456,7 +774,7 @@ public:
 
           // XOR sets status flags but CLR does NOT (TMS9900 Data Manual p.24).
           // Only convert when the XOR's ST def is dead (flags not needed).
-          if (!MI.registerDefIsDead(TMS9900::ST, TRI))
+          if (!isComparisonStatusDeadAfter(MI, TRI))
             continue;
 
           DebugLoc DL = MI.getDebugLoc();
@@ -490,7 +808,7 @@ public:
             continue;
 
           // Case 1: ST dead -- always safe to delete.
-          if (MI.registerDefIsDead(TMS9900::ST, TRI)) {
+          if (isComparisonStatusDeadAfter(MI, TRI)) {
             MI.eraseFromParent();
             Changed = true;
             continue;

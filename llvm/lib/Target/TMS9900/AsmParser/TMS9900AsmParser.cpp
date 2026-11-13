@@ -1517,14 +1517,6 @@ bool TMS9900AsmParser::matchAndEmitInstruction(SMLoc IDLoc, unsigned &Opcode,
 
 unsigned TMS9900AsmParser::validateTargetOperandClass(MCParsedAsmOperand &Op,
                                                        unsigned Kind) {
-  TMS9900Operand &Operand = (TMS9900Operand &)Op;
-
-  // Handle register class matching
-  if (Operand.isReg()) {
-    // All our registers are GR16
-    return Match_Success;
-  }
-
   return Match_InvalidOperand;
 }
 

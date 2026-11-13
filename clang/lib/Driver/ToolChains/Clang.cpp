@@ -1779,6 +1779,23 @@ void Clang::RenderTargetOptions(const llvm::Triple &EffectiveTriple,
   case llvm::Triple::ve:
     AddVETargetArgs(Args, CmdArgs);
     break;
+
+  case llvm::Triple::tms9900:
+    if (Arg *A = Args.getLastArg(options::OPT_masm_EQ)) {
+      StringRef Value = A->getValue();
+      if (Value.equals_insensitive("xas99")) {
+        CmdArgs.push_back("-mllvm");
+        CmdArgs.push_back("-tms9900-asm-dialect=xas99");
+      } else if (Value.equals_insensitive("gnu") ||
+                 Value.equals_insensitive("default")) {
+        CmdArgs.push_back("-mllvm");
+        CmdArgs.push_back("-tms9900-asm-dialect=default");
+      } else {
+        getToolChain().getDriver().Diag(diag::err_drv_unsupported_option_argument)
+            << A->getSpelling() << Value;
+      }
+    }
+    break;
   }
 }
 
@@ -8909,6 +8926,29 @@ void ClangAs::ConstructJob(Compilation &C, const JobAction &JA,
                      options::OPT_mno_default_build_attributes, true)) {
       CmdArgs.push_back("-mllvm");
       CmdArgs.push_back("-hexagon-add-build-attributes");
+    }
+    break;
+
+  case llvm::Triple::tms9900:
+    if (Arg *A = Args.getLastArg(options::OPT_masm_EQ)) {
+      StringRef Value = A->getValue();
+      if (Value.equals_insensitive("xas99")) {
+        CmdArgs.push_back("-mllvm");
+        CmdArgs.push_back("-tms9900-asm-dialect=xas99");
+      } else if (Value.equals_insensitive("gnu") ||
+                 Value.equals_insensitive("default")) {
+        CmdArgs.push_back("-mllvm");
+        CmdArgs.push_back("-tms9900-asm-dialect=default");
+      } else {
+        getToolChain().getDriver().Diag(diag::err_drv_unsupported_option_argument)
+            << A->getSpelling() << Value;
+      }
+    } else if (Input.isFilename()) {
+      StringRef Ext = llvm::sys::path::extension(Input.getBaseInput());
+      if (Ext.equals_insensitive(".asm") || Ext.equals_insensitive(".a99")) {
+        CmdArgs.push_back("-mllvm");
+        CmdArgs.push_back("-tms9900-asm-dialect=xas99");
+      }
     }
     break;
   }

@@ -1616,6 +1616,25 @@ def Br_reg : Format3_Reg<0b0000010001, (outs), (ins GR16:$rs),
   let isIndirectBranch = 1;
 }
 
+def Br_idx : Format3_Idx<0b0000010001, (outs),
+                         (ins i16imm:$offset, IdxRegs:$ri),
+                         "B\t@${offset}(${ri})",
+                         []> {
+  let isBranch = 1;
+  let isTerminator = 1;
+  let isBarrier = 1;
+  let isIndirectBranch = 1;
+}
+
+def Br_pim : Format3_AutoInc<0b0000010001, (outs), (ins GR16:$rs),
+                             "B\t*${rs}+",
+                             []> {
+  let isBranch = 1;
+  let isTerminator = 1;
+  let isBarrier = 1;
+  let isIndirectBranch = 1;
+}
+
 // B with symbolic address - B @symbol (for branch relaxation)
 // Format 3 with symbolic addressing: 4 bytes (opcode + address)
 let isBranch = 1, isTerminator = 1, isBarrier = 1 in
@@ -1715,6 +1734,21 @@ def BL : Format3_IndReg<0b0000011010, (outs), (ins GR16:$rs),
 def BL_reg : Format3_Reg<0b0000011010, (outs), (ins GR16:$rs),
                          "BL\t$rs",
                          []> {
+  let isCall = 1;
+  let Defs = [R11];
+}
+
+def BL_idx : Format3_Idx<0b0000011010, (outs),
+                         (ins i16imm:$offset, IdxRegs:$ri),
+                         "BL\t@${offset}(${ri})",
+                         []> {
+  let isCall = 1;
+  let Defs = [R11];
+}
+
+def BL_pim : Format3_AutoInc<0b0000011010, (outs), (ins GR16:$rs),
+                             "BL\t*${rs}+",
+                             []> {
   let isCall = 1;
   let Defs = [R11];
 }

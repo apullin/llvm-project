@@ -220,6 +220,12 @@ public:
   }
 
   bool parseInclude() override { return parseDirectiveInclude(); }
+  void replaceBuffer(StringRef Content, StringRef Identifier) override {
+    CurBuffer = SrcMgr.AddNewSourceBuffer(
+        MemoryBuffer::getMemBufferCopy(Content, Identifier), SMLoc());
+    Lexer.setBuffer(SrcMgr.getMemoryBuffer(CurBuffer)->getBuffer());
+    Lex();
+  }
 
   /// @name MCAsmParser Interface
   /// {

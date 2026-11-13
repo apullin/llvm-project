@@ -7,6 +7,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "MCTargetDesc/TMS9900MCTargetDesc.h"
+#include "TMS9900Xas99Normalizer.h"
 #include "TargetInfo/TMS9900TargetInfo.h"
 #include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/STLExtras.h"
@@ -295,6 +296,10 @@ private:
   bool parsePrimaryExpr(const MCExpr *&Res, SMLoc &EndLoc) override;
   void doBeforeLabelEmit(MCSymbol *Symbol, SMLoc IDLoc) override;
   void onLabelParsed(MCSymbol *Symbol) override;
+  void onBeginOfFile() override {
+    if (isXas99Dialect())
+      normalizeXas99SourceBuffer(Parser);
+  }
   bool starIsStartOfStatement() override { return isXas99Dialect(); }
   bool exclaimIsStartOfStatement() override { return isXas99Dialect(); }
   bool isTokenStartOfTrailingComment(const AsmToken &Token) override;
@@ -478,7 +483,7 @@ bool TMS9900AsmParser::parsePrimaryExpr(const MCExpr *&Res, SMLoc &EndLoc) {
         Parser.getLexer().peekTok().is(AsmToken::Exclaim))))
     return parseXasLocalReference(Res, EndLoc);
 
-  if (isXas99Dialect() && Parser.getTok().is(AsmToken::Greater)) {
+  if (Parser.getTok().is(AsmToken::Greater)) {
     if (parseExpression(Res))
       return true;
     EndLoc = Parser.getTok().getLoc();
@@ -862,7 +867,8 @@ ParseStatus TMS9900AsmParser::tryParseRegisterOperand(MCRegister &RegNo,
     return Status;
 
   if (Parser.getTok().isNot(AsmToken::Integer) &&
-      Parser.getTok().isNot(AsmToken::Greater))
+      Parser.getTok().isNot(AsmToken::Greater) &&
+      Parser.getTok().isNot(AsmToken::Colon))
     return ParseStatus::NoMatch;
 
   StartLoc = Parser.getTok().getLoc();
@@ -906,7 +912,9 @@ ParseStatus TMS9900AsmParser::tryParseRegister(MCRegister &Reg, SMLoc &StartLoc,
 bool TMS9900AsmParser::parseExpression(const MCExpr *&Expr) {
   // Check for xas99 hex format: >XXXX
   if (Parser.getTok().is(AsmToken::Greater)) {
-    Parser.Lex(); // Consume '>'
+    Parser.getLexer().setLexHLASMIntegers(true);
+    Parser.Lex(); // Consume '>' without rejecting >0080 as invalid octal!
+    Parser.getLexer().setLexHLASMIntegers(isXas99Dialect());
 
     if (Parser.getTok().isNot(AsmToken::Integer) &&
         Parser.getTok().isNot(AsmToken::Identifier)) {
@@ -918,22 +926,22 @@ bool TMS9900AsmParser::parseExpression(const MCExpr *&Expr) {
     std::string HexStr;
 
     // First part (could be integer or identifier)
+    const char *PrevEnd = Parser.getTok().getEndLoc().getPointer();
     HexStr = Parser.getTok().getString().str();
     Parser.Lex();
 
-    // Check if there's a continuation (identifier immediately following)
-    // This handles cases like "8" followed by "C00"
-    while (Parser.getTok().is(AsmToken::Identifier)) {
-      // Check if the identifier could be hex continuation (starts with hex digit)
+    // Check for adjacent continuation tokens (handles ">8C00" -> "8"+"C00"
+    // as well as ">0080" -> "00"+"80" in GNU mode without HLASM lexing!)
+    while ((Parser.getTok().is(AsmToken::Identifier) ||
+            Parser.getTok().is(AsmToken::Integer) ||
+            Parser.getTok().is(AsmToken::BigNum)) &&
+           Parser.getTok().getLoc().getPointer() == PrevEnd) {
       StringRef NextStr = Parser.getTok().getString();
-      if (NextStr.empty())
-        break;
-      char FirstChar = NextStr[0];
-      if (!((FirstChar >= '0' && FirstChar <= '9') ||
-            (FirstChar >= 'A' && FirstChar <= 'F') ||
-            (FirstChar >= 'a' && FirstChar <= 'f')))
+      if (NextStr.empty() ||
+          !llvm::all_of(NextStr, [](char C) { return isHexDigit(C); }))
         break;
       HexStr += NextStr.str();
+      PrevEnd = Parser.getTok().getEndLoc().getPointer();
       Parser.Lex();
     }
 

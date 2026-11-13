@@ -159,6 +159,7 @@ public:
   /// buffer. This allows target-specific aliases of the generic .include
   /// directive to retain the parser's include-stack behavior.
   virtual bool parseInclude() = 0;
+  virtual void replaceBuffer(StringRef Content, StringRef Identifier) {}
 
   virtual SourceMgr &getSourceManager() = 0;
 

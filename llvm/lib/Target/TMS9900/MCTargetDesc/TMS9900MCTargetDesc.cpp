@@ -57,15 +57,18 @@ namespace {
 //===----------------------------------------------------------------------===//
 class TMS9900MCAsmInfo : public MCAsmInfo {
 public:
-  explicit TMS9900MCAsmInfo(const Triple &TT) {
+  explicit TMS9900MCAsmInfo(const Triple &TT, const MCTargetOptions &Options) {
     // Code pointer size is 16 bits (2 bytes)
     CodePointerSize = 2;
     CalleeSaveStackSlotSize = 2;
     MinInstAlignment = 2;
     MaxInstLength = 6;
 
-    // Set assembler dialect based on command-line option
-    AssemblerDialect = TMS9900AsmDialectOpt;
+    // Set assembler dialect based on command-line option or MCTargetOptions
+    if (StringRef(Options.AssemblyLanguage).equals_insensitive("xas99"))
+      AssemblerDialect = AD_XAS99;
+    else
+      AssemblerDialect = TMS9900AsmDialectOpt;
 
     // TMS9900 is big-endian
     IsLittleEndian = false;
@@ -98,8 +101,9 @@ public:
 
     UsesELFSectionDirectiveForBSS = false;
 
-    if (TMS9900AsmDialectOpt == AD_XAS99) {
+    if (AssemblerDialect == AD_XAS99) {
       ZeroDirective = "\tBSS ";
+      AllowAdditionalComments = false;
     }
 
     UseIntegratedAssembler = true;  // Enable AsmParser for .S files
@@ -117,7 +121,7 @@ public:
 static MCAsmInfo *createTMS9900MCAsmInfo(const MCRegisterInfo &MRI,
                                           const Triple &TT,
                                           const MCTargetOptions &Options) {
-  MCAsmInfo *MAI = new TMS9900MCAsmInfo(TT);
+  MCAsmInfo *MAI = new TMS9900MCAsmInfo(TT, Options);
 
   // Initial CFA state for the CIE: CFA = R10 (SP) + 0
   // On function entry, the stack pointer is the canonical frame address.
@@ -150,10 +154,26 @@ static MCSubtargetInfo *createTMS9900MCSubtargetInfo(const Triple &TT,
 // TMS9900InstPrinter
 //===----------------------------------------------------------------------===//
 class TMS9900InstPrinter : public MCInstPrinter {
+  bool UseXas99 = false;
+
 public:
   TMS9900InstPrinter(const MCAsmInfo &MAI, const MCInstrInfo &MII,
-                      const MCRegisterInfo &MRI)
-      : MCInstPrinter(MAI, MII, MRI) {}
+                      const MCRegisterInfo &MRI, unsigned SyntaxVariant)
+      : MCInstPrinter(MAI, MII, MRI),
+        UseXas99(SyntaxVariant == AD_XAS99 ||
+                 MAI.getAssemblerDialect() == AD_XAS99) {}
+
+  bool applyTargetSpecificCLOption(StringRef Opt) override {
+    if (Opt.equals_insensitive("xas99")) {
+      UseXas99 = true;
+      return true;
+    }
+    if (Opt.equals_insensitive("gnu") || Opt.equals_insensitive("default")) {
+      UseXas99 = false;
+      return true;
+    }
+    return false;
+  }
 
   void printInst(const MCInst *MI, uint64_t Address, StringRef Annot,
                  const MCSubtargetInfo &STI, raw_ostream &O) override {
@@ -193,9 +213,18 @@ void TMS9900InstPrinter::printOperand(const MCInst *MI, unsigned OpNo,
     O << getRegisterName(Op.getReg());
   } else if (Op.isImm()) {
     int64_t Imm = Op.getImm();
-    if (MAI.getAssemblerDialect() == AD_XAS99) {
-      uint16_t Val = static_cast<uint16_t>(Imm & 0xFFFF);
-      O << ">" << format_hex_no_prefix(Val, 1);
+    if (UseXas99) {
+      unsigned Opc = MI->getOpcode();
+      bool IsSmallCount =
+          (Opc == TMS9900::SLAri || Opc == TMS9900::SRLri ||
+           Opc == TMS9900::SRAri || Opc == TMS9900::SRCri) &&
+          OpNo == 2;
+      if (IsSmallCount) {
+        O << Imm;
+      } else {
+        uint16_t Val = static_cast<uint16_t>(Imm & 0xFFFF);
+        O << ">" << format_hex_no_prefix(Val, 4, /*Upper=*/true);
+      }
     } else {
       O << Imm;
     }
@@ -211,8 +240,8 @@ void TMS9900InstPrinter::printBranchTarget16(const MCInst *MI, unsigned OpNo,
   if (Op.isImm()) {
     // Always print branch targets in hex (addresses)
     uint16_t Addr = static_cast<uint16_t>(Op.getImm() & 0xFFFF);
-    if (MAI.getAssemblerDialect() == AD_XAS99) {
-      O << ">" << format_hex_no_prefix(Addr, 4);
+    if (UseXas99) {
+      O << ">" << format_hex_no_prefix(Addr, 4, /*Upper=*/true);
     } else {
       O << "0x" << format_hex_no_prefix(Addr, 4);
     }
@@ -233,7 +262,7 @@ static MCInstPrinter *createTMS9900MCInstPrinter(const Triple &T,
                                                   const MCAsmInfo &MAI,
                                                   const MCInstrInfo &MII,
                                                   const MCRegisterInfo &MRI) {
-  return new TMS9900InstPrinter(MAI, MII, MRI);
+  return new TMS9900InstPrinter(MAI, MII, MRI, SyntaxVariant);
 }
 } // end anonymous namespace
 

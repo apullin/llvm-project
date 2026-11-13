@@ -1,5 +1,6 @@
 add_llvm_component_library(LLVMTMS9900AsmParser
   TMS9900AsmParser.cpp
+  TMS9900Xas99Normalizer.cpp
 
   LINK_COMPONENTS
   MC

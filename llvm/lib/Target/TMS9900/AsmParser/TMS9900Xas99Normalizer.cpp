@@ -51,6 +51,48 @@ static bool isXasDirective(StringRef S) {
       .Default(false);
 }
 
+static std::string rewriteZeroXHexOutsideQuotes(StringRef S) {
+  std::string Out;
+  Out.reserve(S.size());
+  bool InSQ = false, InDQ = false;
+  for (size_t I = 0; I < S.size();) {
+    char C = S[I];
+    if (C == '\'' && !InDQ) {
+      Out.push_back(C);
+      if (InSQ && I + 1 < S.size() && S[I + 1] == '\'') {
+        Out.push_back(S[I + 1]);
+        I += 2;
+        continue;
+      }
+      InSQ = !InSQ;
+      ++I;
+      continue;
+    }
+    if (C == '"' && !InSQ) {
+      InDQ = !InDQ;
+      Out.push_back(C);
+      ++I;
+      continue;
+    }
+    if (!InSQ && !InDQ && C == '0' && I + 2 < S.size() &&
+        (S[I + 1] == 'x' || S[I + 1] == 'X') && isHexDigit(S[I + 2]) &&
+        (I == 0 || (!isAlnum(S[I - 1]) && S[I - 1] != '_' && S[I - 1] != '$'))) {
+      size_t J = I + 2;
+      while (J < S.size() && isHexDigit(S[J]))
+        ++J;
+      if (J == S.size() || (!isAlnum(S[J]) && S[J] != '_')) {
+        Out.push_back('>');
+        Out.append(S.data() + I + 2, J - (I + 2));
+        I = J;
+        continue;
+      }
+    }
+    Out.push_back(C);
+    ++I;
+  }
+  return Out;
+}
+
 // Strip ';' or xas99 trailing comment (tab or >=2 spaces after operand field),
 // respecting single- and double-quoted strings.
 static std::pair<StringRef, StringRef> splitOperandsAndComment(StringRef Rest) {
@@ -692,9 +734,11 @@ void llvm::normalizeXas99SourceBuffer(MCAsmParser &Parser) {
     StringRef Line(Lines[LineIdx]);
     StringRef LTrim = Line.ltrim(" \t");
 
-    // Pass blank and full-line comment lines straight through
+    // Emit blank line for full-line '*' or ';' comments so apostrophes (e.g.
+    // "Sprite 0's") inside comments never trigger LexMasmStrings quote swallowing,
+    // while preserving exact 1-to-1 line numbers!
     if (LTrim.empty() || LTrim.starts_with("*") || LTrim.starts_with(";")) {
-      Out << Line << "\n";
+      Out << "\n";
       continue;
     }
 
@@ -733,15 +777,32 @@ void llvm::normalizeXas99SourceBuffer(MCAsmParser &Parser) {
       continue;
     }
 
-    // Preserve GNU/ELF dot-directives (.section, .rodata, .text, .byte, etc.)
+    // Preserve GNU/ELF dot-directives (.section, .rodata, .text, .byte, .equ, etc.)
+    // while translating 0xHEX -> >HEX so HLASM integer mode doesn't split "0x"!
     if (LTrim.starts_with(".")) {
       if (!PendingLabel.empty()) {
         Out << PendingLabel << "\n";
         PendingLabel.clear();
       }
-      Out << Line << "\n";
+      if (LTrim.starts_with_insensitive(".equ ") ||
+          LTrim.starts_with_insensitive(".set ")) {
+        // Rewrite ".equ SYM, expr" -> "SYM EQU expr" so canonical uppercase symbol works too!
+        StringRef Body = LTrim.drop_front(4).ltrim(" \t");
+        size_t Comma = Body.find(',');
+        if (Comma != StringRef::npos) {
+          StringRef Sym = Body.slice(0, Comma).trim(" \t");
+          auto [ValPart, _] = splitOperandsAndComment(Body.substr(Comma + 1));
+          Out << Sym << " EQU " << rewriteZeroXHexOutsideQuotes(ValPart) << "\n";
+          continue;
+        }
+      }
+      Out << rewriteZeroXHexOutsideQuotes(Line) << "\n";
       continue;
     }
+
+    std::string CleanZeroX = rewriteZeroXHexOutsideQuotes(Line);
+    Line = CleanZeroX;
+    LTrim = Line.ltrim(" \t");
 
     // Parse optional column-0 label (or local !label)
     StringRef Rest = Line;

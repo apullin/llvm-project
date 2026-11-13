@@ -28,6 +28,8 @@
 ;--- modern.asm
 TITL 'MODERN'
 IDT  'MODTEST'
+* Sprite 0's apostrophe inside a '*' comment must not swallow lines!
+       .equ VDPWD, 0x8C00
 
 wrksp:
        equ  >8300

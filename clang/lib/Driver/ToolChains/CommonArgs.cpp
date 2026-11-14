@@ -612,6 +612,11 @@ std::string tools::getCPUName(const Driver &D, const ArgList &Args,
       return A->getValue();
     return "";
 
+  case llvm::Triple::i8085:
+    if (const Arg *A = Args.getLastArg(options::OPT_mcpu_EQ))
+      return A->getValue();
+    return "";
+
   case llvm::Triple::m68k:
     return m68k::getM68kTargetCPU(Args);
 
@@ -704,6 +709,12 @@ void tools::getTargetFeatures(const Driver &D, const llvm::Triple &Triple,
   std::vector<StringRef> Features;
   switch (Triple.getArch()) {
   default:
+    break;
+  case llvm::Triple::i8085:
+    if (const Arg *A = Args.getLastArg(options::OPT_mcpu_EQ)) {
+      if (StringRef(A->getValue()) == "i8085-undoc")
+        Features.push_back("+undoc");
+    }
     break;
   case llvm::Triple::mips:
   case llvm::Triple::mipsel:

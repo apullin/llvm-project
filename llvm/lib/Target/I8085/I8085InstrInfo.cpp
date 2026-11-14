@@ -334,6 +334,8 @@ static bool isCondBranchOpcode(unsigned Opc) {
   case I8085::JM:
   case I8085::JPE:
   case I8085::JPO:
+  case I8085::JNX5:
+  case I8085::JX5:
     return true;
   default:
     return false;
@@ -358,6 +360,10 @@ static unsigned getOppositeBranchOpcode(unsigned Opc) {
     return I8085::JPO;
   case I8085::JPO:
     return I8085::JPE;
+  case I8085::JNX5:
+    return I8085::JX5;
+  case I8085::JX5:
+    return I8085::JNX5;
   default:
     llvm_unreachable("unexpected branch opcode!");
   }
@@ -531,6 +537,8 @@ MachineBasicBlock *I8085InstrInfo::getBranchDestBlock(const MachineInstr &MI) co
   case I8085::JNC:
   case I8085::JPE:
   case I8085::JPO:
+  case I8085::JNX5:
+  case I8085::JX5:
     return MI.getOperand(0).getMBB();
   }
 }
@@ -551,6 +559,8 @@ bool I8085InstrInfo::isBranchOffsetInRange(unsigned BranchOp,
   case I8085::JNC:
   case I8085::JPE:
   case I8085::JPO:
+  case I8085::JNX5:
+  case I8085::JX5:
     return true;
   }
 }
@@ -570,15 +580,22 @@ static bool isLXIHLImm(const MachineInstr &MI) {
          MI.getOperand(0).getReg() == I8085::HL && MI.getOperand(1).isImm();
 }
 
+static bool isLDSIImm(const MachineInstr &MI) {
+  return MI.getOpcode() == I8085::LDSI && MI.getNumOperands() >= 1 &&
+         MI.getOperand(0).isImm();
+}
+
 static bool isI8085OutlinerMemoryOpcode(unsigned Opcode) {
   switch (Opcode) {
   case I8085::LDA:
   case I8085::LDAX:
   case I8085::LHLD:
+  case I8085::LHLX:
   case I8085::MOV_FROM_M:
   case I8085::MOV_M:
   case I8085::MVI_M:
   case I8085::SHLD:
+  case I8085::SHLX:
   case I8085::STA:
   case I8085::STAX:
     return true;
@@ -595,6 +612,7 @@ static bool isI8085OutlinerOpcode(unsigned Opcode) {
   case I8085::ADI:
   case I8085::ANA:
   case I8085::ANI:
+  case I8085::ARHL:
   case I8085::CMA:
   case I8085::CMC:
   case I8085::CMP:
@@ -603,11 +621,15 @@ static bool isI8085OutlinerOpcode(unsigned Opcode) {
   case I8085::DAD:
   case I8085::DCR:
   case I8085::DCX:
+  case I8085::DSUB:
   case I8085::INR:
   case I8085::INX:
   case I8085::LDA:
   case I8085::LDAX:
+  case I8085::LDHI:
+  case I8085::LDSI:
   case I8085::LHLD:
+  case I8085::LHLX:
   case I8085::LXI:
   case I8085::MOV:
   case I8085::MOV_FROM_M:
@@ -619,11 +641,13 @@ static bool isI8085OutlinerOpcode(unsigned Opcode) {
   case I8085::ORI:
   case I8085::RAL:
   case I8085::RAR:
+  case I8085::RDEL:
   case I8085::RLC:
   case I8085::RRC:
   case I8085::SBB:
   case I8085::SBI:
   case I8085::SHLD:
+  case I8085::SHLX:
   case I8085::STA:
   case I8085::STAX:
   case I8085::STC:
@@ -659,6 +683,16 @@ static bool isSREGDeadAfter(outliner::Candidate &C,
 static bool hasSafeStackRelativeFixups(outliner::Candidate &C, bool IsTailCall,
                                        const TargetRegisterInfo &TRI) {
   for (auto It = C.begin(), End = C.end(); It != End; ++It) {
+    if (It->getOpcode() == I8085::LDSI) {
+      if (!isLDSIImm(*It))
+        return false;
+      if (!IsTailCall) {
+        int64_t Offset = It->getOperand(0).getImm();
+        if (Offset < 0 || Offset > 253)
+          return false;
+      }
+      continue;
+    }
     if (!isDADSP(*It))
       continue;
     if (It == C.begin())
@@ -892,12 +926,11 @@ I8085InstrInfo::getOutliningTypeImpl(const MachineModuleInfo &MMI,
       !isI8085OutlinerOpcode(MI.getOpcode()))
     return outliner::InstrType::Illegal;
 
-  // CALL pushes a 2-byte return address. Only allow DAD SP when
-  // getOutliningCandidateInfo can prove the candidate contains the immediately
-  // preceding LXI H,imm, which buildOutlinedFrame then repairs by +2.
+  // CALL pushes a 2-byte return address. Only allow DAD SP or LDSI imm8 when
+  // getOutliningCandidateInfo can prove the immediate can be repaired by +2.
   if ((MI.readsRegister(I8085::SP, TRI) ||
        MI.modifiesRegister(I8085::SP, TRI)) &&
-      !isDADSP(MI))
+      !isDADSP(MI) && !isLDSIImm(MI))
     return outliner::InstrType::Illegal;
 
   return outliner::InstrType::Legal;
@@ -908,6 +941,11 @@ void I8085InstrInfo::buildOutlinedFrame(
     const outliner::OutlinedFunction &OF) const {
   if (OF.FrameConstructionID == MachineOutlinerDefault) {
     for (auto It = MBB.begin(), End = MBB.end(); It != End; ++It) {
+      if (isLDSIImm(*It)) {
+        MachineOperand &Offset = It->getOperand(0);
+        Offset.setImm(Offset.getImm() + 2);
+        continue;
+      }
       if (!isDADSP(*It))
         continue;
 

@@ -15,6 +15,18 @@
 include "llvm/Target/Target.td"
 
 //===---------------------------------------------------------------------===//
+// Subtarget Features
+//===---------------------------------------------------------------------===//
+
+def FeatureUndocumented
+    : SubtargetFeature<"undoc", "HasUndocumented", "true",
+                       "Enable undocumented 8085 instructions">;
+
+def HasUndocumented : Predicate<"Subtarget->hasUndocumented()">,
+                      AssemblerPredicate<(all_of FeatureUndocumented),
+                                         "undocumented 8085 instructions">;
+
+//===---------------------------------------------------------------------===//
 // Register File Description
 //===---------------------------------------------------------------------===//
 
@@ -69,6 +81,7 @@ class Proc<string Name, list<SubtargetFeature> Features>
  : Processor<Name, NoItineraries, Features>;
 
 def : Proc<"i8085", []>;
+def : Proc<"i8085-undoc", [FeatureUndocumented]>;
 def : Proc<"generic", []>;
 
 

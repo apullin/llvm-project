@@ -486,6 +486,36 @@ let Defs=[H,L] in def LHLD : F6<0b00101010,(outs), (ins imm16Addr: $k), "LHLD $k
 let Uses=[A] in def STA : F6<0b00110010,(outs), (ins imm16Addr: $k), "STA $k", []>;
 let Defs=[A] in def LDA : F6<0b00111010,(outs), (ins imm16Addr: $k), "LDA $k", []>;
 
+//===----------------------------------------------------------------------===//
+// Undocumented 8085 instructions (enabled with +undoc / -mcpu=i8085-undoc)
+//===----------------------------------------------------------------------===//
+
+let Predicates = [HasUndocumented] in {
+  let Defs = [H, L, SREG], Uses = [H, L, B, C] in
+  def DSUB : F1<0b00001000, (outs), (ins), "DSUB", []>;
+
+  let Defs = [H, L, SREG], Uses = [H, L] in
+  def ARHL : F1<0b00010000, (outs), (ins), "ARHL", []>;
+
+  let Defs = [D, E, SREG], Uses = [D, E, SREG] in
+  def RDEL : F1<0b00011000, (outs), (ins), "RDEL", []>;
+
+  let Defs = [D, E], Uses = [H, L] in
+  def LDHI : F5<0b00101000, (outs), (ins I8085Imm8:$k), "LDHI $k", []>;
+
+  let Defs = [D, E], Uses = [SP] in
+  def LDSI : F5<0b00111000, (outs), (ins I8085Imm8:$k), "LDSI $k", []>;
+
+  let Defs = [SP], Uses = [SP, SREG], isCall = 1, hasSideEffects = 1 in
+  def RSTV : F1<0b11001011, (outs), (ins), "RSTV", []>;
+
+  let Uses = [D, E, H, L], mayStore = 1 in
+  def SHLX : F1<0b11011001, (outs), (ins), "SHLX", []>;
+
+  let Defs = [H, L], Uses = [D, E], mayLoad = 1 in
+  def LHLX : F1<0b11101101, (outs), (ins), "LHLX", []>;
+}
+
 let Defs=[SP, HL, SREG], Uses=[SP] in {
 
 def GROW_STACK_BY 

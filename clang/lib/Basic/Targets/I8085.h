@@ -23,6 +23,8 @@ namespace targets {
 
 class LLVM_LIBRARY_VISIBILITY I8085TargetInfo : public TargetInfo {
   static const char *const GCCRegNames[];
+  bool HasUndoc = false;
+  std::string CPUName = "i8085";
 
 public:
   I8085TargetInfo(const llvm::Triple &Triple, const TargetOptions &)
@@ -96,8 +98,43 @@ public:
   bool validateAsmConstraint(const char *&Name,
                              TargetInfo::ConstraintInfo &Info) const override;
 
+  bool isValidCPUName(StringRef Name) const override {
+    return Name == "i8085" || Name == "i8085-undoc" || Name == "generic";
+  }
+
+  void fillValidCPUList(SmallVectorImpl<StringRef> &Values) const override {
+    Values.append({"i8085", "i8085-undoc", "generic"});
+  }
+
+  bool setCPU(const std::string &Name) override {
+    if (!isValidCPUName(Name))
+      return false;
+    CPUName = Name;
+    return true;
+  }
+
+  bool initFeatureMap(llvm::StringMap<bool> &Features,
+                      DiagnosticsEngine &Diags, StringRef CPU,
+                      const std::vector<std::string> &FeaturesVec) const override {
+    if (CPU == "i8085-undoc")
+      Features["undoc"] = true;
+    return TargetInfo::initFeatureMap(Features, Diags, CPU, FeaturesVec);
+  }
+
+  bool handleTargetFeatures(std::vector<std::string> &Features,
+                            DiagnosticsEngine &Diags) override {
+    HasUndoc = false;
+    for (const auto &Feature : Features) {
+      if (Feature == "+undoc")
+        HasUndoc = true;
+      else if (Feature == "-undoc")
+        HasUndoc = false;
+    }
+    return true;
+  }
+
   bool hasFeature(StringRef Feature) const override {
-    return Feature == "i8085";
+    return Feature == "i8085" || (Feature == "undoc" && HasUndoc);
   }
 };
 

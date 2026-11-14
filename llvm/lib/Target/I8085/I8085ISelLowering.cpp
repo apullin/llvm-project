@@ -272,7 +272,7 @@ I8085TargetLowering::I8085TargetLowering(const I8085TargetMachine &TM,
     }
   }
 
-  setOperationAction(ISD::MUL, MVT::i8, LibCall);
+  setOperationAction(ISD::MUL, MVT::i8, Custom);
   setOperationAction(ISD::MUL, MVT::i16, Custom);
   setOperationAction(ISD::MUL, MVT::i32, Custom);
   setOperationAction(ISD::MUL, MVT::i64, Expand);
@@ -1543,7 +1543,102 @@ SDValue I8085TargetLowering::LowerOperation(SDValue Op, SelectionDAG &DAG) const
       return lowerI64LibCall(RTLIB::MUL_I64, Op.getOperand(0),
                              Op.getOperand(1));
     }
+    if (VT == MVT::i8) {
+      const Function &Fn = DAG.getMachineFunction().getFunction();
+      if (!Fn.hasOptNone()) {
+        SDValue MulLHS = Op.getOperand(0);
+        SDValue MulRHS = Op.getOperand(1);
+        const ConstantSDNode *MulC = dyn_cast<ConstantSDNode>(MulRHS);
+        SDValue Other = MulLHS;
+        if (!MulC) {
+          MulC = dyn_cast<ConstantSDNode>(MulLHS);
+          Other = MulRHS;
+        }
+        if (MulC) {
+          EVT ShiftVT = getShiftAmountTy(VT, DAG.getDataLayout());
+          uint8_t C8 = static_cast<uint8_t>(MulC->getZExtValue() & 0xffu);
+          if (C8 == 0)
+            return DAG.getConstant(0, DL, VT);
+          if (C8 == 1)
+            return Other;
+          if (llvm::has_single_bit(C8)) {
+            unsigned Sh = llvm::countr_zero(C8);
+            return DAG.getNode(ISD::SHL, DL, VT, Other,
+                               DAG.getConstant(Sh, DL, ShiftVT));
+          }
+          if (C8 == 0xffu)
+            return DAG.getNode(ISD::SUB, DL, VT, DAG.getConstant(0, DL, VT),
+                               Other);
+          if (llvm::popcount(C8) == 2) {
+            unsigned B0 = llvm::countr_zero(C8);
+            unsigned B1 =
+                llvm::countr_zero(static_cast<uint8_t>(C8 & (C8 - 1u)));
+            SDValue Term0 = B0 ? DAG.getNode(ISD::SHL, DL, VT, Other,
+                                             DAG.getConstant(B0, DL, ShiftVT))
+                               : Other;
+            SDValue Term1 = DAG.getNode(ISD::SHL, DL, VT, Other,
+                                        DAG.getConstant(B1, DL, ShiftVT));
+            return DAG.getNode(ISD::ADD, DL, VT, Term0, Term1);
+          }
+          uint8_t C8Plus1 = static_cast<uint8_t>(C8 + 1u);
+          if (C8Plus1 != 0 && llvm::has_single_bit(C8Plus1)) {
+            unsigned K = llvm::countr_zero(C8Plus1);
+            SDValue Shifted = DAG.getNode(ISD::SHL, DL, VT, Other,
+                                          DAG.getConstant(K, DL, ShiftVT));
+            return DAG.getNode(ISD::SUB, DL, VT, Shifted, Other);
+          }
+        }
+      }
+      MakeLibCallOptions CallOptions;
+      SDValue Result;
+      SDValue Chain;
+      std::tie(Result, Chain) = makeLibCall(
+          DAG, RTLIB::MUL_I8, MVT::i8, {Op.getOperand(0), Op.getOperand(1)},
+          CallOptions, DL);
+      return Result;
+    }
     if (VT == MVT::i32) {
+      const Function &Fn = DAG.getMachineFunction().getFunction();
+      if (!Fn.hasOptSize() && !Fn.hasOptNone()) {
+        SDValue MulLHS = Op.getOperand(0);
+        SDValue MulRHS = Op.getOperand(1);
+        const ConstantSDNode *MulC = dyn_cast<ConstantSDNode>(MulRHS);
+        SDValue Other = MulLHS;
+        if (!MulC) {
+          MulC = dyn_cast<ConstantSDNode>(MulLHS);
+          Other = MulRHS;
+        }
+        if (MulC) {
+          EVT ShiftVT = getShiftAmountTy(VT, DAG.getDataLayout());
+          uint32_t C32 =
+              static_cast<uint32_t>(MulC->getZExtValue() & 0xffffffffu);
+          if (C32 == 0xffffffffu)
+            return DAG.getNode(ISD::SUB, DL, VT, DAG.getConstant(0, DL, VT),
+                               Other);
+          if (llvm::popcount(C32) == 2) {
+            unsigned B0 = llvm::countr_zero(C32);
+            unsigned B1 = llvm::countr_zero(C32 & (C32 - 1u));
+            if ((B0 % 8) + (B1 % 8) <= 4) {
+              SDValue Term0 =
+                  B0 ? DAG.getNode(ISD::SHL, DL, VT, Other,
+                                   DAG.getConstant(B0, DL, ShiftVT))
+                     : Other;
+              SDValue Term1 = DAG.getNode(ISD::SHL, DL, VT, Other,
+                                          DAG.getConstant(B1, DL, ShiftVT));
+              return DAG.getNode(ISD::ADD, DL, VT, Term0, Term1);
+            }
+          }
+          uint32_t C32Plus1 = C32 + 1u;
+          if (C32Plus1 > 2 && llvm::has_single_bit(C32Plus1)) {
+            unsigned K = llvm::countr_zero(C32Plus1);
+            if ((K % 8) <= 3) {
+              SDValue Shifted = DAG.getNode(ISD::SHL, DL, VT, Other,
+                                            DAG.getConstant(K, DL, ShiftVT));
+              return DAG.getNode(ISD::SUB, DL, VT, Shifted, Other);
+            }
+          }
+        }
+      }
       // Check if both operands are sext from i16 -> use __mulsi16
       // This handles SIGN_EXTEND, SIGN_EXTEND_INREG, and sext loads.
       auto getSExtI16Operand = [&](SDValue V) -> SDValue {
@@ -2648,76 +2743,12 @@ SDValue I8085TargetLowering::performMulCombine(SDNode *N,
     return DAG.getConstant(0, DL, VT);
   if (C->isOne())
     return Other;
-  if (ShiftAmt) {
-    EVT ShiftVT = getShiftAmountTy(VT, DAG.getDataLayout());
-    SDValue Amt = DAG.getConstant(ShiftAmt, DL, ShiftVT);
-    return DAG.getNode(ISD::SHL, DL, VT, Other, Amt);
-  }
-
-  const Function &Fn = DAG.getMachineFunction().getFunction();
-  if (Fn.hasOptNone())
+  if (!ShiftAmt)
     return SDValue();
 
   EVT ShiftVT = getShiftAmountTy(VT, DAG.getDataLayout());
-
-  // Constant i8 multiply strength reduction: straight-line shifts + add/sub
-  // are both smaller (~6-11B) and much faster (~24-40T) than a stack-passed
-  // __mul8 library call (~18B call site + ~150T).
-  if (VT == MVT::i8) {
-    uint8_t C8 = static_cast<uint8_t>(C->getZExtValue() & 0xffu);
-    if (C8 == 0xffu)
-      return DAG.getNode(ISD::SUB, DL, VT, DAG.getConstant(0, DL, VT), Other);
-    if (llvm::popcount(C8) == 2) {
-      unsigned B0 = llvm::countr_zero(C8);
-      unsigned B1 = llvm::countr_zero(static_cast<uint8_t>(C8 & (C8 - 1u)));
-      SDValue Term0 = B0 ? DAG.getNode(ISD::SHL, DL, VT, Other,
-                                       DAG.getConstant(B0, DL, ShiftVT))
-                         : Other;
-      SDValue Term1 = DAG.getNode(ISD::SHL, DL, VT, Other,
-                                  DAG.getConstant(B1, DL, ShiftVT));
-      return DAG.getNode(ISD::ADD, DL, VT, Term0, Term1);
-    }
-    uint8_t C8Plus1 = static_cast<uint8_t>(C8 + 1u);
-    if (C8Plus1 != 0 && llvm::has_single_bit(C8Plus1)) {
-      unsigned K = llvm::countr_zero(C8Plus1);
-      SDValue Shifted = DAG.getNode(ISD::SHL, DL, VT, Other,
-                                    DAG.getConstant(K, DL, ShiftVT));
-      return DAG.getNode(ISD::SUB, DL, VT, Shifted, Other);
-    }
-    return SDValue();
-  }
-
-  // Constant i32 multiply strength reduction in speed mode (-O1/-O2): expand
-  // 2-term and (2^k - 1) constants when total residual bit-shifts after byte
-  // shuffles are small, avoiding ~1,000+ T-state __mul32 calls.
-  if (VT == MVT::i32 && !Fn.hasOptSize()) {
-    uint32_t C32 = static_cast<uint32_t>(C->getZExtValue() & 0xffffffffu);
-    if (C32 == 0xffffffffu)
-      return DAG.getNode(ISD::SUB, DL, VT, DAG.getConstant(0, DL, VT), Other);
-    if (llvm::popcount(C32) == 2) {
-      unsigned B0 = llvm::countr_zero(C32);
-      unsigned B1 = llvm::countr_zero(C32 & (C32 - 1u));
-      if ((B0 % 8) + (B1 % 8) <= 4) {
-        SDValue Term0 = B0 ? DAG.getNode(ISD::SHL, DL, VT, Other,
-                                         DAG.getConstant(B0, DL, ShiftVT))
-                           : Other;
-        SDValue Term1 = DAG.getNode(ISD::SHL, DL, VT, Other,
-                                    DAG.getConstant(B1, DL, ShiftVT));
-        return DAG.getNode(ISD::ADD, DL, VT, Term0, Term1);
-      }
-    }
-    uint32_t C32Plus1 = C32 + 1u;
-    if (C32Plus1 > 2 && llvm::has_single_bit(C32Plus1)) {
-      unsigned K = llvm::countr_zero(C32Plus1);
-      if ((K % 8) <= 3) {
-        SDValue Shifted = DAG.getNode(ISD::SHL, DL, VT, Other,
-                                      DAG.getConstant(K, DL, ShiftVT));
-        return DAG.getNode(ISD::SUB, DL, VT, Shifted, Other);
-      }
-    }
-  }
-
-  return SDValue();
+  SDValue Amt = DAG.getConstant(ShiftAmt, DL, ShiftVT);
+  return DAG.getNode(ISD::SHL, DL, VT, Other, Amt);
 }
 
 SDValue I8085TargetLowering::performTruncMulCombine(SDNode *N,

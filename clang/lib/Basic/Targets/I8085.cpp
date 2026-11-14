@@ -28,6 +28,8 @@ void I8085TargetInfo::getTargetDefines(const LangOptions &Opts,
                                        MacroBuilder &Builder) const {
   Builder.defineMacro("__i8085__");
   Builder.defineMacro("__I8085__");
+  if (HasUndoc)
+    Builder.defineMacro("__I8085_UNDOC__");
 }
 
 bool I8085TargetInfo::validateAsmConstraint(

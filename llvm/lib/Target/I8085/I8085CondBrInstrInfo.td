@@ -143,6 +143,16 @@ let isBranch = 1, isTerminator = 1, Uses=[SREG] in {
    def JPO : F6<0b11100010,(outs),(ins addressTarget: $k),"JPO $k", []>;
 
    def JPE : F6<0b11101010,(outs),(ins addressTarget: $k),"JPE $k", []>;
+
+   let Predicates = [HasUndocumented] in {
+      def JNX5 : F6<0b11011101, (outs), (ins addressTarget:$k), "JNX5 $k", []>;
+      def JX5  : F6<0b11111101, (outs), (ins addressTarget:$k), "JX5 $k", []>;
+   }
+}
+
+let Predicates = [HasUndocumented] in {
+   def : InstAlias<"JNK $k", (JNX5 addressTarget:$k), 0>;
+   def : InstAlias<"JK $k",  (JX5 addressTarget:$k), 0>;
 }
 
 let isBarrier = 1, isBranch = 1, isTerminator = 1 in {

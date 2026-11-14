@@ -54,6 +54,7 @@ private:
 
   const I8085RegisterInfo *TRI;
   const TargetInstrInfo *TII;
+  bool HasUndoc = false;
 
 
   bool expandMBB(Block &MBB);
@@ -127,30 +128,27 @@ private:
     return LiveRegs.contains(Reg);
   }
 
-  bool isHLOrSubRegLive(Block &MBB, BlockIt MBBI) const {
-    if (isPhysRegLive(MBB, MBBI, I8085::HL) ||
-        isPhysRegLive(MBB, MBBI, I8085::H) ||
-        isPhysRegLive(MBB, MBBI, I8085::L)) {
+  bool isPairOrSubRegLive(Block &MBB, BlockIt MBBI, Register Pair,
+                          Register Hi, Register Lo) const {
+    if (isPhysRegLive(MBB, MBBI, Pair) ||
+        isPhysRegLive(MBB, MBBI, Hi) ||
+        isPhysRegLive(MBB, MBBI, Lo)) {
       return true;
     }
 
-    bool HReaches = hasAvailablePhysRegValue(MBB, MBBI, I8085::H);
-    bool LReaches = hasAvailablePhysRegValue(MBB, MBBI, I8085::L);
-    if (!HReaches && !LReaches)
+    bool HiReaches = hasAvailablePhysRegValue(MBB, MBBI, Hi);
+    bool LoReaches = hasAvailablePhysRegValue(MBB, MBBI, Lo);
+    if (!HiReaches && !LoReaches)
       return false;
 
-    // Follow the two register units independently. This is a fallback for
-    // stale kill/dead flags: scratch-using pseudos have no H/L defs and are
-    // crossed, while an explicit H, L, or HL destination terminates only the
-    // value units it actually replaces.
     for (auto I = std::next(MBBI), E = MBB.end(); I != E; ++I) {
       const MachineInstr &Inst = *I;
       for (const MachineOperand &MO : Inst.operands()) {
         if (!MO.isReg() || !MO.isUse())
           continue;
         Register Reg = MO.getReg();
-        if ((HReaches && TRI->regsOverlap(Reg, I8085::H)) ||
-            (LReaches && TRI->regsOverlap(Reg, I8085::L)))
+        if ((HiReaches && TRI->regsOverlap(Reg, Hi)) ||
+            (LoReaches && TRI->regsOverlap(Reg, Lo)))
           return true;
       }
 
@@ -158,19 +156,31 @@ private:
         if (!MO.isReg() || !MO.isDef())
           continue;
         Register Reg = MO.getReg();
-        if (TRI->regsOverlap(Reg, I8085::H))
-          HReaches = false;
-        if (TRI->regsOverlap(Reg, I8085::L))
-          LReaches = false;
+        if (TRI->regsOverlap(Reg, Hi))
+          HiReaches = false;
+        if (TRI->regsOverlap(Reg, Lo))
+          LoReaches = false;
       }
-      if (!HReaches && !LReaches)
+      if (!HiReaches && !LoReaches)
         return false;
     }
 
     LivePhysRegs LiveOuts(*TRI);
     LiveOuts.addLiveOuts(MBB);
-    return (HReaches && LiveOuts.contains(I8085::H)) ||
-           (LReaches && LiveOuts.contains(I8085::L));
+    return (HiReaches && LiveOuts.contains(Hi)) ||
+           (LoReaches && LiveOuts.contains(Lo));
+  }
+
+  bool isHLOrSubRegLive(Block &MBB, BlockIt MBBI) const {
+    return isPairOrSubRegLive(MBB, MBBI, I8085::HL, I8085::H, I8085::L);
+  }
+
+  bool isDEOrSubRegLive(Block &MBB, BlockIt MBBI) const {
+    return isPairOrSubRegLive(MBB, MBBI, I8085::DE, I8085::D, I8085::E);
+  }
+
+  bool isBCOrSubRegLive(Block &MBB, BlockIt MBBI) const {
+    return isPairOrSubRegLive(MBB, MBBI, I8085::BC, I8085::B, I8085::C);
   }
 
   bool shouldPreservePSW(Block &MBB, BlockIt MBBI) const {
@@ -380,6 +390,7 @@ bool I8085ExpandPseudo::runOnMachineFunction(MachineFunction &MF) {
   const I8085Subtarget &STI = MF.getSubtarget<I8085Subtarget>();
   TRI = STI.getRegisterInfo();
   TII = STI.getInstrInfo();
+  HasUndoc = STI.hasUndocumented();
 
   // We need to track liveness in order to use register scavenging.
   MF.getProperties().set(MachineFunctionProperties::Property::TracksLiveness);
@@ -424,6 +435,31 @@ bool I8085ExpandPseudo::expand<I8085::LOAD_16_ADDR_CONTENT>(Block &MBB, BlockIt 
 
   unsigned destReg = MI.getOperand(0).getReg();
   unsigned srcReg = MI.getOperand(1).getReg();
+
+  if (HasUndoc && srcReg == I8085::DE) {
+    if (destReg == I8085::HL) {
+      buildMI(MBB, MBBI, I8085::LHLX);
+      MI.eraseFromParent();
+      return true;
+    }
+    if (destReg == I8085::BC && !isHLOrSubRegLive(MBB, MBBI)) {
+      buildMI(MBB, MBBI, I8085::LHLX);
+      buildMI(MBB, MBBI, I8085::MOV)
+          .addReg(I8085::B, RegState::Define)
+          .addReg(I8085::H);
+      buildMI(MBB, MBBI, I8085::MOV)
+          .addReg(I8085::C, RegState::Define)
+          .addReg(I8085::L);
+      MI.eraseFromParent();
+      return true;
+    }
+    if (destReg == I8085::SP && !isHLOrSubRegLive(MBB, MBBI)) {
+      buildMI(MBB, MBBI, I8085::LHLX);
+      buildMI(MBB, MBBI, I8085::SPHL);
+      MI.eraseFromParent();
+      return true;
+    }
+  }
 
   if ((srcReg == I8085::BC || srcReg == I8085::DE) && destReg != srcReg) {
     bool DestIsSP = (destReg == I8085::SP);
@@ -657,6 +693,25 @@ bool I8085ExpandPseudo::expand<I8085::STORE_16_ADDR_CONTENT>(Block &MBB, BlockIt
 
   unsigned addrReg = MI.getOperand(0).getReg();
   unsigned srcReg = MI.getOperand(1).getReg();
+
+  if (HasUndoc && addrReg == I8085::DE) {
+    if (srcReg == I8085::HL) {
+      buildMI(MBB, MBBI, I8085::SHLX);
+      MI.eraseFromParent();
+      return true;
+    }
+    if (srcReg == I8085::BC && !isHLOrSubRegLive(MBB, MBBI)) {
+      buildMI(MBB, MBBI, I8085::MOV)
+          .addReg(I8085::H, RegState::Define)
+          .addReg(I8085::B);
+      buildMI(MBB, MBBI, I8085::MOV)
+          .addReg(I8085::L, RegState::Define)
+          .addReg(I8085::C);
+      buildMI(MBB, MBBI, I8085::SHLX);
+      MI.eraseFromParent();
+      return true;
+    }
+  }
 
   // Computing an SP address uses HL. Save an HL source in BC first, leaving
   // the original BC value on the stack. Account for that remaining push when
@@ -902,6 +957,25 @@ bool I8085ExpandPseudo::expand<I8085::STORE_8>(Block &MBB, BlockIt MBBI) {
   unsigned srcReg = MI.getOperand(2).getReg();
   unsigned baseReg = MI.getOperand(0).getReg();
   int64_t offsetToStore = MI.getOperand(1).getImm();
+
+  if (HasUndoc && baseReg == I8085::SP && offsetToStore >= 0 &&
+      offsetToStore <= 255 && !isDEOrSubRegLive(MBB, MBBI)) {
+    if (srcReg == I8085::A) {
+      buildMI(MBB, MBBI, I8085::LDSI).addImm(offsetToStore);
+      buildMI(MBB, MBBI, I8085::STAX).addReg(I8085::DE);
+      MI.eraseFromParent();
+      return true;
+    }
+    if (!shouldPreservePSW(MBB, MBBI)) {
+      buildMI(MBB, MBBI, I8085::MOV)
+          .addReg(I8085::A, RegState::Define)
+          .addReg(srcReg);
+      buildMI(MBB, MBBI, I8085::LDSI).addImm(offsetToStore);
+      buildMI(MBB, MBBI, I8085::STAX).addReg(I8085::DE);
+      MI.eraseFromParent();
+      return true;
+    }
+  }
 
   const bool PreserveHL = (baseReg != I8085::HL) &&
                           isHLOrSubRegLive(MBB, MBBI);
@@ -1330,6 +1404,40 @@ bool I8085ExpandPseudo::expand<I8085::STORE_16>(Block &MBB, BlockIt MBBI) {
   int64_t offsetToStore = MI.getOperand(1).getImm();
   unsigned destReg = MI.getOperand(2).getReg();
 
+  if (HasUndoc && baseReg == I8085::SP && offsetToStore >= 0 &&
+      offsetToStore <= 255 && !isDEOrSubRegLive(MBB, MBBI)) {
+    if (destReg == I8085::HL) {
+      buildMI(MBB, MBBI, I8085::LDSI).addImm(offsetToStore);
+      buildMI(MBB, MBBI, I8085::SHLX);
+      MI.eraseFromParent();
+      return true;
+    }
+    if (destReg == I8085::BC && !isHLOrSubRegLive(MBB, MBBI)) {
+      buildMI(MBB, MBBI, I8085::MOV)
+          .addReg(I8085::H, RegState::Define)
+          .addReg(I8085::B);
+      buildMI(MBB, MBBI, I8085::MOV)
+          .addReg(I8085::L, RegState::Define)
+          .addReg(I8085::C);
+      buildMI(MBB, MBBI, I8085::LDSI).addImm(offsetToStore);
+      buildMI(MBB, MBBI, I8085::SHLX);
+      MI.eraseFromParent();
+      return true;
+    }
+    if (destReg == I8085::DE && !isHLOrSubRegLive(MBB, MBBI)) {
+      buildMI(MBB, MBBI, I8085::MOV)
+          .addReg(I8085::H, RegState::Define)
+          .addReg(I8085::D);
+      buildMI(MBB, MBBI, I8085::MOV)
+          .addReg(I8085::L, RegState::Define)
+          .addReg(I8085::E);
+      buildMI(MBB, MBBI, I8085::LDSI).addImm(offsetToStore);
+      buildMI(MBB, MBBI, I8085::SHLX);
+      MI.eraseFromParent();
+      return true;
+    }
+  }
+
   auto addOffsetToHL = [&](int64_t Offset) {
     if (Offset > 0) {
       for (int64_t i = 0; i < Offset; ++i)
@@ -1525,6 +1633,26 @@ bool I8085ExpandPseudo::expand<I8085::LOAD_8_WITH_ADDR>(Block &MBB, BlockIt MBBI
   unsigned baseReg = MI.getOperand(1).getReg();
   int64_t offsetToLoad = MI.getOperand(2).getImm();
 
+  if (HasUndoc && baseReg == I8085::SP && offsetToLoad >= 0 &&
+      offsetToLoad <= 255 && destReg != I8085::D && destReg != I8085::E &&
+      !isDEOrSubRegLive(MBB, MBBI)) {
+    if (destReg == I8085::A) {
+      buildMI(MBB, MBBI, I8085::LDSI).addImm(offsetToLoad);
+      buildMI(MBB, MBBI, I8085::LDAX).addReg(I8085::DE);
+      MI.eraseFromParent();
+      return true;
+    }
+    if (!shouldPreservePSW(MBB, MBBI)) {
+      buildMI(MBB, MBBI, I8085::LDSI).addImm(offsetToLoad);
+      buildMI(MBB, MBBI, I8085::LDAX).addReg(I8085::DE);
+      buildMI(MBB, MBBI, I8085::MOV)
+          .addReg(destReg, RegState::Define)
+          .addReg(I8085::A);
+      MI.eraseFromParent();
+      return true;
+    }
+  }
+
   // When destReg is H or L and the base requires LXI+DAD (base != HL),
   // the "other" sub-register of HL is clobbered by the address computation.
   // If that other sub-register is live, we must preserve it by loading via A
@@ -1655,6 +1783,68 @@ bool I8085ExpandPseudo::expand<I8085::LOAD_16_WITH_ADDR>(Block &MBB, BlockIt MBB
   unsigned destReg = MI.getOperand(0).getReg();
   unsigned baseReg = MI.getOperand(1).getReg();
   int64_t offsetToLoad = MI.getOperand(2).getImm();
+
+  if (HasUndoc && baseReg == I8085::SP && offsetToLoad >= 0 &&
+      offsetToLoad <= 255) {
+    if (destReg == I8085::HL && !isDEOrSubRegLive(MBB, MBBI)) {
+      buildMI(MBB, MBBI, I8085::LDSI).addImm(offsetToLoad);
+      buildMI(MBB, MBBI, I8085::LHLX);
+      MI.eraseFromParent();
+      return true;
+    }
+    if (destReg == I8085::SP && !isDEOrSubRegLive(MBB, MBBI) &&
+        !isHLOrSubRegLive(MBB, MBBI)) {
+      buildMI(MBB, MBBI, I8085::LDSI).addImm(offsetToLoad);
+      buildMI(MBB, MBBI, I8085::LHLX);
+      buildMI(MBB, MBBI, I8085::SPHL);
+      MI.eraseFromParent();
+      return true;
+    }
+    if (destReg == I8085::DE && !isHLOrSubRegLive(MBB, MBBI)) {
+      buildMI(MBB, MBBI, I8085::LDSI).addImm(offsetToLoad);
+      buildMI(MBB, MBBI, I8085::LHLX);
+      buildMI(MBB, MBBI, I8085::XCHG);
+      MI.eraseFromParent();
+      return true;
+    }
+    if (destReg == I8085::BC && !isDEOrSubRegLive(MBB, MBBI)) {
+      if (!isHLOrSubRegLive(MBB, MBBI)) {
+        buildMI(MBB, MBBI, I8085::LDSI).addImm(offsetToLoad);
+        buildMI(MBB, MBBI, I8085::LHLX);
+        buildMI(MBB, MBBI, I8085::MOV)
+            .addReg(I8085::B, RegState::Define)
+            .addReg(I8085::H);
+        buildMI(MBB, MBBI, I8085::MOV)
+            .addReg(I8085::C, RegState::Define)
+            .addReg(I8085::L);
+        MI.eraseFromParent();
+        return true;
+      }
+      if (!shouldPreservePSW(MBB, MBBI)) {
+        buildMI(MBB, MBBI, I8085::LDSI).addImm(offsetToLoad);
+        buildMI(MBB, MBBI, I8085::LDAX).addReg(I8085::DE);
+        buildMI(MBB, MBBI, I8085::MOV)
+            .addReg(I8085::C, RegState::Define)
+            .addReg(I8085::A);
+        buildINX(MBB, MBBI, I8085::DE);
+        buildMI(MBB, MBBI, I8085::LDAX).addReg(I8085::DE);
+        buildMI(MBB, MBBI, I8085::MOV)
+            .addReg(I8085::B, RegState::Define)
+            .addReg(I8085::A);
+        MI.eraseFromParent();
+        return true;
+      }
+    }
+  }
+
+  if (HasUndoc && baseReg == I8085::HL && destReg == I8085::HL &&
+      offsetToLoad >= 2 && offsetToLoad <= 255 &&
+      !isDEOrSubRegLive(MBB, MBBI)) {
+    buildMI(MBB, MBBI, I8085::LDHI).addImm(offsetToLoad);
+    buildMI(MBB, MBBI, I8085::LHLX);
+    MI.eraseFromParent();
+    return true;
+  }
 
   const bool PreserveHL =
       (baseReg != I8085::HL && destReg != I8085::HL &&
@@ -2431,6 +2621,25 @@ template <> bool I8085ExpandPseudo::expand<I8085::SUB_16>(Block &MBB, BlockIt MB
   unsigned opLow,opHigh;
   unsigned destLow,destHigh;
 
+  if (HasUndoc && destReg == I8085::HL && operandOne == I8085::HL) {
+    if (operandTwo == I8085::BC) {
+      buildMI(MBB, MBBI, I8085::DSUB);
+      MI.eraseFromParent();
+      return true;
+    }
+    if (operandTwo == I8085::DE && !isBCOrSubRegLive(MBB, MBBI)) {
+      buildMI(MBB, MBBI, I8085::MOV)
+          .addReg(I8085::B, RegState::Define)
+          .addReg(I8085::D);
+      buildMI(MBB, MBBI, I8085::MOV)
+          .addReg(I8085::C, RegState::Define)
+          .addReg(I8085::E);
+      buildMI(MBB, MBBI, I8085::DSUB);
+      MI.eraseFromParent();
+      return true;
+    }
+  }
+
   if (destReg == operandTwo && destReg != operandOne) {
     if (!getPairRegs(destReg, destLow, destHigh))
       return false;
@@ -2764,6 +2973,25 @@ template <> bool I8085ExpandPseudo::expand<I8085::RL_16>(Block &MBB, BlockIt MBB
   unsigned destReg = MI.getOperand(0).getReg();
   unsigned srcReg = MI.getOperand(1).getReg();
 
+  if (HasUndoc && destReg == I8085::DE) {
+    if (srcReg != I8085::DE) {
+      unsigned srcLow, srcHigh;
+      if (!getPairRegs(srcReg, srcLow, srcHigh))
+        return false;
+      buildMI(MBB, MBBI, I8085::MOV)
+          .addReg(I8085::E, RegState::Define)
+          .addReg(srcLow);
+      buildMI(MBB, MBBI, I8085::MOV)
+          .addReg(I8085::D, RegState::Define)
+          .addReg(srcHigh);
+    }
+    buildMI(MBB, MBBI, I8085::STC);
+    buildMI(MBB, MBBI, I8085::CMC);
+    buildMI(MBB, MBBI, I8085::RDEL);
+    MI.eraseFromParent();
+    return true;
+  }
+
   unsigned regLow, regHigh;
   if (!getPairRegs(destReg, regLow, regHigh))
     return false;
@@ -2890,6 +3118,45 @@ template <> bool I8085ExpandPseudo::expand<I8085::ASR_16>(Block &MBB, BlockIt MB
   unsigned regLow, regHigh;
   if (!getPairRegs(destReg, regLow, regHigh))
     return false;
+
+  if (HasUndoc) {
+    if (destReg == I8085::HL) {
+      if (srcReg != I8085::HL) {
+        unsigned srcLow, srcHigh;
+        if (!getPairRegs(srcReg, srcLow, srcHigh))
+          return false;
+        buildMI(MBB, MBBI, I8085::MOV)
+            .addReg(I8085::L, RegState::Define)
+            .addReg(srcLow);
+        buildMI(MBB, MBBI, I8085::MOV)
+            .addReg(I8085::H, RegState::Define)
+            .addReg(srcHigh);
+      }
+      buildMI(MBB, MBBI, I8085::ARHL);
+      MI.eraseFromParent();
+      return true;
+    }
+    if (!isHLOrSubRegLive(MBB, MBBI)) {
+      unsigned srcLow, srcHigh;
+      if (!getPairRegs(srcReg, srcLow, srcHigh))
+        return false;
+      buildMI(MBB, MBBI, I8085::MOV)
+          .addReg(I8085::L, RegState::Define)
+          .addReg(srcLow);
+      buildMI(MBB, MBBI, I8085::MOV)
+          .addReg(I8085::H, RegState::Define)
+          .addReg(srcHigh);
+      buildMI(MBB, MBBI, I8085::ARHL);
+      buildMI(MBB, MBBI, I8085::MOV)
+          .addReg(regLow, RegState::Define)
+          .addReg(I8085::L);
+      buildMI(MBB, MBBI, I8085::MOV)
+          .addReg(regHigh, RegState::Define)
+          .addReg(I8085::H);
+      MI.eraseFromParent();
+      return true;
+    }
+  }
   if (destReg != srcReg) {
     unsigned srcLow, srcHigh;
     if (!getPairRegs(srcReg, srcLow, srcHigh))

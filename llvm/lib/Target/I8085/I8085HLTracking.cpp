@@ -360,12 +360,15 @@ private:
 
     // Instructions that always clobber HL or change SP
     switch (Opc) {
+    case I8085::ARHL:
     case I8085::CALL:
-    case I8085::RET:
-    case I8085::XTHL:
-    case I8085::SPHL:
+    case I8085::DSUB:
     case I8085::LHLD:
+    case I8085::LHLX:
+    case I8085::RET:
+    case I8085::SPHL:
     case I8085::XCHG:
+    case I8085::XTHL:
       return true;
     default:
       break;

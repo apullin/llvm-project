@@ -130,7 +130,9 @@ static unsigned getInstructionSize(uint8_t Opcode) {
   case 0xEA:
   case 0xF2:
   case 0xFA:
-    return 3; // JMP/Jcc
+  case 0xDD:
+  case 0xFD:
+    return 3; // JMP/Jcc (including undocumented JNX5/JX5)
   case 0xCD:
   case 0xC4:
   case 0xCC:
@@ -161,6 +163,9 @@ static unsigned getInstructionSize(uint8_t Opcode) {
   case 0xDB:
   case 0xD3:
     return 2; // IN/OUT
+  case 0x28:
+  case 0x38:
+    return 2; // LDHI/LDSI (undocumented)
   default:
     break;
   }

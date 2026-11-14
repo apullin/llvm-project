@@ -67,9 +67,12 @@ public:
     return ELFArch;
   }
 
+  bool hasUndocumented() const { return HasUndocumented; }
+
 private:
   /// The ELF e_flags architecture.
   unsigned ELFArch;
+  bool HasUndocumented = false;
 
   I8085InstrInfo InstrInfo;
   I8085FrameLowering FrameLowering;

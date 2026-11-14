@@ -2583,6 +2583,56 @@ bool I8085ExpandPseudo::expand<I8085::ADD_16>(Block &MBB, BlockIt MBBI) {
   if (!getPairRegs(operandTwo, opLow, opHigh))
     return false;
 
+  // Use native 16-bit DAD (1 byte, 10 T-states, preserves A) when SREG is not
+  // live after ADD_16 (DAD sets Carry identically to ADD+ADC, while Z/S/P/AC
+  // are preserved rather than reflecting the high byte).
+  if (!DstIsDead && !isPhysRegLive(MBB, MBBI, I8085::SREG)) {
+    if (workReg == I8085::HL) {
+      buildMI(MBB, MBBI, I8085::DAD).addReg(operandTwo);
+      MI.eraseFromParent();
+      return true;
+    }
+    if (workReg == I8085::DE) {
+      unsigned DadSrc = operandTwo;
+      if (operandTwo == I8085::DE)
+        DadSrc = I8085::HL;
+      else if (operandTwo == I8085::HL)
+        DadSrc = I8085::DE;
+      // Mark implicit $h/$l on the entry XCHG undef unless HL is an explicit
+      // input or live across this instruction (avoids MachineVerifier errors
+      // when a prior instruction killed $h or $l).
+      const bool HLive = (operandTwo == I8085::HL) ||
+                         isPhysRegLive(MBB, MBBI, I8085::H);
+      const bool LLive = (operandTwo == I8085::HL) ||
+                         isPhysRegLive(MBB, MBBI, I8085::L);
+      MachineInstr *Xchg1 = buildMI(MBB, MBBI, I8085::XCHG);
+      for (MachineOperand &MO : Xchg1->operands()) {
+        if (!MO.isReg() || !MO.isUse())
+          continue;
+        if (MO.getReg() == I8085::H && !HLive)
+          MO.setIsUndef(true);
+        if (MO.getReg() == I8085::L && !LLive)
+          MO.setIsUndef(true);
+      }
+      buildMI(MBB, MBBI, I8085::DAD).addReg(DadSrc);
+      buildMI(MBB, MBBI, I8085::XCHG);
+      MI.eraseFromParent();
+      return true;
+    }
+    if (workReg == I8085::BC && operandTwo == I8085::HL &&
+        !isHLOrSubRegLive(MBB, MBBI)) {
+      buildMI(MBB, MBBI, I8085::DAD).addReg(I8085::BC);
+      buildMI(MBB, MBBI, I8085::MOV)
+          .addReg(I8085::B, RegState::Define)
+          .addReg(I8085::H);
+      buildMI(MBB, MBBI, I8085::MOV)
+          .addReg(I8085::C, RegState::Define)
+          .addReg(I8085::L);
+      MI.eraseFromParent();
+      return true;
+    }
+  }
+
   bool WorkIsDead = DstIsDead && !copyBack;
   buildMI(MBB, MBBI, I8085::ADD_8)
       .addReg(destLow, RegState::Define | getDeadRegState(WorkIsDead))

@@ -15,9 +15,9 @@ define void @increment_global() {
 ; CHECK: MOV D, M
 ; CHECK: DCX H
 ; CHECK: MOV E, M
-; CHECK: ADD C
-; CHECK: ADC B
-; CHECK: MOV C, E
+; CHECK: XCHG
+; CHECK: DAD B
+; CHECK: XCHG
 ; CHECK: MOV M, C
 ; CHECK: INX H
 ; CHECK: MOV M, B
@@ -57,8 +57,7 @@ entry:
 define i16 @load_array_elem(i16 %idx) {
 ; CHECK-LABEL: load_array_elem:
 ; CHECK: LXI B, array
-; CHECK: ADD C
-; CHECK: ADC B
+; CHECK: DAD B
 ; CHECK: MOV C, M
 ; CHECK: INX H
 ; CHECK: MOV B, M
@@ -73,8 +72,7 @@ entry:
 define void @store_array_elem(i16 %idx, i16 %val) {
 ; CHECK-LABEL: store_array_elem:
 ; CHECK: LXI B, array
-; CHECK: ADD C
-; CHECK: ADC B
+; CHECK: DAD B
 ; CHECK: STAX D
 ; CHECK: RET
 entry:

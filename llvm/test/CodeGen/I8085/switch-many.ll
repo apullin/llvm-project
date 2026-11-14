@@ -17,19 +17,9 @@ define i8 @switch_many(i8 %x) {
 ; CHECK-NEXT:    MOV A, B
 ; CHECK-NEXT:    MOV L, A
 ; CHECK-NEXT:    MVI H, 0
-; CHECK-NEXT:    MOV A, L
-; CHECK-NEXT:    ADD L
-; CHECK-NEXT:    MOV L, A
-; CHECK-NEXT:    MOV A, H
-; CHECK-NEXT:    ADC H
-; CHECK-NEXT:    MOV H, A
+; CHECK-NEXT:    DAD H
 ; CHECK-NEXT:    LXI B, JTI0_0
-; CHECK-NEXT:    MOV A, L
-; CHECK-NEXT:    ADD C
-; CHECK-NEXT:    MOV L, A
-; CHECK-NEXT:    MOV A, H
-; CHECK-NEXT:    ADC B
-; CHECK-NEXT:    MOV H, A
+; CHECK-NEXT:    DAD B
 ; CHECK-NEXT:    MOV A, M
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    MOV H, M

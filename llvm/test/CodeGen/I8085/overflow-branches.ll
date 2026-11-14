@@ -22,12 +22,7 @@ define i8 @br_uadd_ov(i16 %a, i16 %b) {
 ; CHECK-NEXT:    MOV B, M
 ; CHECK-NEXT:    MOV H, D
 ; CHECK-NEXT:    MOV L, E
-; CHECK-NEXT:    MOV A, L
-; CHECK-NEXT:    ADD C
-; CHECK-NEXT:    MOV L, A
-; CHECK-NEXT:    MOV A, H
-; CHECK-NEXT:    ADC B
-; CHECK-NEXT:    MOV H, A
+; CHECK-NEXT:    DAD B
 ; CHECK-NEXT:    MOV A, L
 ; CHECK-NEXT:    SUB E
 ; CHECK-NEXT:    MOV L, A
@@ -76,12 +71,7 @@ define i8 @br_sadd_ov(i16 %a, i16 %b) {
 ; CHECK-NEXT:    MOV D, M
 ; CHECK-NEXT:    MOV H, B
 ; CHECK-NEXT:    MOV L, C
-; CHECK-NEXT:    MOV A, L
-; CHECK-NEXT:    ADD E
-; CHECK-NEXT:    MOV L, A
-; CHECK-NEXT:    MOV A, H
-; CHECK-NEXT:    ADC D
-; CHECK-NEXT:    MOV H, A
+; CHECK-NEXT:    DAD D
 ; CHECK-NEXT:    MOV A, E
 ; CHECK-NEXT:    XRA L
 ; CHECK-NEXT:    MOV E, A

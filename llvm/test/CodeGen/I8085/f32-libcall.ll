@@ -19,25 +19,6 @@ define float @fadd_f32(float %a, float %b) {
 ; CHECK-NEXT:    MOV D, M
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    MOV E, M
-; CHECK-NEXT:    LXI H, 8
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, B
-; CHECK-NEXT:    INX H
-; CHECK-NEXT:    MOV M, C
-; CHECK-NEXT:    INX H
-; CHECK-NEXT:    MOV M, D
-; CHECK-NEXT:    INX H
-; CHECK-NEXT:    MOV M, E
-; CHECK-NEXT:    DCX H
-; CHECK-NEXT:    DCX H
-; CHECK-NEXT:    DCX H
-; CHECK-NEXT:    MOV B, M
-; CHECK-NEXT:    INX H
-; CHECK-NEXT:    MOV C, M
-; CHECK-NEXT:    INX H
-; CHECK-NEXT:    MOV D, M
-; CHECK-NEXT:    INX H
-; CHECK-NEXT:    MOV E, M
 ; CHECK-NEXT:    LXI H, 4
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV M, B
@@ -135,25 +116,6 @@ define float @fsub_f32(float %a, float %b) {
 ; CHECK-NEXT:    .cfi_adjust_cfa_offset 12
 ; CHECK-NEXT:    LXI H, 18
 ; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV B, M
-; CHECK-NEXT:    INX H
-; CHECK-NEXT:    MOV C, M
-; CHECK-NEXT:    INX H
-; CHECK-NEXT:    MOV D, M
-; CHECK-NEXT:    INX H
-; CHECK-NEXT:    MOV E, M
-; CHECK-NEXT:    LXI H, 8
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, B
-; CHECK-NEXT:    INX H
-; CHECK-NEXT:    MOV M, C
-; CHECK-NEXT:    INX H
-; CHECK-NEXT:    MOV M, D
-; CHECK-NEXT:    INX H
-; CHECK-NEXT:    MOV M, E
-; CHECK-NEXT:    DCX H
-; CHECK-NEXT:    DCX H
-; CHECK-NEXT:    DCX H
 ; CHECK-NEXT:    MOV B, M
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    MOV C, M
@@ -265,25 +227,6 @@ define float @fmul_f32(float %a, float %b) {
 ; CHECK-NEXT:    MOV D, M
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    MOV E, M
-; CHECK-NEXT:    LXI H, 8
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, B
-; CHECK-NEXT:    INX H
-; CHECK-NEXT:    MOV M, C
-; CHECK-NEXT:    INX H
-; CHECK-NEXT:    MOV M, D
-; CHECK-NEXT:    INX H
-; CHECK-NEXT:    MOV M, E
-; CHECK-NEXT:    DCX H
-; CHECK-NEXT:    DCX H
-; CHECK-NEXT:    DCX H
-; CHECK-NEXT:    MOV B, M
-; CHECK-NEXT:    INX H
-; CHECK-NEXT:    MOV C, M
-; CHECK-NEXT:    INX H
-; CHECK-NEXT:    MOV D, M
-; CHECK-NEXT:    INX H
-; CHECK-NEXT:    MOV E, M
 ; CHECK-NEXT:    LXI H, 4
 ; CHECK-NEXT:    DAD SP
 ; CHECK-NEXT:    MOV M, B
@@ -381,25 +324,6 @@ define float @fdiv_f32(float %a, float %b) {
 ; CHECK-NEXT:    .cfi_adjust_cfa_offset 12
 ; CHECK-NEXT:    LXI H, 18
 ; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV B, M
-; CHECK-NEXT:    INX H
-; CHECK-NEXT:    MOV C, M
-; CHECK-NEXT:    INX H
-; CHECK-NEXT:    MOV D, M
-; CHECK-NEXT:    INX H
-; CHECK-NEXT:    MOV E, M
-; CHECK-NEXT:    LXI H, 8
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, B
-; CHECK-NEXT:    INX H
-; CHECK-NEXT:    MOV M, C
-; CHECK-NEXT:    INX H
-; CHECK-NEXT:    MOV M, D
-; CHECK-NEXT:    INX H
-; CHECK-NEXT:    MOV M, E
-; CHECK-NEXT:    DCX H
-; CHECK-NEXT:    DCX H
-; CHECK-NEXT:    DCX H
 ; CHECK-NEXT:    MOV B, M
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    MOV C, M
@@ -505,25 +429,6 @@ define i1 @fcmp_eq_f32(float %a, float %b) {
 ; CHECK-NEXT:    .cfi_adjust_cfa_offset 16
 ; CHECK-NEXT:    LXI H, 22
 ; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV B, M
-; CHECK-NEXT:    INX H
-; CHECK-NEXT:    MOV C, M
-; CHECK-NEXT:    INX H
-; CHECK-NEXT:    MOV D, M
-; CHECK-NEXT:    INX H
-; CHECK-NEXT:    MOV E, M
-; CHECK-NEXT:    LXI H, 8
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, B
-; CHECK-NEXT:    INX H
-; CHECK-NEXT:    MOV M, C
-; CHECK-NEXT:    INX H
-; CHECK-NEXT:    MOV M, D
-; CHECK-NEXT:    INX H
-; CHECK-NEXT:    MOV M, E
-; CHECK-NEXT:    DCX H
-; CHECK-NEXT:    DCX H
-; CHECK-NEXT:    DCX H
 ; CHECK-NEXT:    MOV B, M
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    MOV C, M
@@ -667,25 +572,6 @@ define i1 @fcmp_lt_f32(float %a, float %b) {
 ; CHECK-NEXT:    .cfi_adjust_cfa_offset 16
 ; CHECK-NEXT:    LXI H, 22
 ; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV B, M
-; CHECK-NEXT:    INX H
-; CHECK-NEXT:    MOV C, M
-; CHECK-NEXT:    INX H
-; CHECK-NEXT:    MOV D, M
-; CHECK-NEXT:    INX H
-; CHECK-NEXT:    MOV E, M
-; CHECK-NEXT:    LXI H, 8
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, B
-; CHECK-NEXT:    INX H
-; CHECK-NEXT:    MOV M, C
-; CHECK-NEXT:    INX H
-; CHECK-NEXT:    MOV M, D
-; CHECK-NEXT:    INX H
-; CHECK-NEXT:    MOV M, E
-; CHECK-NEXT:    DCX H
-; CHECK-NEXT:    DCX H
-; CHECK-NEXT:    DCX H
 ; CHECK-NEXT:    MOV B, M
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    MOV C, M
@@ -840,25 +726,6 @@ define i1 @fcmp_gt_f32(float %a, float %b) {
 ; CHECK-NEXT:    .cfi_adjust_cfa_offset 16
 ; CHECK-NEXT:    LXI H, 22
 ; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV B, M
-; CHECK-NEXT:    INX H
-; CHECK-NEXT:    MOV C, M
-; CHECK-NEXT:    INX H
-; CHECK-NEXT:    MOV D, M
-; CHECK-NEXT:    INX H
-; CHECK-NEXT:    MOV E, M
-; CHECK-NEXT:    LXI H, 8
-; CHECK-NEXT:    DAD SP
-; CHECK-NEXT:    MOV M, B
-; CHECK-NEXT:    INX H
-; CHECK-NEXT:    MOV M, C
-; CHECK-NEXT:    INX H
-; CHECK-NEXT:    MOV M, D
-; CHECK-NEXT:    INX H
-; CHECK-NEXT:    MOV M, E
-; CHECK-NEXT:    DCX H
-; CHECK-NEXT:    DCX H
-; CHECK-NEXT:    DCX H
 ; CHECK-NEXT:    MOV B, M
 ; CHECK-NEXT:    INX H
 ; CHECK-NEXT:    MOV C, M

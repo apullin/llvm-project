@@ -69,32 +69,12 @@ BitVector I8085RegisterInfo::getReservedRegs(const MachineFunction &MF) const {
     Reserved.set(I8085::E);
   }
 
-  // GR32 pseudos use HL as a scratch address register after regalloc.
-  // Reserve HL when IAX/IBX are present to avoid clobbering live values.
-  bool UsesGR32 = false;
-  for (const auto &MBB : MF) {
-    for (const auto &MI : MBB) {
-      for (const auto &MO : MI.operands()) {
-        if (!MO.isReg())
-          continue;
-        Register Reg = MO.getReg();
-        if (Reg == I8085::IAX || Reg == I8085::IBX) {
-          UsesGR32 = true;
-          break;
-        }
-      }
-      if (UsesGR32)
-        break;
-    }
-    if (UsesGR32)
-      break;
-  }
-  if (UsesGR32) {
-    Reserved.set(I8085::A);
-    Reserved.set(I8085::HL);
-    Reserved.set(I8085::H);
-    Reserved.set(I8085::L);
-  }
+  // Note: A and HL are no longer reserved function-wide when IAX/IBX (GR32)
+  // are present. Non-branch GR32 pseudos declare their A/SREG clobbers or
+  // dynamically preserve live HL and PSW in I8085ExpandPseudo32, and branch
+  // GR32 pseudos declare Defs=[SREG, A, H, L]. Keeping A and HL allocatable
+  // restores 3 of 7 GPRs and native [HL] indirect addressing in mixed-width
+  // functions.
 
   return Reserved;
 }

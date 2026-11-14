@@ -93,6 +93,7 @@ private:
   template <unsigned OP> bool expand(Block &MBB, BlockIt MBBI);
   bool binOperationWithImmediateOperand(unsigned opCode, Block &MBB, BlockIt MBBI);
   bool binOperation(unsigned opCode, Block &MBB, BlockIt MBBI);
+  bool carryBinOperation(unsigned lowOpc, unsigned carryOpc, Block &MBB, BlockIt MBBI);
   int64_t getScratchOffset(unsigned Reg, int ByteIndex) const;
   void emitScratchAddr(Block &MBB, BlockIt MBBI, unsigned Reg, int ByteIndex);
   void emitScratchAddr(Block &MBB, const DebugLoc &DL, unsigned Reg,
@@ -237,6 +238,65 @@ private:
   bool shouldPreservePSW(Block &MBB, BlockIt MBBI) const {
     return isPhysRegLive(MBB, MBBI, I8085::A) ||
            isPhysRegLive(MBB, MBBI, I8085::SREG);
+  }
+
+  bool isRegUnitLiveAfter(Block &MBB, BlockIt MBBI, MCRegister Reg) const {
+    if (isPhysRegLive(MBB, MBBI, Reg))
+      return true;
+    if (!hasAvailablePhysRegValue(MBB, MBBI, Reg))
+      return false;
+    for (auto I = std::next(MBBI), E = MBB.end(); I != E; ++I) {
+      if (I->isDebugInstr())
+        continue;
+      for (const MachineOperand &MO : I->operands()) {
+        if (MO.isReg() && MO.isUse() && !MO.isUndef() &&
+            MO.getReg().isPhysical() && TRI->regsOverlap(MO.getReg(), Reg))
+          return true;
+      }
+      for (const MachineOperand &MO : I->operands()) {
+        if (MO.isReg() && MO.isDef() && MO.getReg().isPhysical() &&
+            TRI->regsOverlap(MO.getReg(), Reg))
+          return false;
+      }
+    }
+    LivePhysRegs LiveOuts(*TRI);
+    LiveOuts.addLiveOuts(MBB);
+    return LiveOuts.contains(Reg);
+  }
+
+  bool isBCDeadAfter(Block &MBB, BlockIt MBBI) const {
+    return !isRegUnitLiveAfter(MBB, MBBI, I8085::B) &&
+           !isRegUnitLiveAfter(MBB, MBBI, I8085::C);
+  }
+
+  bool isDEDeadAfter(Block &MBB, BlockIt MBBI) const {
+    return !ScratchUsesBasePointer &&
+           !isRegUnitLiveAfter(MBB, MBBI, I8085::D) &&
+           !isRegUnitLiveAfter(MBB, MBBI, I8085::E);
+  }
+
+  bool areBCDEDeadAfter(Block &MBB, BlockIt MBBI) const {
+    return isBCDeadAfter(MBB, MBBI) && isDEDeadAfter(MBB, MBBI);
+  }
+
+  bool isGR32DeadAfter(Block &MBB, BlockIt MBBI, unsigned GR32Reg) const {
+    for (auto I = std::next(MBBI), E = MBB.end(); I != E; ++I) {
+      if (I->isDebugInstr())
+        continue;
+      for (const MachineOperand &MO : I->operands()) {
+        if (MO.isReg() && MO.isUse() && !MO.isUndef() &&
+            MO.getReg() == GR32Reg)
+          return false;
+      }
+      for (const MachineOperand &MO : I->operands()) {
+        if (MO.isReg() && MO.isDef() && MO.getReg() == GR32Reg)
+          return true;
+      }
+    }
+    for (const MachineBasicBlock *Succ : MBB.successors())
+      if (Succ->isLiveIn(GR32Reg))
+        return false;
+    return true;
   }
 
 };
@@ -615,10 +675,37 @@ bool I8085ExpandPseudo32::tryForwardBCDE(Block &MBB, BlockIt MBBI,
 
   MachineInstr *NextPseudo = &*NextIt;
   unsigned NextOpc = NextPseudo->getOpcode();
+  BlockIt NextMBBI(NextPseudo);
 
-  // Only allow binOperation consumers.
-  if (NextOpc != I8085::XOR_32 && NextOpc != I8085::OR_32 &&
-      NextOpc != I8085::AND_32)
+  // Allow STORE_32 / STORE_32_AT_OFFSET_WITH_SP when destReg's scratch slot is
+  // provably dead after the store and B/C/D/E are dead after the store.
+  if (NextOpc == I8085::STORE_32) {
+    if (NextPseudo->getOperand(0).getReg() != I8085::SP ||
+        NextPseudo->getOperand(2).getReg() != destReg)
+      return false;
+    if (!isGR32DeadAfter(MBB, NextMBBI, destReg) ||
+        !areBCDEDeadAfter(MBB, NextMBBI))
+      return false;
+    BCDEForwarded[NextPseudo] = destReg;
+    return true;
+  }
+  if (NextOpc == I8085::STORE_32_AT_OFFSET_WITH_SP) {
+    if (NextPseudo->getOperand(0).getReg() != destReg)
+      return false;
+    if (!isGR32DeadAfter(MBB, NextMBBI, destReg) ||
+        !areBCDEDeadAfter(MBB, NextMBBI))
+      return false;
+    BCDEForwarded[NextPseudo] = destReg;
+    return true;
+  }
+
+  const bool IsLogicBin =
+      (NextOpc == I8085::XOR_32 || NextOpc == I8085::OR_32 ||
+       NextOpc == I8085::AND_32);
+  const bool IsCarryBin =
+      (NextOpc == I8085::ADD_32 || NextOpc == I8085::SUB_32) &&
+      !isPhysRegLive(MBB, NextMBBI, I8085::SREG);
+  if (!IsLogicBin && !IsCarryBin)
     return false;
 
   // Check the consumer reads from the forwarded register.
@@ -641,12 +728,8 @@ bool I8085ExpandPseudo32::tryForwardBCDE(Block &MBB, BlockIt MBBI,
     return false;
 
   // Check that B/C/D/E are dead after the consumer too (so it can batch).
-  auto AfterNext = std::next(BlockIt(NextPseudo));
-  for (MCRegister Reg : {I8085::B, I8085::C, I8085::D, I8085::E}) {
-    if (MBB.computeRegisterLiveness(TRI, Reg, AfterNext, 20) !=
-        MachineBasicBlock::LQR_Dead)
-      return false;
-  }
+  if (!areBCDEDeadAfter(MBB, NextMBBI))
+    return false;
 
   // All checks passed. Register the consumer for forwarding.
   LLVM_DEBUG(dbgs() << "BCDE forwarding: skip Phase 3 store of "
@@ -728,17 +811,7 @@ bool I8085ExpandPseudo32::binOperation(unsigned opCode, Block &MBB, BlockIt MBBI
   // Phase 1: Load all 4 bytes of op1 into B/C/D/E via scratch + INX
   // Phase 2: For each byte, ALU with op2 via scratch + INX, store in B/C/D/E
   // Phase 3: Store all 4 result bytes back to dest via scratch + INX
-  auto AfterMI = std::next(MBBI);
-  bool CanBatch = (destReg == operandOne);
-  if (CanBatch) {
-    for (MCRegister Reg : {I8085::B, I8085::C, I8085::D, I8085::E}) {
-      if (MBB.computeRegisterLiveness(TRI, Reg, AfterMI, 20) !=
-          MachineBasicBlock::LQR_Dead) {
-        CanBatch = false;
-        break;
-      }
-    }
-  }
+  bool CanBatch = (destReg == operandOne) && areBCDEDeadAfter(MBB, MBBI);
 
   if (CanBatch) {
     // Check if B/C/D/E already hold operandOne via forwarding.
@@ -1122,38 +1195,19 @@ template <> bool I8085ExpandPseudo32::expand<I8085::STORE_32_ADDR_CONTENT>(Block
   if (!haveAddr)
     return false;
 
-  const bool PreservePSW = shouldPreservePSW(MBB, MBBI);
-  if (PreservePSW) {
-    buildMI(MBB, MBBI, I8085::PUSH).addReg(I8085::PSW);
+  // Outer expandMI already handles PreservePSW and NeedHLSave via HLSaveBias.
+  if (addrIsHL) {
+    buildMI(MBB, MBBI, I8085::PUSH).addReg(I8085::HL);
     HLSaveBias += 2;
   }
 
-  auto emitScratchLoadWithBias = [&](int SpBias, unsigned Reg, int ByteIndex,
-                                     unsigned DestReg) {
-    int64_t Offset = getScratchOffset(Reg, ByteIndex) +
-                     (ScratchUsesBasePointer ? 0 : SpBias);
-    buildMI(MBB, MBBI, I8085::LXI)
-        .addReg(I8085::HL, RegState::Define)
-        .addImm(Offset);
-    buildMI(MBB, MBBI, I8085::DAD)
-        .addReg(ScratchUsesBasePointer ? I8085::DE : I8085::SP);
-    buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(DestReg, RegState::Define);
-  };
-
-  if (addrIsHL)
-    buildMI(MBB, MBBI, I8085::PUSH).addReg(I8085::HL);
-
   for(int i=0;i<4;i++){
-    // Load byte i from the 32-bit source.
-    if (addrIsHL) {
-      // SP is biased by the saved HL (PUSH) in this path.
-      emitScratchLoadWithBias(/*SpBias=*/2, srcReg, i, I8085::A);
-    } else {
-      emitScratchLoad(MBB, MBBI, srcReg, i, I8085::A);
-    }
+    // Load byte i from the 32-bit source (includes CurrentSPAdj + HLSaveBias).
+    emitScratchLoad(MBB, MBBI, srcReg, i, I8085::A);
 
     if (addrIsHL) {
       buildMI(MBB, MBBI, I8085::POP).addReg(I8085::HL, RegState::Define);
+      HLSaveBias -= 2;
     } else if (addrIsSP) {
       buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(HLSaveBias);
       buildMI(MBB, MBBI, I8085::DAD).addReg(I8085::SP);
@@ -1172,12 +1226,8 @@ template <> bool I8085ExpandPseudo32::expand<I8085::STORE_32_ADDR_CONTENT>(Block
     if (addrIsHL && i < 3) {
       buildINX(MBB, MBBI, I8085::HL);
       buildMI(MBB, MBBI, I8085::PUSH).addReg(I8085::HL);
+      HLSaveBias += 2;
     }
-  }
-
-  if (PreservePSW) {
-    HLSaveBias -= 2;
-    buildMI(MBB, MBBI, I8085::POP).addReg(I8085::PSW, RegState::Define);
   }
 
   MI.eraseFromParent();
@@ -1495,15 +1545,7 @@ template <> bool I8085ExpandPseudo32::expand<I8085::MOV_32>(Block &MBB, BlockIt 
   // Check if B, C, D, E are all dead after this instruction.
   // If so, batch-load all 4 bytes into registers, then batch-store,
   // using INX H between sequential accesses (saves 6 LXI+DAD pairs).
-  auto AfterMI = std::next(MBBI);
-  bool CanBatch = true;
-  for (MCRegister Reg : {I8085::B, I8085::C, I8085::D, I8085::E}) {
-    if (MBB.computeRegisterLiveness(TRI, Reg, AfterMI, 20) !=
-        MachineBasicBlock::LQR_Dead) {
-      CanBatch = false;
-      break;
-    }
-  }
+  bool CanBatch = areBCDEDeadAfter(MBB, MBBI);
 
   if (CanBatch) {
     // Load all 4 bytes from source into B/C/D/E
@@ -1529,9 +1571,33 @@ template <> bool I8085ExpandPseudo32::expand<I8085::MOV_32>(Block &MBB, BlockIt 
       buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::E);
     }
   } else {
-    for (int i = 0; i < 4; i++) {
-      emitScratchLoad(MBB, MBBI, srcReg, i, I8085::A);
-      emitScratchStore(MBB, MBBI, destReg, i, I8085::A);
+    // 2-byte pair shuttle (avoids 8x LXI+DAD and preserves A):
+    unsigned Pair = I8085::BC, R0 = I8085::C, R1 = I8085::B;
+    bool NeedSave = false;
+    if (isDEDeadAfter(MBB, MBBI)) {
+      Pair = I8085::DE;
+      R0 = I8085::E;
+      R1 = I8085::D;
+    } else if (!isBCDeadAfter(MBB, MBBI)) {
+      NeedSave = true;
+    }
+    if (NeedSave) {
+      buildMI(MBB, MBBI, I8085::PUSH).addReg(Pair);
+      HLSaveBias += 2;
+    }
+    for (int half = 0; half < 4; half += 2) {
+      emitScratchAddr(MBB, MBBI, srcReg, half);
+      buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(R0, RegState::Define);
+      emitScratchAdvance(MBB, MBBI, 1);
+      buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(R1, RegState::Define);
+      emitScratchAddr(MBB, MBBI, destReg, half);
+      buildMI(MBB, MBBI, I8085::MOV_M).addReg(R0);
+      emitScratchAdvance(MBB, MBBI, 1);
+      buildMI(MBB, MBBI, I8085::MOV_M).addReg(R1);
+    }
+    if (NeedSave) {
+      HLSaveBias -= 2;
+      buildMI(MBB, MBBI, I8085::POP).addReg(Pair, RegState::Define);
     }
   }
 
@@ -1550,6 +1616,21 @@ template <> bool I8085ExpandPseudo32::expand<I8085::PACK_16_TO_32>(Block &MBB, B
   if (!getPairRegs(loReg, loLow, loHigh) || !getPairRegs(hiReg, hiLow, hiHigh))
     return false;
 
+  unsigned SavedPair = 0;
+  auto savePairIfLive = [&](unsigned Pair) {
+    unsigned PushedLow = 0, PushedHigh = 0;
+    getPairRegs(Pair, PushedLow, PushedHigh);
+    bool PairLive = (Pair == I8085::DE && ScratchUsesBasePointer) ||
+                    isPhysRegLive(MBB, MBBI, Pair) ||
+                    isPhysRegLive(MBB, MBBI, PushedLow) ||
+                    isPhysRegLive(MBB, MBBI, PushedHigh);
+    if (PairLive) {
+      buildMI(MBB, MBBI, I8085::PUSH).addReg(Pair);
+      HLSaveBias += 2;
+      SavedPair = Pair;
+    }
+  };
+
   auto copyHLToPair = [&](unsigned Pair) {
     unsigned PairLow = 0, PairHigh = 0;
     assert(getPairRegs(Pair, PairLow, PairHigh) &&
@@ -1564,21 +1645,24 @@ template <> bool I8085ExpandPseudo32::expand<I8085::PACK_16_TO_32>(Block &MBB, B
   };
 
   // emitScratchAddr() clobbers HL. If either source pair is HL, copy it to
-  // the remaining free 16-bit pair first so we store the original value, not
-  // the computed scratch address bytes.
+  // a free 16-bit pair first (preserving that pair on the stack if it is live
+  // across this instruction or serves as the VLA base pointer).
   if (loReg == I8085::HL && hiReg == I8085::HL) {
-    auto LoPair = copyHLToPair(I8085::BC);
-    auto HiPair = copyHLToPair(I8085::DE);
-    loLow = LoPair.first;
-    loHigh = LoPair.second;
-    hiLow = HiPair.first;
-    hiHigh = HiPair.second;
+    unsigned Scratch = ScratchUsesBasePointer ? I8085::BC : I8085::DE;
+    savePairIfLive(Scratch);
+    auto Saved = copyHLToPair(Scratch);
+    loLow = hiLow = Saved.first;
+    loHigh = hiHigh = Saved.second;
   } else if (loReg == I8085::HL) {
-    auto Saved = copyHLToPair(hiReg == I8085::BC ? I8085::DE : I8085::BC);
+    unsigned Scratch = (hiReg == I8085::BC) ? I8085::DE : I8085::BC;
+    savePairIfLive(Scratch);
+    auto Saved = copyHLToPair(Scratch);
     loLow = Saved.first;
     loHigh = Saved.second;
   } else if (hiReg == I8085::HL) {
-    auto Saved = copyHLToPair(loReg == I8085::BC ? I8085::DE : I8085::BC);
+    unsigned Scratch = (loReg == I8085::BC) ? I8085::DE : I8085::BC;
+    savePairIfLive(Scratch);
+    auto Saved = copyHLToPair(Scratch);
     hiLow = Saved.first;
     hiHigh = Saved.second;
   }
@@ -1591,6 +1675,11 @@ template <> bool I8085ExpandPseudo32::expand<I8085::PACK_16_TO_32>(Block &MBB, B
   buildMI(MBB, MBBI, I8085::MOV_M).addReg(hiLow);
   emitScratchAdvance(MBB, MBBI, 1);
   buildMI(MBB, MBBI, I8085::MOV_M).addReg(hiHigh);
+
+  if (SavedPair) {
+    HLSaveBias -= 2;
+    buildMI(MBB, MBBI, I8085::POP).addReg(SavedPair, RegState::Define);
+  }
 
   MI.eraseFromParent();
   return true;
@@ -1762,38 +1851,29 @@ template <> bool I8085ExpandPseudo32::expand<I8085::STORE_32>(Block &MBB, BlockI
   }
 
   // Check if B, C, D, E are all dead after this instruction.
-  // If so, batch-load from scratch into B/C/D/E, then batch-store to dest.
+  // If so, batch-load from scratch into B/C/D/E (or consume forwarded BCDE!),
+  // then batch-store to dest.
   {
-    auto AfterMI = std::next(MBBI);
-    // Loading the source into BCDE would destroy a BC/DE destination base
-    // before Phase 2 computes its address.
-    bool CanBatch = baseReg != I8085::BC && baseReg != I8085::DE;
-    for (MCRegister Reg : {I8085::B, I8085::C, I8085::D, I8085::E}) {
-      if (MBB.computeRegisterLiveness(TRI, Reg, AfterMI, 20) !=
-          MachineBasicBlock::LQR_Dead) {
-        CanBatch = false;
-        break;
-      }
-    }
+    auto FwdIt = BCDEForwarded.find(&MI);
+    bool Forwarded = (FwdIt != BCDEForwarded.end() && FwdIt->second == srcReg);
+    bool CanBatch = Forwarded ||
+                    (baseReg != I8085::BC && baseReg != I8085::DE &&
+                     areBCDEDeadAfter(MBB, MBBI));
+    if (Forwarded)
+      BCDEForwarded.erase(FwdIt);
 
     if (CanBatch) {
-      const bool PreserveFlags =
-          isPhysRegLive(MBB, MBBI, I8085::SREG);
-      if (PreserveFlags) {
-        buildMI(MBB, MBBI, I8085::PUSH).addReg(I8085::PSW);
-        HLSaveBias += 2;
-        if (baseReg == I8085::SP)
-          offsetToStore += 2;
+      if (!Forwarded) {
+        // Phase 1: Load 4 bytes from scratch into B/C/D/E
+        emitScratchAddr(MBB, MBBI, srcReg, 0);
+        buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::B, RegState::Define);
+        emitScratchAdvance(MBB, MBBI, 1);
+        buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::C, RegState::Define);
+        emitScratchAdvance(MBB, MBBI, 1);
+        buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::D, RegState::Define);
+        emitScratchAdvance(MBB, MBBI, 1);
+        buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::E, RegState::Define);
       }
-      // Phase 1: Load 4 bytes from scratch into B/C/D/E
-      emitScratchAddr(MBB, MBBI, srcReg, 0);
-      buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::B, RegState::Define);
-      emitScratchAdvance(MBB, MBBI, 1);
-      buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::C, RegState::Define);
-      emitScratchAdvance(MBB, MBBI, 1);
-      buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::D, RegState::Define);
-      emitScratchAdvance(MBB, MBBI, 1);
-      buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::E, RegState::Define);
 
       // Phase 2: Store B/C/D/E to [baseReg+offset] via one LXI+DAD + INX chain
       buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL, RegState::Define).addImm(offsetToStore);
@@ -1805,32 +1885,44 @@ template <> bool I8085ExpandPseudo32::expand<I8085::STORE_32>(Block &MBB, BlockI
       buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::D);
       emitScratchAdvance(MBB, MBBI, 1);
       buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::E);
-      if (PreserveFlags) {
-        HLSaveBias -= 2;
-        buildMI(MBB, MBBI, I8085::POP).addReg(I8085::PSW,
-                                              RegState::Define);
-      }
     } else {
-      // Fallback: original per-byte approach with full address recomputation
-      const bool PreservePSW = shouldPreservePSW(MBB, MBBI);
-      if (PreservePSW) {
-        buildMI(MBB, MBBI, I8085::PUSH).addReg(I8085::PSW);
+      // 2-byte pair shuttle (outer expandMI already preserved PSW/HL if live)
+      unsigned Pair = (baseReg == I8085::BC) ? I8085::DE : I8085::BC;
+      unsigned R0 = (Pair == I8085::BC) ? I8085::C : I8085::E;
+      unsigned R1 = (Pair == I8085::BC) ? I8085::B : I8085::D;
+      bool NeedSave = false;
+      if (Pair == I8085::BC && baseReg != I8085::DE && isDEDeadAfter(MBB, MBBI) &&
+          !isBCDeadAfter(MBB, MBBI)) {
+        Pair = I8085::DE;
+        R0 = I8085::E;
+        R1 = I8085::D;
+      } else if (Pair == I8085::BC && !isBCDeadAfter(MBB, MBBI)) {
+        NeedSave = true;
+      } else if (Pair == I8085::DE && !isDEDeadAfter(MBB, MBBI)) {
+        NeedSave = true;
+      }
+      if (NeedSave) {
+        buildMI(MBB, MBBI, I8085::PUSH).addReg(Pair);
         HLSaveBias += 2;
         if (baseReg == I8085::SP)
           offsetToStore += 2;
       }
-      for (int i = 0; i < 4; ++i) {
-        emitScratchLoad(MBB, MBBI, srcReg, i, I8085::A);
+      for (int half = 0; half < 4; half += 2) {
+        emitScratchAddr(MBB, MBBI, srcReg, half);
+        buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(R0, RegState::Define);
+        emitScratchAdvance(MBB, MBBI, 1);
+        buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(R1, RegState::Define);
         buildMI(MBB, MBBI, I8085::LXI)
             .addReg(I8085::HL, RegState::Define)
-            .addImm(offsetToStore + i);
+            .addImm(offsetToStore + half);
         buildMI(MBB, MBBI, I8085::DAD).addReg(baseReg);
-        buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::A);
+        buildMI(MBB, MBBI, I8085::MOV_M).addReg(R0);
+        emitScratchAdvance(MBB, MBBI, 1);
+        buildMI(MBB, MBBI, I8085::MOV_M).addReg(R1);
       }
-      if (PreservePSW) {
+      if (NeedSave) {
         HLSaveBias -= 2;
-        buildMI(MBB, MBBI, I8085::POP).addReg(I8085::PSW,
-                                              RegState::Define);
+        buildMI(MBB, MBBI, I8085::POP).addReg(Pair, RegState::Define);
       }
     }
   }
@@ -1840,11 +1932,77 @@ template <> bool I8085ExpandPseudo32::expand<I8085::STORE_32>(Block &MBB, BlockI
 }
 
 
+bool I8085ExpandPseudo32::carryBinOperation(unsigned lowOpc, unsigned carryOpc,
+                                            Block &MBB, BlockIt MBBI) {
+  MachineInstr &MI = *MBBI;
+  unsigned destReg = MI.getOperand(0).getReg();
+  unsigned operandOne = MI.getOperand(1).getReg();
+  unsigned operandTwo = MI.getOperand(2).getReg();
+
+  auto FwdIt = BCDEForwarded.find(&MI);
+  bool Forwarded = (FwdIt != BCDEForwarded.end() && FwdIt->second == operandOne);
+  if (Forwarded)
+    BCDEForwarded.erase(FwdIt);
+
+  if (!Forwarded) {
+    emitScratchAddr(MBB, MBBI, operandOne, 0);
+    buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::B, RegState::Define);
+    emitScratchAdvance(MBB, MBBI, 1);
+    buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::C, RegState::Define);
+    emitScratchAdvance(MBB, MBBI, 1);
+    buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::D, RegState::Define);
+    emitScratchAdvance(MBB, MBBI, 1);
+    buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::E, RegState::Define);
+  }
+
+  // If Phase 1 just read operandOne[3] and operandTwo[0] is immediately after
+  // it in scratch (IAX at +0..3, IBX at +4..7 -> delta == +1), advance HL by 1!
+  if (!Forwarded &&
+      getScratchOffset(operandTwo, 0) - getScratchOffset(operandOne, 3) == 1) {
+    emitScratchAdvance(MBB, MBBI, 1);
+  } else {
+    emitScratchAddr(MBB, MBBI, operandTwo, 0);
+  }
+
+  const unsigned Regs[4] = {I8085::B, I8085::C, I8085::D, I8085::E};
+  for (int i = 0; i < 4; ++i) {
+    buildMI(MBB, MBBI, I8085::MOV)
+        .addReg(I8085::A, RegState::Define)
+        .addReg(Regs[i]);
+    buildMI(MBB, MBBI, i == 0 ? lowOpc : carryOpc);
+    buildMI(MBB, MBBI, I8085::MOV)
+        .addReg(Regs[i], RegState::Define)
+        .addReg(I8085::A);
+    if (i != 3)
+      emitScratchAdvance(MBB, MBBI, 1);
+  }
+
+  if (!tryForwardBCDE(MBB, MBBI, destReg)) {
+    emitScratchAddr(MBB, MBBI, destReg, 0);
+    buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::B);
+    emitScratchAdvance(MBB, MBBI, 1);
+    buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::C);
+    emitScratchAdvance(MBB, MBBI, 1);
+    buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::D);
+    emitScratchAdvance(MBB, MBBI, 1);
+    buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::E);
+  }
+
+  MI.eraseFromParent();
+  return true;
+}
+
 template <> bool I8085ExpandPseudo32::expand<I8085::ADD_32>(Block &MBB, BlockIt MBBI) {
   MachineInstr &MI = *MBBI;
 
   unsigned destReg = MI.getOperand(0).getReg();
+  unsigned operandOne = MI.getOperand(1).getReg();
   unsigned operandTwo = MI.getOperand(2).getReg();
+
+  if (destReg == operandOne && !isPhysRegLive(MBB, MBBI, I8085::SREG) &&
+      (BCDEForwarded.count(&MI) || areBCDEDeadAfter(MBB, MBBI))) {
+    return carryBinOperation(I8085::ADD_M, I8085::ADC_M, MBB, MBBI);
+  }
 
   int baseOne = (destReg == I8085::IBX) ? 4 : 0;
   int baseTwo = (operandTwo == I8085::IBX) ? 4 : 0;
@@ -1910,7 +2068,13 @@ template <> bool I8085ExpandPseudo32::expand<I8085::SUB_32>(Block &MBB, BlockIt 
   MachineInstr &MI = *MBBI;
 
   unsigned destReg = MI.getOperand(0).getReg();
+  unsigned operandOne = MI.getOperand(1).getReg();
   unsigned operandTwo = MI.getOperand(2).getReg();
+
+  if (destReg == operandOne && !isPhysRegLive(MBB, MBBI, I8085::SREG) &&
+      (BCDEForwarded.count(&MI) || areBCDEDeadAfter(MBB, MBBI))) {
+    return carryBinOperation(I8085::SUB_M, I8085::SBB_M, MBB, MBBI);
+  }
 
   int baseOne = (destReg == I8085::IBX) ? 4 : 0;
   int baseTwo = (operandTwo == I8085::IBX) ? 4 : 0;
@@ -1996,15 +2160,7 @@ template <> bool I8085ExpandPseudo32::expand<I8085::LOAD_32_WITH_ADDR>(Block &MB
   // Check if B, C, D, E are all dead after this instruction.
   // If so, batch-load all 4 bytes into registers via one LXI+DAD + INX chain,
   // then batch-store to scratch via one LXI+DAD + INX chain.
-  auto AfterMI = std::next(MBBI);
-  bool CanBatch = true;
-  for (MCRegister Reg : {I8085::B, I8085::C, I8085::D, I8085::E}) {
-    if (MBB.computeRegisterLiveness(TRI, Reg, AfterMI, 20) !=
-        MachineBasicBlock::LQR_Dead) {
-      CanBatch = false;
-      break;
-    }
-  }
+  bool CanBatch = areBCDEDeadAfter(MBB, MBBI);
 
   if (CanBatch) {
     // Phase 1: Load 4 bytes from [baseReg+offset] into B/C/D/E
@@ -2030,41 +2186,44 @@ template <> bool I8085ExpandPseudo32::expand<I8085::LOAD_32_WITH_ADDR>(Block &MB
       buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::E);
     }
   } else {
-    // Fallback: original per-byte approach with full address recomputation.
-    // This path uses A as a temp register.  Since LOAD_32_WITH_ADDR no longer
-    // declares Defs=[A], we must preserve A here if it is live.
-    //
-    // IMPORTANT: When PreserveA is true, we insert PUSH PSW which shifts SP
-    // by -2. Both the source address (offsetToLoad) AND the scratch store
-    // destination must be adjusted by +2 to compensate for the shifted SP.
-    bool PreserveA =
-        MBB.computeRegisterLiveness(TRI, I8085::A, MBBI, 20) !=
-        MachineBasicBlock::LQR_Dead;
-    int SpBias = 0;
-    if (PreserveA) {
-      // PUSH PSW to save A (and flags).
-      buildMI(MBB, MBBI, I8085::PUSH).addReg(I8085::PSW);
+    // 2-byte pair shuttle (outer expandMI already preserved PSW/HL if live)
+    unsigned Pair = (baseReg == I8085::BC) ? I8085::DE : I8085::BC;
+    unsigned R0 = (Pair == I8085::BC) ? I8085::C : I8085::E;
+    unsigned R1 = (Pair == I8085::BC) ? I8085::B : I8085::D;
+    bool NeedSave = false;
+    if (Pair == I8085::BC && baseReg != I8085::DE && isDEDeadAfter(MBB, MBBI) &&
+        !isBCDeadAfter(MBB, MBBI)) {
+      Pair = I8085::DE;
+      R0 = I8085::E;
+      R1 = I8085::D;
+    } else if (Pair == I8085::BC && !isBCDeadAfter(MBB, MBBI)) {
+      NeedSave = true;
+    } else if (Pair == I8085::DE && !isDEDeadAfter(MBB, MBBI)) {
+      NeedSave = true;
+    }
+    if (NeedSave) {
+      buildMI(MBB, MBBI, I8085::PUSH).addReg(Pair);
+      HLSaveBias += 2;
       if (baseReg == I8085::SP)
         offsetToLoad += 2;
-      SpBias = 2;  // All SP-relative addresses need +2 while PUSH is active
     }
-    for(int i=0;i<4;i++){
-      buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(offsetToLoad+i);
-      buildMI(MBB, MBBI, I8085::DAD).addReg(baseReg);
-      buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::A,RegState::Define);
-      // SP-based scratch needs compensation for PUSH PSW. A frame-base
-      // scratch address is unaffected by temporary stack movement.
-      int64_t ScratchOff =
-          getScratchOffset(destReg, i) + (ScratchUsesBasePointer ? 0 : SpBias);
+    for (int half = 0; half < 4; half += 2) {
       buildMI(MBB, MBBI, I8085::LXI)
           .addReg(I8085::HL, RegState::Define)
-          .addImm(ScratchOff);
-      buildMI(MBB, MBBI, I8085::DAD)
-          .addReg(ScratchUsesBasePointer ? I8085::DE : I8085::SP);
-      buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::A);
+          .addImm(offsetToLoad + half);
+      buildMI(MBB, MBBI, I8085::DAD).addReg(baseReg);
+      buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(R0, RegState::Define);
+      emitScratchAdvance(MBB, MBBI, 1);
+      buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(R1, RegState::Define);
+      emitScratchAddr(MBB, MBBI, destReg, half);
+      buildMI(MBB, MBBI, I8085::MOV_M).addReg(R0);
+      emitScratchAdvance(MBB, MBBI, 1);
+      buildMI(MBB, MBBI, I8085::MOV_M).addReg(R1);
     }
-    if (PreserveA)
-      buildMI(MBB, MBBI, I8085::POP).addReg(I8085::PSW, RegState::Define);
+    if (NeedSave) {
+      HLSaveBias -= 2;
+      buildMI(MBB, MBBI, I8085::POP).addReg(Pair, RegState::Define);
+    }
   }
 
   MI.eraseFromParent();
@@ -2403,32 +2562,24 @@ template <> bool I8085ExpandPseudo32::expand<I8085::STORE_32_AT_OFFSET_WITH_SP>(
 
   // Check if B, C, D, E are all dead after this instruction.
   // If so, batch-load from scratch into B/C/D/E, then batch-store to dest.
-  auto AfterMI = std::next(MBBI);
-  bool CanBatch = true;
-  for (MCRegister Reg : {I8085::B, I8085::C, I8085::D, I8085::E}) {
-    if (MBB.computeRegisterLiveness(TRI, Reg, AfterMI, 20) !=
-        MachineBasicBlock::LQR_Dead) {
-      CanBatch = false;
-      break;
-    }
-  }
+  auto FwdIt = BCDEForwarded.find(&MI);
+  bool Forwarded = (FwdIt != BCDEForwarded.end() && FwdIt->second == srcReg);
+  if (Forwarded)
+    BCDEForwarded.erase(FwdIt);
+  bool CanBatch = Forwarded || areBCDEDeadAfter(MBB, MBBI);
 
   if (CanBatch) {
-    const bool PreserveFlags = isPhysRegLive(MBB, MBBI, I8085::SREG);
-    if (PreserveFlags) {
-      buildMI(MBB, MBBI, I8085::PUSH).addReg(I8085::PSW);
-      HLSaveBias += 2;
-      offsetToStore += 2;
+    if (!Forwarded) {
+      // Phase 1: Load 4 bytes from scratch into B/C/D/E
+      emitScratchAddr(MBB, MBBI, srcReg, 0);
+      buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::B, RegState::Define);
+      emitScratchAdvance(MBB, MBBI, 1);
+      buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::C, RegState::Define);
+      emitScratchAdvance(MBB, MBBI, 1);
+      buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::D, RegState::Define);
+      emitScratchAdvance(MBB, MBBI, 1);
+      buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::E, RegState::Define);
     }
-    // Phase 1: Load 4 bytes from scratch into B/C/D/E
-    emitScratchAddr(MBB, MBBI, srcReg, 0);
-    buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::B, RegState::Define);
-    emitScratchAdvance(MBB, MBBI, 1);
-    buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::C, RegState::Define);
-    emitScratchAdvance(MBB, MBBI, 1);
-    buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::D, RegState::Define);
-    emitScratchAdvance(MBB, MBBI, 1);
-    buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::E, RegState::Define);
 
     // Phase 2: Store B/C/D/E to [SP+offset] via one LXI+DAD + INX chain
     buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL, RegState::Define).addImm(offsetToStore);
@@ -2440,29 +2591,37 @@ template <> bool I8085ExpandPseudo32::expand<I8085::STORE_32_AT_OFFSET_WITH_SP>(
     buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::D);
     emitScratchAdvance(MBB, MBBI, 1);
     buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::E);
-    if (PreserveFlags) {
-      HLSaveBias -= 2;
-      buildMI(MBB, MBBI, I8085::POP).addReg(I8085::PSW,
-                                            RegState::Define);
-    }
   } else {
-    // Fallback: original per-byte approach
-    const bool PreservePSW = shouldPreservePSW(MBB, MBBI);
-    if (PreservePSW) {
-      buildMI(MBB, MBBI, I8085::PUSH).addReg(I8085::PSW);
+    unsigned Pair = I8085::BC, R0 = I8085::C, R1 = I8085::B;
+    bool NeedSave = false;
+    if (isDEDeadAfter(MBB, MBBI)) {
+      Pair = I8085::DE;
+      R0 = I8085::E;
+      R1 = I8085::D;
+    } else if (!isBCDeadAfter(MBB, MBBI)) {
+      NeedSave = true;
+    }
+    if (NeedSave) {
+      buildMI(MBB, MBBI, I8085::PUSH).addReg(Pair);
       HLSaveBias += 2;
       offsetToStore += 2;
     }
-    for(int i=0;i<4;i++){
-      emitScratchLoad(MBB, MBBI, srcReg, i, I8085::A);
-      buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(offsetToStore+i);
+    for (int half = 0; half < 4; half += 2) {
+      emitScratchAddr(MBB, MBBI, srcReg, half);
+      buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(R0, RegState::Define);
+      emitScratchAdvance(MBB, MBBI, 1);
+      buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(R1, RegState::Define);
+      buildMI(MBB, MBBI, I8085::LXI)
+          .addReg(I8085::HL, RegState::Define)
+          .addImm(offsetToStore + half);
       buildMI(MBB, MBBI, I8085::DAD).addReg(I8085::SP);
-      buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::A);
+      buildMI(MBB, MBBI, I8085::MOV_M).addReg(R0);
+      emitScratchAdvance(MBB, MBBI, 1);
+      buildMI(MBB, MBBI, I8085::MOV_M).addReg(R1);
     }
-    if (PreservePSW) {
+    if (NeedSave) {
       HLSaveBias -= 2;
-      buildMI(MBB, MBBI, I8085::POP).addReg(I8085::PSW,
-                                            RegState::Define);
+      buildMI(MBB, MBBI, I8085::POP).addReg(Pair, RegState::Define);
     }
   }
 
@@ -2489,15 +2648,7 @@ template <> bool I8085ExpandPseudo32::expand<I8085::LOAD_32_OFFSET_WITH_SP>(Bloc
   // Check if B, C, D, E are all dead after this instruction.
   // If so, batch-load all 4 bytes into registers via one LXI+DAD + INX chain,
   // then batch-store to scratch via one LXI+DAD + INX chain.
-  auto AfterMI = std::next(MBBI);
-  bool CanBatch = true;
-  for (MCRegister Reg : {I8085::B, I8085::C, I8085::D, I8085::E}) {
-    if (MBB.computeRegisterLiveness(TRI, Reg, AfterMI, 20) !=
-        MachineBasicBlock::LQR_Dead) {
-      CanBatch = false;
-      break;
-    }
-  }
+  bool CanBatch = areBCDEDeadAfter(MBB, MBBI);
 
   if (CanBatch) {
     // Phase 1: Load 4 bytes from [SP+offset] into B/C/D/E
@@ -2523,33 +2674,37 @@ template <> bool I8085ExpandPseudo32::expand<I8085::LOAD_32_OFFSET_WITH_SP>(Bloc
       buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::E);
     }
   } else {
-    // Fallback: original per-byte approach.
-    // This path uses A as a temp.  Preserve A if live.
-    bool PreserveA =
-        MBB.computeRegisterLiveness(TRI, I8085::A, MBBI, 20) !=
-        MachineBasicBlock::LQR_Dead;
-    if (PreserveA) {
-      buildMI(MBB, MBBI, I8085::PUSH).addReg(I8085::PSW);
+    unsigned Pair = I8085::BC, R0 = I8085::C, R1 = I8085::B;
+    bool NeedSave = false;
+    if (isDEDeadAfter(MBB, MBBI)) {
+      Pair = I8085::DE;
+      R0 = I8085::E;
+      R1 = I8085::D;
+    } else if (!isBCDeadAfter(MBB, MBBI)) {
+      NeedSave = true;
+    }
+    if (NeedSave) {
+      buildMI(MBB, MBBI, I8085::PUSH).addReg(Pair);
+      HLSaveBias += 2;
       offsetToLoad += 2;
     }
-    // Only SP-based scratch needs compensation for PUSH PSW. A frame-base
-    // scratch address is unaffected by temporary stack movement.
-    int SpBias = PreserveA ? 2 : 0;
-    for(int i=0;i<4;i++){
-      buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL,RegState::Define).addImm(offsetToLoad+i);
-      buildMI(MBB, MBBI, I8085::DAD).addReg(I8085::SP);
-      buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::A,RegState::Define);
-      int64_t ScratchOff =
-          getScratchOffset(destReg, i) + (ScratchUsesBasePointer ? 0 : SpBias);
+    for (int half = 0; half < 4; half += 2) {
       buildMI(MBB, MBBI, I8085::LXI)
           .addReg(I8085::HL, RegState::Define)
-          .addImm(ScratchOff);
-      buildMI(MBB, MBBI, I8085::DAD)
-          .addReg(ScratchUsesBasePointer ? I8085::DE : I8085::SP);
-      buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::A);
+          .addImm(offsetToLoad + half);
+      buildMI(MBB, MBBI, I8085::DAD).addReg(I8085::SP);
+      buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(R0, RegState::Define);
+      emitScratchAdvance(MBB, MBBI, 1);
+      buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(R1, RegState::Define);
+      emitScratchAddr(MBB, MBBI, destReg, half);
+      buildMI(MBB, MBBI, I8085::MOV_M).addReg(R0);
+      emitScratchAdvance(MBB, MBBI, 1);
+      buildMI(MBB, MBBI, I8085::MOV_M).addReg(R1);
     }
-    if (PreserveA)
-      buildMI(MBB, MBBI, I8085::POP).addReg(I8085::PSW, RegState::Define);
+    if (NeedSave) {
+      HLSaveBias -= 2;
+      buildMI(MBB, MBBI, I8085::POP).addReg(Pair, RegState::Define);
+    }
   }
 
   MI.eraseFromParent();
@@ -2572,15 +2727,7 @@ template <> bool I8085ExpandPseudo32::expand<I8085::LOAD_32_WITH_IMM_ADDR>(Block
   // Check if B, C, D, E are all dead after this instruction.
   // If so, batch-load all 4 bytes into registers via one LXI + INX chain,
   // then batch-store to scratch via one LXI+DAD + INX chain.
-  auto AfterMI = std::next(MBBI);
-  bool CanBatch = true;
-  for (MCRegister Reg : {I8085::B, I8085::C, I8085::D, I8085::E}) {
-    if (MBB.computeRegisterLiveness(TRI, Reg, AfterMI, 20) !=
-        MachineBasicBlock::LQR_Dead) {
-      CanBatch = false;
-      break;
-    }
-  }
+  bool CanBatch = areBCDEDeadAfter(MBB, MBBI);
 
   if (CanBatch) {
     // Phase 1: Load 4 bytes from [immAddr] into B/C/D/E
@@ -2609,32 +2756,35 @@ template <> bool I8085ExpandPseudo32::expand<I8085::LOAD_32_WITH_IMM_ADDR>(Block
       buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::E);
     }
   } else {
-    // Fallback: original per-byte approach.
-    // This path uses A as a temp.  Preserve A if live.
-    bool PreserveA =
-        MBB.computeRegisterLiveness(TRI, I8085::A, MBBI, 20) !=
-        MachineBasicBlock::LQR_Dead;
-    if (PreserveA)
-      buildMI(MBB, MBBI, I8085::PUSH).addReg(I8085::PSW);
-    // Only SP-based scratch needs compensation for PUSH PSW. A frame-base
-    // scratch address is unaffected by temporary stack movement.
-    int SpBias = PreserveA ? 2 : 0;
-    for(int i=0;i<4;i++){
+    unsigned Pair = I8085::BC, R0 = I8085::C, R1 = I8085::B;
+    bool NeedSave = false;
+    if (isDEDeadAfter(MBB, MBBI)) {
+      Pair = I8085::DE;
+      R0 = I8085::E;
+      R1 = I8085::D;
+    } else if (!isBCDeadAfter(MBB, MBBI)) {
+      NeedSave = true;
+    }
+    if (NeedSave) {
+      buildMI(MBB, MBBI, I8085::PUSH).addReg(Pair);
+      HLSaveBias += 2;
+    }
+    for (int half = 0; half < 4; half += 2) {
       MachineInstrBuilder Addr =
           buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL, RegState::Define);
-      addAddrOperand(Addr, AddrMO, i);
-      buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::A,RegState::Define);
-      int64_t ScratchOff =
-          getScratchOffset(destReg, i) + (ScratchUsesBasePointer ? 0 : SpBias);
-      buildMI(MBB, MBBI, I8085::LXI)
-          .addReg(I8085::HL, RegState::Define)
-          .addImm(ScratchOff);
-      buildMI(MBB, MBBI, I8085::DAD)
-          .addReg(ScratchUsesBasePointer ? I8085::DE : I8085::SP);
-      buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::A);
+      addAddrOperand(Addr, AddrMO, half);
+      buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(R0, RegState::Define);
+      emitScratchAdvance(MBB, MBBI, 1);
+      buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(R1, RegState::Define);
+      emitScratchAddr(MBB, MBBI, destReg, half);
+      buildMI(MBB, MBBI, I8085::MOV_M).addReg(R0);
+      emitScratchAdvance(MBB, MBBI, 1);
+      buildMI(MBB, MBBI, I8085::MOV_M).addReg(R1);
     }
-    if (PreserveA)
-      buildMI(MBB, MBBI, I8085::POP).addReg(I8085::PSW, RegState::Define);
+    if (NeedSave) {
+      HLSaveBias -= 2;
+      buildMI(MBB, MBBI, I8085::POP).addReg(Pair, RegState::Define);
+    }
   }
 
   MI.eraseFromParent();

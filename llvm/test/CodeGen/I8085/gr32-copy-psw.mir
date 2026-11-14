@@ -38,8 +38,10 @@ body: |
     STC implicit-def $sreg
     ; CHECK-LABEL: name: slow
     ; CHECK: PUSH $psw
-    ; CHECK: $a = MOV_FROM_M
-    ; CHECK: MOV_M $a
+    ; CHECK: PUSH $bc
+    ; CHECK: $c = MOV_FROM_M
+    ; CHECK: MOV_M $c
+    ; CHECK: $bc = POP
     ; CHECK: $psw = POP
     ; CHECK: RET
     $ibx = MOV_32 $iax

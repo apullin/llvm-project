@@ -500,7 +500,9 @@ I8085TargetLowering::I8085TargetLowering(const I8085TargetMachine &TM,
   setOperationAction(ISD::JumpTable, MVT::i16, Custom);
   setOperationAction(ISD::BR_JT, MVT::Other, Expand);
 
-  setMinFunctionAlignment(Align(2));
+  // The 8080/8085 fetches opcodes over an 8-bit data bus with zero alignment
+  // penalty; 2-byte function alignment only injects dead NOP padding bytes.
+  setMinFunctionAlignment(Align(1));
   // The 8085 can materialize an indirect branch via PCHL, and MC lowering
   // already supports jump-table symbols. Keep the threshold conservative so
   // small switches still become compare chains, but allow large dispatchers

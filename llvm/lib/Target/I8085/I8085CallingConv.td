@@ -69,3 +69,4 @@ def ArgCC_I8085_Fast : CallingConv<[
 //===----------------------------------------------------------------------===//
 
 def CSR_Normal : CalleeSavedRegs<(add)>;
+def CSR_Interrupt : CalleeSavedRegs<(add PSW, BC, DE, HL)>;

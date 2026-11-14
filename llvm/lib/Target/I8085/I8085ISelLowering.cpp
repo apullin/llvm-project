@@ -3369,6 +3369,8 @@ SDValue I8085TargetLowering::LowerFormalArguments(
 
   // Assign locations to all of the incoming arguments.
   auto *AFI = MF.getInfo<I8085MachineFunctionInfo>();
+  if (AFI->isInterruptOrSignalHandler() && (!Ins.empty() || isVarArg))
+    report_fatal_error("I8085 interrupt/signal handlers cannot take arguments");
   bool CaptureRegArgs = MF.getFunction().hasFnAttribute("stackrealign");
   for (const Instruction &I : instructions(MF.getFunction())) {
     if (const auto *AI = dyn_cast<AllocaInst>(&I)) {
@@ -3479,6 +3481,9 @@ static bool isEligibleForTailCallOptimization(
   // CALL_INDIRECT path unless a dedicated indirect tail jump is implemented.
   if (!isa<GlobalAddressSDNode>(CLI.Callee) &&
       !isa<ExternalSymbolSDNode>(CLI.Callee))
+    return false;
+
+  if (MF.getInfo<I8085MachineFunctionInfo>()->isInterruptOrSignalHandler())
     return false;
 
   const Function &Caller = MF.getFunction();
@@ -3843,6 +3848,10 @@ I8085TargetLowering::LowerReturn(SDValue Chain, CallingConv::ID CallConv,
                  *DAG.getContext());
 
   MachineFunction &MF = DAG.getMachineFunction();
+
+  if (MF.getInfo<I8085MachineFunctionInfo>()->isInterruptOrSignalHandler() &&
+      !Outs.empty())
+    report_fatal_error("I8085 interrupt/signal handlers must return void");
 
   if (MF.getFunction().getAttributes().hasFnAttr(Attribute::Naked)) {
     return Chain;

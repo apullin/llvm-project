@@ -255,7 +255,21 @@ void I8085FrameLowering::emitPrologue(MachineFunction &MF,
   }
 }
 
-static void restoreStatusRegister(MachineFunction &MF, MachineBasicBlock &MBB) {
+static void emitInterruptEpilogue(MachineFunction &MF,
+                                  MachineBasicBlock &MBB,
+                                  const I8085InstrInfo &TII) {
+  const auto *AFI = MF.getInfo<I8085MachineFunctionInfo>();
+  if (!AFI->isInterruptHandler())
+    return;
+
+  // On 8080/8085, hardware interrupt acknowledge clears INTE. EI enables
+  // interrupts after the immediately following instruction, so placing EI
+  // directly before RET allows RET to pop the return address before any
+  // pending interrupt is serviced. "signal" handlers omit EI.
+  MachineBasicBlock::iterator RetMI = MBB.getLastNonDebugInstr();
+  assert(RetMI != MBB.end() && RetMI->getDesc().isReturn() &&
+         "Expected return instruction at end of interrupt epilogue");
+  BuildMI(MBB, RetMI, RetMI->getDebugLoc(), TII.get(I8085::EI));
 }
 
 void I8085FrameLowering::emitEpilogue(MachineFunction &MF,
@@ -371,7 +385,7 @@ void I8085FrameLowering::emitEpilogue(MachineFunction &MF,
           .addImm(0);
     }
     BuildMI(MBB, MBBI, DL, TII.get(I8085::SPHL));
-    restoreStatusRegister(MF, MBB);
+    emitInterruptEpilogue(MF, MBB, TII);
     return;
   }
 
@@ -398,11 +412,7 @@ void I8085FrameLowering::emitEpilogue(MachineFunction &MF,
   }
 
 
-  // Write back R29R28 to SP and temporarily disable interrupts.
-  // BuildMI(MBB, MBBI, DL, TII.get(I8085::SPWRITE), I8085::SP)
-  //     .addReg(I8085::D, RegState::Kill);
-
-  restoreStatusRegister(MF, MBB);
+  emitInterruptEpilogue(MF, MBB, TII);
 
   if (!EmitCFI)
     return;
@@ -729,6 +739,16 @@ void I8085FrameLowering::determineCalleeSaves(MachineFunction &MF,
                                             BitVector &SavedRegs,
                                             RegScavenger *RS) const {
   TargetFrameLowering::determineCalleeSaves(MF, SavedRegs, RS);
+
+  if (MF.getInfo<I8085MachineFunctionInfo>()->isInterruptOrSignalHandler()) {
+    // Unconditionally preserve all GPR pairs and PSW (A + flags) across ISRs:
+    // late pseudo expansion and frame adjustments use A, HL, and SREG as
+    // temporaries even when pre-PEI MIR does not list them as explicit defs.
+    SavedRegs.set(I8085::PSW);
+    SavedRegs.set(I8085::BC);
+    SavedRegs.set(I8085::DE);
+    SavedRegs.set(I8085::HL);
+  }
 
   if (MF.getFrameInfo().hasVarSizedObjects()) {
     SavedRegs.set(I8085::DE);

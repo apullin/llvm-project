@@ -572,9 +572,15 @@ static bool isLXIHLImm(const MachineInstr &MI) {
 
 static bool isI8085OutlinerMemoryOpcode(unsigned Opcode) {
   switch (Opcode) {
+  case I8085::LDA:
+  case I8085::LDAX:
+  case I8085::LHLD:
   case I8085::MOV_FROM_M:
   case I8085::MOV_M:
   case I8085::MVI_M:
+  case I8085::SHLD:
+  case I8085::STA:
+  case I8085::STAX:
     return true;
   default:
     return false;
@@ -599,6 +605,9 @@ static bool isI8085OutlinerOpcode(unsigned Opcode) {
   case I8085::DCX:
   case I8085::INR:
   case I8085::INX:
+  case I8085::LDA:
+  case I8085::LDAX:
+  case I8085::LHLD:
   case I8085::LXI:
   case I8085::MOV:
   case I8085::MOV_FROM_M:
@@ -614,6 +623,9 @@ static bool isI8085OutlinerOpcode(unsigned Opcode) {
   case I8085::RRC:
   case I8085::SBB:
   case I8085::SBI:
+  case I8085::SHLD:
+  case I8085::STA:
+  case I8085::STAX:
   case I8085::STC:
   case I8085::SUB:
   case I8085::SUI:
@@ -626,14 +638,46 @@ static bool isI8085OutlinerOpcode(unsigned Opcode) {
   }
 }
 
-static bool hasSafeStackRelativeFixups(outliner::Candidate &C) {
+static bool isSREGDeadAfter(outliner::Candidate &C,
+                            MachineBasicBlock::iterator DADIt,
+                            const TargetRegisterInfo &TRI) {
+  for (auto Scan = std::next(DADIt), End = C.end(); Scan != End; ++Scan) {
+    if (Scan->readsRegister(I8085::SREG, &TRI))
+      return false;
+    if (Scan->modifiesRegister(I8085::SREG, &TRI))
+      return true;
+  }
+
+  MachineBasicBlock &MBB = *C.getMBB();
+  LivePhysRegs Live(TRI);
+  Live.addLiveOuts(MBB);
+  for (auto I = MBB.end(), Stop = C.end(); I != Stop;)
+    Live.stepBackward(*--I);
+  return !Live.contains(I8085::SREG);
+}
+
+static bool hasSafeStackRelativeFixups(outliner::Candidate &C, bool IsTailCall,
+                                       const TargetRegisterInfo &TRI) {
   for (auto It = C.begin(), End = C.end(); It != End; ++It) {
     if (!isDADSP(*It))
       continue;
     if (It == C.begin())
       return false;
-    if (!isLXIHLImm(*std::prev(It)))
+    const MachineInstr &Prev = *std::prev(It);
+    if (!isLXIHLImm(Prev))
       return false;
+    if (!IsTailCall) {
+      // CALL_OUTLINE pushes a 2-byte return address at [SP-2..SP-1] and adds
+      // +2 to the LXI H immediate. Reject negative/wrapping immediates (such as
+      // GROW_STACK_BY's 65534/65535) that would overflow 16-bit assembly syntax
+      // or alias the pushed return address, and require SREG to be dead so
+      // boundary carry differences in (SP-2)+(imm+2) are unobservable.
+      int64_t Offset = Prev.getOperand(1).getImm();
+      if (Offset < 0 || Offset > 0x7ffd)
+        return false;
+      if (!isSREGDeadAfter(C, It, TRI))
+        return false;
+    }
   }
   return true;
 }
@@ -748,6 +792,8 @@ bool I8085InstrInfo::isFunctionSafeToOutlineFrom(
     return false;
   if (F.hasFnAttribute(Attribute::Naked))
     return false;
+  if (MF.getInfo<I8085MachineFunctionInfo>()->isInterruptOrSignalHandler())
+    return false;
 
   return true;
 }
@@ -766,15 +812,17 @@ I8085InstrInfo::getOutliningCandidateInfo(
 
   const TargetRegisterInfo *TRI =
       RepeatedSequenceLocs[0].getMF()->getSubtarget().getRegisterInfo();
+  const bool IsTailCall =
+      RepeatedSequenceLocs[0].back().getOpcode() == I8085::RET;
 
-  llvm::erase_if(RepeatedSequenceLocs, [](outliner::Candidate &C) {
-    return !hasSafeStackRelativeFixups(C);
+  llvm::erase_if(RepeatedSequenceLocs, [&](outliner::Candidate &C) {
+    return !hasSafeStackRelativeFixups(C, IsTailCall, *TRI);
   });
 
   if (RepeatedSequenceLocs.size() < 2)
     return std::nullopt;
 
-  if (RepeatedSequenceLocs[0].back().getOpcode() == I8085::RET) {
+  if (IsTailCall) {
     llvm::erase_if(RepeatedSequenceLocs, [&](outliner::Candidate &C) {
       return !hasSafeTailCallReplacement(C, *TRI);
     });
@@ -830,6 +878,11 @@ I8085InstrInfo::getOutliningTypeImpl(const MachineModuleInfo &MMI,
 
   if ((MI.mayLoad() || MI.mayStore()) &&
       !isI8085OutlinerMemoryOpcode(MI.getOpcode()))
+    return outliner::InstrType::Illegal;
+
+  if (llvm::any_of(MI.memoperands(), [](const MachineMemOperand *MMO) {
+        return MMO && !MMO->isUnordered();
+      }))
     return outliner::InstrType::Illegal;
 
   // Most patternless I8085 real instructions are conservatively tagged with

@@ -1,0 +1,152 @@
+# RUN: llc -mtriple=i8085-unknown-elf -run-pass=machine-outliner -enable-machine-outliner=always -verify-machineinstrs -simplify-mir %s -o - | FileCheck %s
+# RUN: llc -mtriple=i8085-unknown-elf -start-before=machine-outliner -enable-machine-outliner=always %s -o %t.s
+# RUN: llvm-mc -triple=i8085-unknown-elf -filetype=obj %t.s -o %t.o
+
+--- |
+  target triple = "i8085-unknown-elf"
+
+  @g8 = external global i8
+  @g16 = external global i16
+
+  define void @neg_sp_a() { ret void }
+  define void @neg_sp_b() { ret void }
+  define void @live_cy_a() { ret void }
+  define void @live_cy_b() { ret void }
+  define void @direct_mem_a() { ret void }
+  define void @direct_mem_b() { ret void }
+...
+
+---
+name:            neg_sp_a
+tracksRegLiveness: true
+body:             |
+  bb.0:
+    liveins: $bc
+    ; Negative/wrapping SP offsets (e.g. GROW_STACK_BY 2 -> 65534) must not be
+    ; outlined with a +2 immediate fixup (which would emit invalid LXI H, 65536).
+    ; CHECK-LABEL: name: neg_sp_a
+    ; CHECK: $hl = LXI 65534
+    ; CHECK-NEXT: DAD $sp
+    $a = MVI 1
+    $d = MOV $b
+    $e = MOV $c
+    $b = MOV $a
+    $c = MOV $d
+    $hl = LXI 65534
+    DAD $sp, implicit-def $sreg, implicit $h, implicit $l, implicit-def $h, implicit-def $l
+    SPHL implicit-def $sp, implicit $h, implicit $l
+    $b = MVI 1
+    RET implicit $sp, implicit-def $sp
+...
+
+---
+name:            neg_sp_b
+tracksRegLiveness: true
+body:             |
+  bb.0:
+    liveins: $bc
+    ; CHECK-LABEL: name: neg_sp_b
+    ; CHECK: $hl = LXI 65534
+    ; CHECK-NEXT: DAD $sp
+    $a = MVI 1
+    $d = MOV $b
+    $e = MOV $c
+    $b = MOV $a
+    $c = MOV $d
+    $hl = LXI 65534
+    DAD $sp, implicit-def $sreg, implicit $h, implicit $l, implicit-def $h, implicit-def $l
+    SPHL implicit-def $sp, implicit $h, implicit $l
+    $b = MVI 2
+    RET implicit $sp, implicit-def $sp
+...
+
+---
+name:            live_cy_a
+tracksRegLiveness: true
+body:             |
+  bb.0:
+    ; DAD SP whose carry flag is read after the candidate must not be outlined.
+    ; CHECK-LABEL: name: live_cy_a
+    ; CHECK-NOT: CALL_OUTLINE
+    ; CHECK: DAD $sp
+    ; CHECK: ADC $b
+    $b = MVI 7
+    $c = MVI 8
+    $d = MVI 9
+    $e = MVI 10
+    $hl = LXI 4
+    DAD $sp, implicit-def $sreg, implicit $h, implicit $l, implicit-def $h, implicit-def $l
+    $a = MVI 0
+    ADC $b, implicit-def $a, implicit-def $sreg, implicit $a, implicit $sreg
+    $b = MVI 1
+    RET implicit $sp, implicit-def $sp
+...
+
+---
+name:            live_cy_b
+tracksRegLiveness: true
+body:             |
+  bb.0:
+    ; CHECK-LABEL: name: live_cy_b
+    ; CHECK-NOT: CALL_OUTLINE
+    ; CHECK: DAD $sp
+    ; CHECK: ADC $b
+    $b = MVI 7
+    $c = MVI 8
+    $d = MVI 9
+    $e = MVI 10
+    $hl = LXI 4
+    DAD $sp, implicit-def $sreg, implicit $h, implicit $l, implicit-def $h, implicit-def $l
+    $a = MVI 0
+    ADC $b, implicit-def $a, implicit-def $sreg, implicit $a, implicit $sreg
+    $b = MVI 2
+    RET implicit $sp, implicit-def $sp
+...
+
+---
+name:            direct_mem_a
+tracksRegLiveness: true
+body:             |
+  bb.0:
+    liveins: $bc, $de
+    ; Non-SP memory instructions (LDA, STA, LHLD, SHLD, LDAX, STAX) can be outlined.
+    ; CHECK-LABEL: name: direct_mem_a
+    ; CHECK: CALL_OUTLINE @[[MEMFN:OUTLINED_FUNCTION_[0-9]+]]
+    ; CHECK: $b = MVI 1
+    LDA @g8, implicit-def $a
+    STAX $bc, implicit $a
+    LDAX $de, implicit-def $a
+    STA @g8, implicit $a
+    LHLD @g16, implicit-def $h, implicit-def $l
+    SHLD @g16, implicit $h, implicit $l
+    $b = MVI 1
+    RET implicit $sp, implicit-def $sp
+...
+
+---
+name:            direct_mem_b
+tracksRegLiveness: true
+body:             |
+  bb.0:
+    liveins: $bc, $de
+    ; CHECK-LABEL: name: direct_mem_b
+    ; CHECK: CALL_OUTLINE @[[MEMFN]]
+    ; CHECK: $b = MVI 2
+    LDA @g8, implicit-def $a
+    STAX $bc, implicit $a
+    LDAX $de, implicit-def $a
+    STA @g8, implicit $a
+    LHLD @g16, implicit-def $h, implicit-def $l
+    SHLD @g16, implicit $h, implicit $l
+    $b = MVI 2
+    RET implicit $sp, implicit-def $sp
+...
+
+# CHECK: name: [[MEMFN]]
+# CHECK: LDA @g8
+# CHECK: STAX $bc
+# CHECK: LDAX $de
+# CHECK: STA @g8
+# CHECK: LHLD @g16
+# CHECK: SHLD @g16
+# CHECK: RET

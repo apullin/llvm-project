@@ -42,12 +42,16 @@ static bool needsBasePointer(const MachineFunction &MF) {
 
 const uint16_t *
 I8085RegisterInfo::getCalleeSavedRegs(const MachineFunction *MF) const {
+  if (MF && MF->getInfo<I8085MachineFunctionInfo>()->isInterruptOrSignalHandler())
+    return CSR_Interrupt_SaveList;
   return CSR_Normal_SaveList;
 }
 
 const uint32_t *
 I8085RegisterInfo::getCallPreservedMask(const MachineFunction &MF,
                                       CallingConv::ID CC) const {
+  if (CC == CallingConv::I8085_INTR || CC == CallingConv::I8085_SIGNAL)
+    return CSR_Interrupt_RegMask;
   return CSR_Normal_RegMask;
 }
 

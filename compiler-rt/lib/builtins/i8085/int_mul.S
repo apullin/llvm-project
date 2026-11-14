@@ -25,28 +25,26 @@
 	.globl	__mul8
 	.type	__mul8,@function
 __mul8:
-	; Load a (multiplicand) into E
+	; Load a (multiplicand) into E, b (multiplier) into D in one walk
 	lxi	h, 2
 	dad	sp
 	mov	e, m
-
-	; Load b (multiplier) into D
-	lxi	h, 3
-	dad	sp
+	inx	h
 	mov	d, m
 
 	; Result accumulator in C
 	mvi	c, 0
 
 .Lm8_loop:
-	; Early exit when multiplier is exhausted
+	; Early exit when multiplier is exhausted; ORA A also clears carry
 	mov	a, d
 	ora	a
 	jz	.Lm8_done
 
-	; Test LSB of multiplier
-	ani	1
-	jz	.Lm8_no_add
+	; Shift multiplier >>= 1 into carry and test old LSB directly
+	rar
+	mov	d, a
+	jnc	.Lm8_no_add
 	mov	a, c
 	add	e		; result += multiplicand
 	mov	c, a
@@ -55,13 +53,6 @@ __mul8:
 	mov	a, e
 	add	a
 	mov	e, a
-
-	; multiplier >>= 1
-	mov	a, d
-	ora	a		; clear carry
-	rar
-	mov	d, a
-
 	jmp	.Lm8_loop
 
 .Lm8_done:
@@ -79,25 +70,18 @@ __mul8:
 ; ===================================================================
 	.section .text.__mul16, "ax", @progbits
 	.globl	__mul16
+	.globl	__mulsi16_lo16
 	.type	__mul16,@function
+	.type	__mulsi16_lo16,@function
 __mul16:
-	; Load a (multiplicand) into DE
-#ifdef UNDOC
-	ldsi	2
-	lhlx
-	mov	e, l
-	mov	d, h
-#else
+__mulsi16_lo16:
+	; Walk stack once: DE = a (multiplicand), BC = b (multiplier)
 	lxi	h, 2
 	dad	sp
 	mov	e, m
 	inx	h
 	mov	d, m
-#endif
-
-	; Load b (multiplier) into BC
-	lxi	h, 4
-	dad	sp
+	inx	h
 	mov	c, m
 	inx	h
 	mov	b, m
@@ -106,34 +90,25 @@ __mul16:
 	lxi	h, 0
 
 .Lm16_loop:
-	; Early exit when multiplier == 0
+	; Early exit when multiplier == 0; ORA C also clears carry (CY = 0)
 	mov	a, b
 	ora	c
 	jz	.Lm16_done
 
-	; Test LSB of multiplier
-	mov	a, c
-	ani	1
-	jz	.Lm16_no_add
-	dad	d		; result += multiplicand (16-bit)
-.Lm16_no_add:
-	; multiplier >>= 1  (BC >>= 1)
+	; Shift BC >>= 1 (CY is 0 on entry; old C.bit0 shifts out into CY)
 	mov	a, b
-	ora	a		; clear carry
-	rar			; B >>= 1
+	rar
 	mov	b, a
 	mov	a, c
-	rar			; C >>= 1, old B.bit0 into C.bit7
+	rar
 	mov	c, a
-
-	; multiplicand <<= 1  (DE <<= 1)
-	mov	a, e
-	add	a		; E <<= 1
-	mov	e, a
-	mov	a, d
-	adc	a		; D = D*2 + carry
-	mov	d, a
-
+	jnc	.Lm16_no_add
+	dad	d		; result += multiplicand (16-bit)
+.Lm16_no_add:
+	; multiplicand <<= 1 (DE <<= 1 via XCHG + DAD H + XCHG: 3B, 18T)
+	xchg
+	dad	h
+	xchg
 	jmp	.Lm16_loop
 
 .Lm16_done:
@@ -142,6 +117,7 @@ __mul16:
 	mov	c, l
 	ret
 	.size	__mul16, .-__mul16
+	.size	__mulsi16_lo16, .-__mulsi16_lo16
 
 
 ; ===================================================================
@@ -184,21 +160,33 @@ __mul32:
 	inx	h
 	ora	m		; | a[2]
 	inx	h
-	ora	m		; | a[3]
+	ora	m		; | a[3] (sets Z if 0, clears CY = 0, HL = &a[3])
 	jz	.Lm32_done
 
-	; --- Test bit 0 of multiplier ---
-	; HL currently -> a[3]; walk back to a[0] (DCX is 6 cyc vs
-	; LXI+DAD SP = 20 cyc, saves 2 cycles per iteration).
+	; --- Shift multiplier (a) right by 1 directly from &a[3] ---
+	; CY is already 0 from ORA M; old a[0].bit0 shifts out into CY.
+	mov	a, m
+	rar
+	mov	m, a
+
 	dcx	h		; -> a[2]
+	mov	a, m
+	rar
+	mov	m, a
+
 	dcx	h		; -> a[1]
+	mov	a, m
+	rar
+	mov	m, a
+
 	dcx	h		; -> a[0]
 	mov	a, m
-	ani	1
-	jz	.Lm32_no_add
+	rar
+	mov	m, a
+
+	jnc	.Lm32_no_add
 
 	; --- result (BC:DE) += multiplicand (on stack) ---
-	; Add b[0..3] directly from memory into register result.
 	lxi	h, 6
 	dad	sp		; HL -> b[0]
 
@@ -222,32 +210,7 @@ __mul32:
 	mov	d, a
 
 .Lm32_no_add:
-	; --- Shift multiplier (a) right by 1 ---
-	; Process MSB first so carry propagates downward.
-	lxi	h, 5
-	dad	sp		; HL -> a[3]
-	mov	a, m
-	ora	a		; clear carry
-	rar
-	mov	m, a
-
-	dcx	h		; -> a[2]
-	mov	a, m
-	rar
-	mov	m, a
-
-	dcx	h		; -> a[1]
-	mov	a, m
-	rar
-	mov	m, a
-
-	dcx	h		; -> a[0]
-	mov	a, m
-	rar
-	mov	m, a
-
 	; --- Shift multiplicand (b) left by 1 ---
-	; Process LSB first so carry propagates upward.
 	lxi	h, 6
 	dad	sp		; HL -> b[0]
 	mov	a, m
@@ -862,68 +825,8 @@ __mulsi16_hi16:
 ; bits of the unsigned multiply.  No sign handling is needed!
 ; This is just __mul16 renamed.  We can skip computing bytes 2-3.
 ; ===================================================================
-	.section .text.__mulsi16_lo16, "ax", @progbits
-	.globl	__mulsi16_lo16
-	.type	__mulsi16_lo16,@function
-__mulsi16_lo16:
-	; Load a (multiplicand) into DE
-#ifdef UNDOC
-	ldsi	2
-	lhlx
-	mov	e, l
-	mov	d, h
-#else
-	lxi	h, 2
-	dad	sp
-	mov	e, m
-	inx	h
-	mov	d, m
-#endif
-
-	; Load b (multiplier) into BC
-	lxi	h, 4
-	dad	sp
-	mov	c, m
-	inx	h
-	mov	b, m
-
-	; HL = 0 (result accumulator, 16-bit)
-	lxi	h, 0
-
-.Lms16lo_loop:
-	mov	a, b
-	ora	c
-	jz	.Lms16lo_done
-
-	mov	a, c
-	ani	1
-	jz	.Lms16lo_no_add
-	dad	d		; result += multiplicand (16-bit)
-.Lms16lo_no_add:
-	; multiplier >>= 1 (BC >>= 1)
-	mov	a, b
-	ora	a
-	rar
-	mov	b, a
-	mov	a, c
-	rar
-	mov	c, a
-
-	; multiplicand <<= 1 (DE <<= 1)
-	mov	a, e
-	add	a
-	mov	e, a
-	mov	a, d
-	adc	a
-	mov	d, a
-
-	jmp	.Lms16lo_loop
-
-.Lms16lo_done:
-	mov	b, h
-	mov	c, l
-	ret
-	.size	__mulsi16_lo16, .-__mulsi16_lo16
+; __mulsi16_lo16 is defined as a direct symbol alias of __mul16 above
+; (lower 16 bits of signed and unsigned 16x16 multiply are identical).
 
 
 ; ===================================================================

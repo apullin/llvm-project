@@ -380,6 +380,19 @@ let Defs=[SREG, A] in def ASR_16_BY_8  : I8085Pseudo<(outs GR16: $rd), (ins GR16
 // Sign extension: ashr i16, 15 → 0x0000 or 0xFFFF based on sign bit
 let Defs=[SREG, A] in def SIGN_EXTEND_16 : I8085Pseudo<(outs GR16: $rd), (ins GR16: $rs), "SIGN_EXTEND_16 $rs", []>;
 
+// Sign extension: ashr i8, 7 → 0x00 or 0xFF based on sign bit
+let Defs=[SREG, A] in def SIGN_EXTEND_8  : I8085Pseudo<(outs GR8: $rd), (ins GR8: $rs), "SIGN_EXTEND_8 $rs", []>;
+
+// High-count constant shifts via opposite-direction byte rotates + mask:
+//   SRL_16_HI_ROT k (k in 13..15): extract top (16-k) bits of high byte via RLC
+//   SHL_16_LO_ROT k (k in 13..15): shift bottom (16-k) bits of low byte into high via RRC
+//   SHL_8_ROT     k (k in 5..7):   shift bottom (8-k) bits into top via RRC + mask
+let Defs=[SREG, A] in {
+def SRL_16_HI_ROT : I8085Pseudo<(outs GR16: $rd), (ins GR16: $rs, i8imm: $amt), "SRL_16_HI_ROT $rs, $amt", []>;
+def SHL_16_LO_ROT : I8085Pseudo<(outs GR16: $rd), (ins GR16: $rs, i8imm: $amt), "SHL_16_LO_ROT $rs, $amt", []>;
+def SHL_8_ROT     : I8085Pseudo<(outs GR8: $rd),  (ins GR8: $rs,  i8imm: $amt), "SHL_8_ROT $rs, $amt", []>;
+}
+
 // Constant multiply strength reduction pseudo.
 // Multiplies a GR16 value by an immediate constant using DAD H (shift left),
 // DAD B (add saved value), and 16-bit subtract sequences.

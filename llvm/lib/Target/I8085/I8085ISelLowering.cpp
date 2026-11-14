@@ -206,12 +206,12 @@ I8085TargetLowering::I8085TargetLowering(const I8085TargetMachine &TM,
   }
   setOperationAction(ISD::ATOMIC_FENCE, MVT::Other, Custom);
   // Force custom memcpy/memset expansion in SelectionDAGInfo.
-  MaxStoresPerMemcpy = 0;
-  MaxStoresPerMemcpyOptSize = 0;
-  MaxStoresPerMemmove = 0;
-  MaxStoresPerMemmoveOptSize = 0;
-  MaxStoresPerMemset = 0;
-  MaxStoresPerMemsetOptSize = 0;
+  MaxStoresPerMemcpy = 2;
+  MaxStoresPerMemcpyOptSize = 2;
+  MaxStoresPerMemmove = 2;
+  MaxStoresPerMemmoveOptSize = 1;
+  MaxStoresPerMemset = 4;
+  MaxStoresPerMemsetOptSize = 2;
 
   setTruncStoreAction(MVT::i16, MVT::i8, Expand);
   setTruncStoreAction(MVT::i32, MVT::i8, Expand);
@@ -2648,12 +2648,76 @@ SDValue I8085TargetLowering::performMulCombine(SDNode *N,
     return DAG.getConstant(0, DL, VT);
   if (C->isOne())
     return Other;
-  if (!ShiftAmt)
+  if (ShiftAmt) {
+    EVT ShiftVT = getShiftAmountTy(VT, DAG.getDataLayout());
+    SDValue Amt = DAG.getConstant(ShiftAmt, DL, ShiftVT);
+    return DAG.getNode(ISD::SHL, DL, VT, Other, Amt);
+  }
+
+  const Function &Fn = DAG.getMachineFunction().getFunction();
+  if (Fn.hasOptNone())
     return SDValue();
 
   EVT ShiftVT = getShiftAmountTy(VT, DAG.getDataLayout());
-  SDValue Amt = DAG.getConstant(ShiftAmt, DL, ShiftVT);
-  return DAG.getNode(ISD::SHL, DL, VT, Other, Amt);
+
+  // Constant i8 multiply strength reduction: straight-line shifts + add/sub
+  // are both smaller (~6-11B) and much faster (~24-40T) than a stack-passed
+  // __mul8 library call (~18B call site + ~150T).
+  if (VT == MVT::i8) {
+    uint8_t C8 = static_cast<uint8_t>(C->getZExtValue() & 0xffu);
+    if (C8 == 0xffu)
+      return DAG.getNode(ISD::SUB, DL, VT, DAG.getConstant(0, DL, VT), Other);
+    if (llvm::popcount(C8) == 2) {
+      unsigned B0 = llvm::countr_zero(C8);
+      unsigned B1 = llvm::countr_zero(static_cast<uint8_t>(C8 & (C8 - 1u)));
+      SDValue Term0 = B0 ? DAG.getNode(ISD::SHL, DL, VT, Other,
+                                       DAG.getConstant(B0, DL, ShiftVT))
+                         : Other;
+      SDValue Term1 = DAG.getNode(ISD::SHL, DL, VT, Other,
+                                  DAG.getConstant(B1, DL, ShiftVT));
+      return DAG.getNode(ISD::ADD, DL, VT, Term0, Term1);
+    }
+    uint8_t C8Plus1 = static_cast<uint8_t>(C8 + 1u);
+    if (C8Plus1 != 0 && llvm::has_single_bit(C8Plus1)) {
+      unsigned K = llvm::countr_zero(C8Plus1);
+      SDValue Shifted = DAG.getNode(ISD::SHL, DL, VT, Other,
+                                    DAG.getConstant(K, DL, ShiftVT));
+      return DAG.getNode(ISD::SUB, DL, VT, Shifted, Other);
+    }
+    return SDValue();
+  }
+
+  // Constant i32 multiply strength reduction in speed mode (-O1/-O2): expand
+  // 2-term and (2^k - 1) constants when total residual bit-shifts after byte
+  // shuffles are small, avoiding ~1,000+ T-state __mul32 calls.
+  if (VT == MVT::i32 && !Fn.hasOptSize()) {
+    uint32_t C32 = static_cast<uint32_t>(C->getZExtValue() & 0xffffffffu);
+    if (C32 == 0xffffffffu)
+      return DAG.getNode(ISD::SUB, DL, VT, DAG.getConstant(0, DL, VT), Other);
+    if (llvm::popcount(C32) == 2) {
+      unsigned B0 = llvm::countr_zero(C32);
+      unsigned B1 = llvm::countr_zero(C32 & (C32 - 1u));
+      if ((B0 % 8) + (B1 % 8) <= 4) {
+        SDValue Term0 = B0 ? DAG.getNode(ISD::SHL, DL, VT, Other,
+                                         DAG.getConstant(B0, DL, ShiftVT))
+                           : Other;
+        SDValue Term1 = DAG.getNode(ISD::SHL, DL, VT, Other,
+                                    DAG.getConstant(B1, DL, ShiftVT));
+        return DAG.getNode(ISD::ADD, DL, VT, Term0, Term1);
+      }
+    }
+    uint32_t C32Plus1 = C32 + 1u;
+    if (C32Plus1 > 2 && llvm::has_single_bit(C32Plus1)) {
+      unsigned K = llvm::countr_zero(C32Plus1);
+      if ((K % 8) <= 3) {
+        SDValue Shifted = DAG.getNode(ISD::SHL, DL, VT, Other,
+                                      DAG.getConstant(K, DL, ShiftVT));
+        return DAG.getNode(ISD::SUB, DL, VT, Shifted, Other);
+      }
+    }
+  }
+
+  return SDValue();
 }
 
 SDValue I8085TargetLowering::performTruncMulCombine(SDNode *N,

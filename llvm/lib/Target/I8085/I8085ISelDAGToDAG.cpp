@@ -502,6 +502,16 @@ template <> bool I8085DAGToDAGISel::select<ISD::SHL>(SDNode *N) {
       }
       if (ShiftAmt > 1 && ShiftAmt < 16) {
         SDValue Result = LHS;
+        if (ShiftAmt >= 13) {
+          SDValue AmtOp = CurDAG->getTargetConstant(ShiftAmt, dl, MVT::i8);
+          Result = SDValue(
+              CurDAG->getMachineNode(I8085::SHL_16_LO_ROT, dl, MVT::i16, Result,
+                                     AmtOp),
+              0);
+          ReplaceUses(SDValue(N, 0), Result);
+          CurDAG->RemoveDeadNode(N);
+          return true;
+        }
         if (ShiftAmt >= 8) {
           Result = SDValue(CurDAG->getMachineNode(I8085::SHL_16_BY_8, dl, MVT::i16, Result), 0);
           ShiftAmt -= 8;
@@ -554,7 +564,7 @@ template <> bool I8085DAGToDAGISel::select<ISD::SHL>(SDNode *N) {
     return false; // Variable shifts handled by LowerOperation libcall.
   }
   if(LHS.getSimpleValueType() == MVT::i8 && RHS.getSimpleValueType() == MVT::i8){
-    // Handle constant shift amounts with inline shifts (up to 4)
+    // Handle constant shift amounts with inline shifts (1..4 via RL_8, 5..7 via RRC+mask)
     if (const auto *C = dyn_cast<ConstantSDNode>(RHS)) {
       uint64_t ShiftAmt = C->getZExtValue();
       if (ShiftAmt > 0 && ShiftAmt <= 4) {
@@ -563,6 +573,15 @@ template <> bool I8085DAGToDAGISel::select<ISD::SHL>(SDNode *N) {
           SDValue Ops[] = {Result};
           Result = SDValue(CurDAG->getMachineNode(I8085::RL_8, dl, MVT::i8, Ops), 0);
         }
+        ReplaceUses(SDValue(N, 0), Result);
+        CurDAG->RemoveDeadNode(N);
+        return true;
+      }
+      if (ShiftAmt >= 5 && ShiftAmt <= 7) {
+        SDValue AmtOp = CurDAG->getTargetConstant(ShiftAmt, dl, MVT::i8);
+        SDValue Result = SDValue(
+            CurDAG->getMachineNode(I8085::SHL_8_ROT, dl, MVT::i8, LHS, AmtOp),
+            0);
         ReplaceUses(SDValue(N, 0), Result);
         CurDAG->RemoveDeadNode(N);
         return true;
@@ -649,9 +668,16 @@ template <> bool I8085DAGToDAGISel::select<ISD::SRA>(SDNode *N) {
     return false; // Variable shifts handled by LowerOperation libcall.
   }
   if(LHS.getSimpleValueType() == MVT::i8 && RHS.getSimpleValueType() == MVT::i8){
-    // Handle constant shift amounts with inline shifts (up to 4)
+    // Handle constant shift amounts with inline shifts (up to 4, plus 7 sign-extend)
     if (const auto *C = dyn_cast<ConstantSDNode>(RHS)) {
       uint64_t ShiftAmt = C->getZExtValue();
+      if (ShiftAmt == 7) {
+        SDValue Result = SDValue(
+            CurDAG->getMachineNode(I8085::SIGN_EXTEND_8, dl, MVT::i8, LHS), 0);
+        ReplaceUses(SDValue(N, 0), Result);
+        CurDAG->RemoveDeadNode(N);
+        return true;
+      }
       if (ShiftAmt > 0 && ShiftAmt <= 4) {
         SDValue Result = LHS;
         for (uint64_t i = 0; i < ShiftAmt; ++i) {
@@ -687,6 +713,16 @@ template <> bool I8085DAGToDAGISel::select<ISD::SRL>(SDNode *N) {
       uint64_t ShiftAmt = C->getZExtValue();
       if (ShiftAmt > 0 && ShiftAmt < 16) {
         SDValue Result = LHS;
+        if (ShiftAmt >= 13) {
+          SDValue AmtOp = CurDAG->getTargetConstant(ShiftAmt, dl, MVT::i8);
+          Result = SDValue(
+              CurDAG->getMachineNode(I8085::SRL_16_HI_ROT, dl, MVT::i16, Result,
+                                     AmtOp),
+              0);
+          ReplaceUses(SDValue(N, 0), Result);
+          CurDAG->RemoveDeadNode(N);
+          return true;
+        }
         if (ShiftAmt >= 8) {
           Result = SDValue(CurDAG->getMachineNode(I8085::SRL_16_BY_8, dl, MVT::i16, Result), 0);
           ShiftAmt -= 8;

@@ -2069,7 +2069,6 @@ bool I8085ExpandPseudo::expand<I8085::OR_16>(Block &MBB, BlockIt MBBI) {
   MachineInstr &MI = *MBBI;
 
   unsigned destReg = MI.getOperand(0).getReg();
-  unsigned operandOne = MI.getOperand(1).getReg();
   uint16_t operandTwo = MI.getOperand(2).getReg();
   bool DstIsDead = MI.getOperand(0).isDead();
   
@@ -2100,7 +2099,6 @@ bool I8085ExpandPseudo::expand<I8085::XOR_16>(Block &MBB, BlockIt MBBI) {
   MachineInstr &MI = *MBBI;
 
   unsigned destReg = MI.getOperand(0).getReg();
-  unsigned operandOne = MI.getOperand(1).getReg();
   uint16_t operandTwo = MI.getOperand(2).getReg();
   bool DstIsDead = MI.getOperand(0).isDead();
   
@@ -3096,28 +3094,162 @@ template <> bool I8085ExpandPseudo::expand<I8085::SIGN_EXTEND_16>(Block &MBB, Bl
   return true;
 }
 
-template <> bool I8085ExpandPseudo::expand<I8085::RL_8>(Block &MBB, BlockIt MBBI) {
+template <> bool I8085ExpandPseudo::expand<I8085::SIGN_EXTEND_8>(Block &MBB, BlockIt MBBI) {
   MachineInstr &MI = *MBBI;
-  
+
   unsigned destReg = MI.getOperand(0).getReg();
   unsigned srcReg = MI.getOperand(1).getReg();
-  if (destReg != srcReg) {
+
+  if (srcReg != I8085::A) {
     buildMI(MBB, MBBI, I8085::MOV)
-      .addReg(destReg, RegState::Define)
-      .addReg(srcReg);
+        .addReg(I8085::A, RegState::Define)
+        .addReg(srcReg);
+  }
+  buildMI(MBB, MBBI, I8085::RAL);
+  buildMI(MBB, MBBI, I8085::SBB).addReg(I8085::A);
+  if (destReg != I8085::A) {
+    buildMI(MBB, MBBI, I8085::MOV)
+        .addReg(destReg, RegState::Define)
+        .addReg(I8085::A);
   }
 
+  MI.eraseFromParent();
+  return true;
+}
+
+template <> bool I8085ExpandPseudo::expand<I8085::SRL_16_HI_ROT>(Block &MBB, BlockIt MBBI) {
+  MachineInstr &MI = *MBBI;
+
+  unsigned destReg = MI.getOperand(0).getReg();
+  unsigned srcReg = MI.getOperand(1).getReg();
+  unsigned shiftAmt = static_cast<unsigned>(MI.getOperand(2).getImm());
+  assert(shiftAmt >= 13 && shiftAmt <= 15 && "Unexpected SRL_16_HI_ROT shift");
+
+  unsigned dstLow, dstHigh, srcLow, srcHigh;
+  if (!getPairRegs(destReg, dstLow, dstHigh) ||
+      !getPairRegs(srcReg, srcLow, srcHigh))
+    return false;
+
+  unsigned rotCount = 16u - shiftAmt;
+  unsigned mask = (1u << rotCount) - 1u;
+
   buildMI(MBB, MBBI, I8085::MOV)
-    .addReg(I8085::A,RegState::Define)
-    .addReg(destReg);
+      .addReg(I8085::A, RegState::Define)
+      .addReg(srcHigh);
+  for (unsigned i = 0; i < rotCount; ++i)
+    buildMI(MBB, MBBI, I8085::RLC);
+  buildMI(MBB, MBBI, I8085::ANI).addImm(mask);
+  buildMI(MBB, MBBI, I8085::MOV)
+      .addReg(dstLow, RegState::Define)
+      .addReg(I8085::A);
+  buildMI(MBB, MBBI, I8085::MVI)
+      .addReg(dstHigh, RegState::Define)
+      .addImm(0);
 
-  buildMI(MBB, MBBI, I8085::ADD)
-    .addReg(I8085::A);
+  MI.eraseFromParent();
+  return true;
+}
+
+template <> bool I8085ExpandPseudo::expand<I8085::SHL_16_LO_ROT>(Block &MBB, BlockIt MBBI) {
+  MachineInstr &MI = *MBBI;
+
+  unsigned destReg = MI.getOperand(0).getReg();
+  unsigned srcReg = MI.getOperand(1).getReg();
+  unsigned shiftAmt = static_cast<unsigned>(MI.getOperand(2).getImm());
+  assert(shiftAmt >= 13 && shiftAmt <= 15 && "Unexpected SHL_16_LO_ROT shift");
+
+  unsigned dstLow, dstHigh, srcLow, srcHigh;
+  if (!getPairRegs(destReg, dstLow, dstHigh) ||
+      !getPairRegs(srcReg, srcLow, srcHigh))
+    return false;
+
+  unsigned rotCount = 16u - shiftAmt;
+  unsigned mask = (0xffu << (shiftAmt - 8u)) & 0xffu;
 
   buildMI(MBB, MBBI, I8085::MOV)
-    .addReg(destReg,RegState::Define)
-    .addReg(I8085::A);
+      .addReg(I8085::A, RegState::Define)
+      .addReg(srcLow);
+  for (unsigned i = 0; i < rotCount; ++i)
+    buildMI(MBB, MBBI, I8085::RRC);
+  buildMI(MBB, MBBI, I8085::ANI).addImm(mask);
+  buildMI(MBB, MBBI, I8085::MOV)
+      .addReg(dstHigh, RegState::Define)
+      .addReg(I8085::A);
+  buildMI(MBB, MBBI, I8085::MVI)
+      .addReg(dstLow, RegState::Define)
+      .addImm(0);
 
+  MI.eraseFromParent();
+  return true;
+}
+
+template <> bool I8085ExpandPseudo::expand<I8085::SHL_8_ROT>(Block &MBB, BlockIt MBBI) {
+  MachineInstr &MI = *MBBI;
+
+  unsigned destReg = MI.getOperand(0).getReg();
+  unsigned srcReg = MI.getOperand(1).getReg();
+  unsigned shiftAmt = static_cast<unsigned>(MI.getOperand(2).getImm());
+  assert(shiftAmt >= 5 && shiftAmt <= 7 && "Unexpected SHL_8_ROT shift");
+
+  unsigned rotCount = 8u - shiftAmt;
+  unsigned mask = (0xffu << shiftAmt) & 0xffu;
+
+  if (srcReg != I8085::A) {
+    buildMI(MBB, MBBI, I8085::MOV)
+        .addReg(I8085::A, RegState::Define)
+        .addReg(srcReg);
+  }
+  for (unsigned i = 0; i < rotCount; ++i)
+    buildMI(MBB, MBBI, I8085::RRC);
+  buildMI(MBB, MBBI, I8085::ANI).addImm(mask);
+  if (destReg != I8085::A) {
+    buildMI(MBB, MBBI, I8085::MOV)
+        .addReg(destReg, RegState::Define)
+        .addReg(I8085::A);
+  }
+
+  MI.eraseFromParent();
+  return true;
+}
+
+template <> bool I8085ExpandPseudo::expand<I8085::RL_8>(Block &MBB, BlockIt MBBI) {
+  MachineInstr &MI = *MBBI;
+
+  unsigned srcReg = MI.getOperand(1).getReg();
+  unsigned finalDestReg = MI.getOperand(0).getReg();
+  unsigned count = 1;
+
+  SmallVector<MachineInstr *, 4> Fused;
+  BlockIt Next = nextNonDebugInstr(MBB, std::next(MBBI));
+  while (Next != MBB.end() && Next->getOpcode() == I8085::RL_8 &&
+         Next->getOperand(1).getReg() == finalDestReg &&
+         (Next->getOperand(0).getReg() == finalDestReg ||
+          Next->getOperand(1).isKill())) {
+    finalDestReg = Next->getOperand(0).getReg();
+    Fused.push_back(&*Next);
+    ++count;
+    Next = nextNonDebugInstr(MBB, std::next(Next));
+  }
+
+  if (srcReg != I8085::A) {
+    buildMI(MBB, MBBI, I8085::MOV)
+        .addReg(I8085::A, RegState::Define)
+        .addReg(srcReg);
+  }
+
+  for (unsigned i = 0; i < count; ++i) {
+    buildMI(MBB, MBBI, I8085::ADD)
+        .addReg(I8085::A);
+  }
+
+  if (finalDestReg != I8085::A) {
+    buildMI(MBB, MBBI, I8085::MOV)
+        .addReg(finalDestReg, RegState::Define)
+        .addReg(I8085::A);
+  }
+
+  for (MachineInstr *Dead : Fused)
+    Dead->eraseFromParent();
   MI.eraseFromParent();
   return true;
 }
@@ -3728,6 +3860,10 @@ bool I8085ExpandPseudo::expandMI(Block &MBB, BlockIt MBBI) {
     EXPAND(I8085::SRL_16_BY_8);
     EXPAND(I8085::ASR_16_BY_8);
     EXPAND(I8085::SIGN_EXTEND_16);
+    EXPAND(I8085::SIGN_EXTEND_8);
+    EXPAND(I8085::SRL_16_HI_ROT);
+    EXPAND(I8085::SHL_16_LO_ROT);
+    EXPAND(I8085::SHL_8_ROT);
     EXPAND(I8085::RL_8);
     EXPAND(I8085::RR_8);
     EXPAND(I8085::ASR_8);

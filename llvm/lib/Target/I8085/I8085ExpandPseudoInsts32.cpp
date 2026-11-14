@@ -87,7 +87,7 @@ private:
   DenseMap<MachineInstr *, unsigned> BCDEForwarded;
 
   void preScanKnownZeroBytes(Block &MBB);
-  bool expandMBB(Block &MBB);
+  bool expandMBB(Block &MBB, bool &Modified);
   int64_t computeSPAdjustment(Block &MBB, BlockIt UpTo);
   bool expandMI(Block &MBB, BlockIt MBBI);
   template <unsigned OP> bool expand(Block &MBB, BlockIt MBBI);
@@ -449,16 +449,36 @@ void I8085ExpandPseudo32::preScanKnownZeroBytes(Block &MBB) {
   }
 }
 
-bool I8085ExpandPseudo32::expandMBB(MachineBasicBlock &MBB) {
-  for (BlockIt MBBI = MBB.begin(), E = MBB.end(); MBBI != E; ) {
-    // Compute SP adjustment up to this instruction for correct scratch offsets
-    CurrentSPAdj = computeSPAdjustment(MBB, MBBI);
+bool I8085ExpandPseudo32::expandMBB(MachineBasicBlock &MBB, bool &Modified) {
+  int64_t RunningSPAdj = 0;
+  for (BlockIt MBBI = MBB.begin(); MBBI != MBB.end(); ) {
+    if (MBBI->isPseudo()) {
+      CurrentSPAdj = RunningSPAdj;
+      const bool SplitsBlock = MBBI->isBranch();
+      const bool AtBegin = (MBBI == MBB.begin());
+      BlockIt Prev = AtBegin ? MBB.end() : std::prev(MBBI);
+      if (expandMI(MBB, MBBI)) {
+        Modified = true;
+        if (SplitsBlock)
+          return true;
+        MBBI = AtBegin ? MBB.begin() : std::next(Prev);
+        continue;
+      }
+    }
 
-    // Some expansions splice instructions into new blocks, which can invalidate
-    // iterators. Restart the scan after any successful expansion.
-    if (expandMI(MBB, MBBI))
-      return true;
-    MBBI = std::next(MBBI);
+    if (!MBBI->getFlag(MachineInstr::FrameSetup) &&
+        !MBBI->getFlag(MachineInstr::FrameDestroy)) {
+      unsigned Opc = MBBI->getOpcode();
+      if (Opc == I8085::GROW_STACK_BY)
+        RunningSPAdj += MBBI->getOperand(0).getImm();
+      else if (Opc == I8085::SHRINK_STACK_BY)
+        RunningSPAdj -= MBBI->getOperand(0).getImm();
+      else if (Opc == I8085::PUSH)
+        RunningSPAdj += 2;
+      else if (Opc == I8085::POP)
+        RunningSPAdj -= 2;
+    }
+    ++MBBI;
   }
 
   return false;
@@ -544,14 +564,12 @@ bool I8085ExpandPseudo32::runOnMachineFunction(MachineFunction &MF) {
     unsigned ExpandCount = 0;
     unsigned MaxExpansions = static_cast<unsigned>(MBB.size()) + 16;
 
-    // Continue expanding the block until all pseudos are expanded.
+    // Continue expanding the block until any block-splitting branch pseudos finish.
     do {
       if (ExpandCount++ >= MaxExpansions)
         report_fatal_error("I8085 pseudo expand limit reached");
 
-      bool BlockModified = expandMBB(MBB);
-      Modified |= BlockModified;
-      ContinueExpanding = BlockModified;
+      ContinueExpanding = expandMBB(MBB, Modified);
     } while (ContinueExpanding);
   }
 

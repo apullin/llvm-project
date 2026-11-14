@@ -27,6 +27,7 @@
 #include "llvm/CodeGen/MachineInstr.h"
 #include "llvm/CodeGen/MachineOperand.h"
 #include "llvm/CodeGen/TargetInstrInfo.h"
+#include "llvm/IR/Function.h"
 #include "llvm/Support/Debug.h"
 
 using namespace llvm;
@@ -117,102 +118,164 @@ public:
 
   bool runOnMachineFunction(MachineFunction &MF) override {
     const TargetInstrInfo *TII = MF.getSubtarget().getInstrInfo();
+    const int BlockMaxDelta = MF.getFunction().hasMinSize() ? 4 : MaxDelta;
     bool Changed = false;
 
-    ExitStates.assign(MF.getNumBlockIDs(), HLState());
+    ExitStates.assign(MF.getNumBlockIDs(), PairState());
 
     // Pass 1: process all blocks with no cross-BB info (populates exit states)
     for (MachineBasicBlock &MBB : MF) {
-      HLState entry;
-      ExitStates[MBB.getNumber()] = processBlock(MBB, entry, TII, Changed);
+      PairState entry;
+      ExitStates[MBB.getNumber()] =
+          processBlock(MBB, entry, TII, BlockMaxDelta, Changed);
     }
 
     // Pass 2: re-process with predecessor exit states available
     for (MachineBasicBlock &MBB : MF) {
-      HLState entry = mergeEntryState(MBB);
-      if (entry.isTracked()) {
-        if (!MBB.isLiveIn(I8085::HL))
-          MBB.addLiveIn(I8085::HL);
-      }
-      ExitStates[MBB.getNumber()] = processBlock(MBB, entry, TII, Changed);
+      PairState entry = mergeEntryState(MBB);
+      if (entry.HL.isTracked() && !MBB.isLiveIn(I8085::HL))
+        MBB.addLiveIn(I8085::HL);
+      if (entry.DE.isTracked() && !MBB.isLiveIn(I8085::DE))
+        MBB.addLiveIn(I8085::DE);
+      ExitStates[MBB.getNumber()] =
+          processBlock(MBB, entry, TII, BlockMaxDelta, Changed);
     }
 
     return Changed;
   }
 
 private:
-  SmallVector<HLState> ExitStates;
+  struct PairState {
+    HLState HL;
+    HLState DE;
+  };
 
-  HLState mergeEntryState(const MachineBasicBlock &MBB) const {
-    HLState result;
+  SmallVector<PairState> ExitStates;
+
+  PairState mergeEntryState(const MachineBasicBlock &MBB) const {
+    PairState result;
     bool first = true;
 
     for (const MachineBasicBlock *Pred : MBB.predecessors()) {
-      const HLState &PredExit = ExitStates[Pred->getNumber()];
-      if (!PredExit.isTracked())
-        return HLState();
-
+      const PairState &PredExit = ExitStates[Pred->getNumber()];
       if (first) {
         result = PredExit;
         first = false;
-      } else if (!(result == PredExit)) {
-        return HLState();
+      } else {
+        if (!(result.HL == PredExit.HL))
+          result.HL = HLState();
+        if (!(result.DE == PredExit.DE))
+          result.DE = HLState();
       }
+      if (!result.HL.isTracked() && !result.DE.isTracked())
+        return PairState();
     }
 
-    // No predecessors (entry block) -> untracked
     if (first)
-      return HLState();
+      return PairState();
 
     return result;
   }
 
-  HLState processBlock(MachineBasicBlock &MBB, HLState State,
-                        const TargetInstrInfo *TII, bool &Changed) {
-    HLState Current = State;
+  PairState processBlock(MachineBasicBlock &MBB, PairState State,
+                         const TargetInstrInfo *TII, int BlockMaxDelta,
+                         bool &Changed) {
+    HLState Current = State.HL;
+    HLState CurrentDE = State.DE;
 
     for (auto MI = MBB.begin(); MI != MBB.end();) {
       if (MI->getOpcode() == I8085::LXI &&
           MI->getNumOperands() >= 2 &&
-          MI->getOperand(0).isReg() &&
-          MI->getOperand(0).getReg() == I8085::HL) {
-        auto Next = std::next(MI);
+          MI->getOperand(0).isReg()) {
+        Register DstPair = MI->getOperand(0).getReg();
+        if (DstPair == I8085::HL) {
+          auto Next = std::next(MI);
 
-        // Check for LXI H, imm followed by DAD SP.
-        if (MI->getOperand(1).isImm() && Next != MBB.end() &&
-            Next->getOpcode() == I8085::DAD && Next->getNumOperands() >= 1 &&
-            Next->getOperand(0).isReg() &&
-            Next->getOperand(0).getReg() == I8085::SP) {
-          HLState Target =
-              HLState::getSPRelative(MI->getOperand(1).getImm());
-          if (tryReuseHL(MBB, MI, Next, Current, Target, TII, Changed))
+          // Check for LXI H, imm followed by DAD SP.
+          if (MI->getOperand(1).isImm() && Next != MBB.end() &&
+              Next->getOpcode() == I8085::DAD && Next->getNumOperands() >= 1 &&
+              Next->getOperand(0).isReg() &&
+              Next->getOperand(0).getReg() == I8085::SP) {
+            HLState Target =
+                HLState::getSPRelative(MI->getOperand(1).getImm());
+            if (tryReuseHL(MBB, MI, Next, Current, Target, TII, BlockMaxDelta,
+                           Changed))
+              continue;
+
+            Current = Target;
+            MI = std::next(Next);
             continue;
+          }
 
-          Current = Target;
-          MI = std::next(Next);
-          continue;
-        }
+          HLState Target;
+          if (getSymbolicLXIState(MI->getOperand(1), Target)) {
+            if (tryReuseHL(MBB, MI, MI, Current, Target, TII, BlockMaxDelta,
+                           Changed))
+              continue;
 
-        HLState Target;
-        if (getSymbolicLXIState(MI->getOperand(1), Target)) {
-          if (tryReuseHL(MBB, MI, MI, Current, Target, TII, Changed))
+            Current = Target;
+            ++MI;
             continue;
-
-          Current = Target;
-          ++MI;
-          continue;
+          }
+        } else if (DstPair == I8085::DE) {
+          HLState Target;
+          if (getSymbolicLXIState(MI->getOperand(1), Target)) {
+            CurrentDE = Target;
+            ++MI;
+            continue;
+          }
         }
       }
 
-      // PUSH: SP -= 2, HL unchanged. Adjust tracked offset.
-      if (MI->getOpcode() == I8085::PUSH) {
-        if (Current.isSPRelative())
-          Current.Offset += 2;
+      // XCHG swaps HL and DE without touching SP or flags: swap tracked states!
+      if (MI->getOpcode() == I8085::XCHG) {
+        std::swap(Current, CurrentDE);
         ++MI;
         continue;
       }
 
-      // POP: SP += 2. POP H clobbers HL; others just adjust offset.
+      // Adjacent pair copies MOV D,H ; MOV E,L or MOV H,D ; MOV L,E propagate
+      // tracked addresses between HL and DE.
+      if (MI->getOpcode() == I8085::MOV && MI->getNumOperands() >= 2 &&
+          MI->getOperand(0).isReg() && MI->getOperand(1).isReg()) {
+        auto Next = std::next(MI);
+        if (Next != MBB.end() && Next->getOpcode() == I8085::MOV &&
+            Next->getNumOperands() >= 2 && Next->getOperand(0).isReg() &&
+            Next->getOperand(1).isReg()) {
+          Register D0 = MI->getOperand(0).getReg();
+          Register S0 = MI->getOperand(1).getReg();
+          Register D1 = Next->getOperand(0).getReg();
+          Register S1 = Next->getOperand(1).getReg();
+          if (((D0 == I8085::D && S0 == I8085::H &&
+                D1 == I8085::E && S1 == I8085::L) ||
+               (D0 == I8085::E && S0 == I8085::L &&
+                D1 == I8085::D && S1 == I8085::H))) {
+            CurrentDE = Current;
+            MI = std::next(Next);
+            continue;
+          }
+          if (((D0 == I8085::H && S0 == I8085::D &&
+                D1 == I8085::L && S1 == I8085::E) ||
+               (D0 == I8085::L && S0 == I8085::E &&
+                D1 == I8085::H && S1 == I8085::D))) {
+            Current = CurrentDE;
+            MI = std::next(Next);
+            continue;
+          }
+        }
+      }
+
+      // PUSH: SP -= 2, HL and DE unchanged. Adjust tracked SP-relative offsets.
+      if (MI->getOpcode() == I8085::PUSH) {
+        if (Current.isSPRelative())
+          Current.Offset += 2;
+        if (CurrentDE.isSPRelative())
+          CurrentDE.Offset += 2;
+        ++MI;
+        continue;
+      }
+
+      // POP: SP += 2. POP H/D clobbers that pair; others adjust SP offset.
       if (MI->getOpcode() == I8085::POP) {
         unsigned Reg = MI->getOperand(0).getReg();
         if (Reg == I8085::HL) {
@@ -220,40 +283,61 @@ private:
         } else if (Current.isSPRelative()) {
           Current.Offset -= 2;
         }
+        if (Reg == I8085::DE) {
+          CurrentDE = HLState();
+        } else if (CurrentDE.isSPRelative()) {
+          CurrentDE.Offset -= 2;
+        }
         ++MI;
         continue;
       }
 
-      // INX/DCX H update HL in a tracked way rather than invalidating it.
+      // INX/DCX H or D update tracked offsets rather than invalidating them.
       if (MI->getOpcode() == I8085::INX &&
           MI->getNumOperands() >= 1 &&
-          MI->getOperand(0).isReg() &&
-          MI->getOperand(0).getReg() == I8085::HL) {
-        if (Current.isTracked())
-          Current.Offset++;
-        ++MI;
-        continue;
+          MI->getOperand(0).isReg()) {
+        Register Reg = MI->getOperand(0).getReg();
+        if (Reg == I8085::HL) {
+          if (Current.isTracked())
+            Current.Offset++;
+          ++MI;
+          continue;
+        }
+        if (Reg == I8085::DE) {
+          if (CurrentDE.isTracked())
+            CurrentDE.Offset++;
+          ++MI;
+          continue;
+        }
       }
 
       if (MI->getOpcode() == I8085::DCX &&
           MI->getNumOperands() >= 1 &&
-          MI->getOperand(0).isReg() &&
-          MI->getOperand(0).getReg() == I8085::HL) {
-        if (Current.isTracked())
-          Current.Offset--;
-        ++MI;
-        continue;
+          MI->getOperand(0).isReg()) {
+        Register Reg = MI->getOperand(0).getReg();
+        if (Reg == I8085::HL) {
+          if (Current.isTracked())
+            Current.Offset--;
+          ++MI;
+          continue;
+        }
+        if (Reg == I8085::DE) {
+          if (CurrentDE.isTracked())
+            CurrentDE.Offset--;
+          ++MI;
+          continue;
+        }
       }
 
-      // Check if this instruction invalidates HL tracking
-      if (clobbersHL(*MI)) {
+      if (clobbersHL(*MI))
         Current = HLState();
-      }
+      if (clobbersDE(*MI))
+        CurrentDE = HLState();
 
       ++MI;
     }
 
-    return Current;
+    return {Current, CurrentDE};
   }
 
   bool getSymbolicLXIState(const MachineOperand &MO, HLState &State) const {
@@ -323,12 +407,16 @@ private:
   bool tryReuseHL(MachineBasicBlock &MBB, MachineBasicBlock::iterator &MI,
                   MachineBasicBlock::iterator LastToErase, HLState &Current,
                   const HLState &Target, const TargetInstrInfo *TII,
-                  bool &Changed) const {
+                  int BlockMaxDelta, bool &Changed) const {
     if (!Current.isTracked() || !(Current.Base == Target.Base))
       return false;
 
     int64_t Delta = Target.Offset - Current.Offset;
-    if (Delta < -MaxDelta || Delta > MaxDelta)
+    // Symbolic LXI H, sym is 3 bytes (delta <= 2 saves bytes, == 3 ties);
+    // SP-relative LXI H, imm ; DAD SP is 4 bytes (delta <= 3 saves bytes, == 4 ties).
+    int EffectiveMax =
+        (LastToErase->getOpcode() == I8085::DAD) ? BlockMaxDelta : MaxDelta;
+    if (Delta < -EffectiveMax || Delta > EffectiveMax)
       return false;
 
     if (LastToErase->getOpcode() == I8085::DAD) {
@@ -393,6 +481,37 @@ private:
         continue;
       Register Reg = MO.getReg();
       if (Reg == I8085::H || Reg == I8085::L || Reg == I8085::HL)
+        return true;
+    }
+
+    return false;
+  }
+
+  bool clobbersDE(const MachineInstr &MI) const {
+    unsigned Opc = MI.getOpcode();
+
+    switch (Opc) {
+    case I8085::CALL:
+    case I8085::LDHI:
+    case I8085::LDSI:
+    case I8085::RDEL:
+    case I8085::RET:
+    case I8085::SPHL:
+    case I8085::XCHG:
+      return true;
+    default:
+      break;
+    }
+
+    if (Opc == I8085::LXI && MI.getNumOperands() >= 1 &&
+        MI.getOperand(0).isReg() && MI.getOperand(0).getReg() == I8085::DE)
+      return true;
+
+    for (const MachineOperand &MO : MI.operands()) {
+      if (!MO.isReg() || !MO.isDef())
+        continue;
+      Register Reg = MO.getReg();
+      if (Reg == I8085::D || Reg == I8085::E || Reg == I8085::DE)
         return true;
     }
 

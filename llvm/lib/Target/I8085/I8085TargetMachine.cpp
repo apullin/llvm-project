@@ -57,9 +57,9 @@ I8085TargetMachine::I8085TargetMachine(const Target &T, const Triple &TT,
   this->TLOF = std::make_unique<I8085TargetObjectFile>();
   initAsmInfo();
 
-  // I8085 supports explicit MachineOutliner runs. Leave default outlining off
-  // until SP-relative fixups and benchmark coverage are mature enough for -Oz.
+  // Enable MachineOutliner by default for minsize (-Oz) functions.
   setMachineOutliner(true);
+  setSupportsDefaultOutlining(true);
 }
 
 namespace {

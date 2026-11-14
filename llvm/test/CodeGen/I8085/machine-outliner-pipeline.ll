@@ -1,4 +1,5 @@
 ; RUN: llc -mtriple=i8085-unknown-elf -enable-machine-outliner=always -verify-machineinstrs %s -o - | FileCheck %s
+; RUN: llc -mtriple=i8085-unknown-elf -verify-machineinstrs %s -o - | FileCheck %s
 
 target triple = "i8085-unknown-elf"
 
@@ -28,6 +29,5 @@ entry:
 
 ; CHECK-LABEL: OUTLINED_FUNCTION_0:
 ; CHECK: LXI H, 2
-; CHECK: ADD E
-; CHECK: XRA L
+; CHECK: DAD B
 ; CHECK: RET

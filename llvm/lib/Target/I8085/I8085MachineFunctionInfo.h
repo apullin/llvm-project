@@ -51,6 +51,8 @@ class I8085MachineFunctionInfo : public MachineFunctionInfo {
   /// When only IBX is used (no IAX), the scratch slot is only 4 bytes
   /// and IBX is remapped to offset 0 instead of its usual offset 4.
   bool IBXRemappedToZero;
+  /// Whether IAX/IBX live in shared static .bss.i8085.scratch storage.
+  bool UsesStaticGR32Scratch;
   /// FrameIndex for saved original SP when stack realignment is used.
   int StackRealignSaveFI;
   /// Indicates whether this function realigns the stack.
@@ -62,7 +64,8 @@ class I8085MachineFunctionInfo : public MachineFunctionInfo {
       : HasSpills(false), HasAllocas(false), HasStackArgs(false),
         CalleeSavedFrameSize(0), VarArgsFrameIndex(0),
         ReturnAddrFrameIndex(0), GR32ScratchFI(-1),
-        IBXRemappedToZero(false), StackRealignSaveFI(-1),
+        IBXRemappedToZero(false), UsesStaticGR32Scratch(false),
+        StackRealignSaveFI(-1),
         HasStackRealign(false) {
     CallingConv::ID CallConv = F.getCallingConv();
 
@@ -105,6 +108,9 @@ class I8085MachineFunctionInfo : public MachineFunctionInfo {
 
   bool isIBXRemappedToZero() const { return IBXRemappedToZero; }
   void setIBXRemappedToZero(bool B) { IBXRemappedToZero = B; }
+
+  bool usesStaticGR32Scratch() const { return UsesStaticGR32Scratch; }
+  void setUsesStaticGR32Scratch(bool B) { UsesStaticGR32Scratch = B; }
 
   int getStackRealignSaveFI() const { return StackRealignSaveFI; }
   void setStackRealignSaveFI(int Idx) { StackRealignSaveFI = Idx; }

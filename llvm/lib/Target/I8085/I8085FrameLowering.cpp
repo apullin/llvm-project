@@ -466,6 +466,11 @@ void I8085FrameLowering::processFunctionBeforeFrameFinalized(
   if (!UsesIAX && !UsesIBX)
     return;
 
+  if (isI8085StaticGR32Enabled() && !FuncInfo->isInterruptOrSignalHandler()) {
+    FuncInfo->setUsesStaticGR32Scratch(true);
+    return;
+  }
+
   // Allocate scratch space only for registers that are actually used.
   // IAX uses bytes 0-3, IBX uses bytes 4-7 in the full 8-byte layout.
   // When only one register is used, we save 4 bytes of stack space.

@@ -28,6 +28,10 @@
 #include "llvm/CodeGen/TargetFrameLowering.h"
 #include "llvm/CodeGen/TargetOpcodes.h"
 #include "llvm/CodeGen/TargetRegisterInfo.h"
+#include "llvm/IR/Constants.h"
+#include "llvm/IR/DerivedTypes.h"
+#include "llvm/IR/GlobalVariable.h"
+#include "llvm/IR/Module.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/ErrorHandling.h"
 #include <stdint.h>
@@ -70,6 +74,8 @@ private:
   bool HaveScratch = false;
   bool IBXRemapped = false;
   bool ScratchUsesBasePointer = false;
+  bool UsesStaticGR32 = false;
+  GlobalVariable *StaticGR32GV = nullptr;
   // Track mid-function SP adjustments (GROW_STACK_BY/SHRINK_STACK_BY for calls)
   int64_t CurrentSPAdj = 0;
   // When HL is live across a pseudo expansion, we wrap the expansion in
@@ -365,6 +371,10 @@ static bool getPairRegs(unsigned Pair, unsigned &LowReg, unsigned &HighReg) {
 
 int64_t I8085ExpandPseudo32::getScratchOffset(unsigned Reg,
                                               int ByteIndex) const {
+  if (UsesStaticGR32) {
+    int Base = (Reg == I8085::IBX) ? 4 : 0;
+    return Base + ByteIndex;
+  }
   assert(HaveScratch && "GR32 scratch not initialized");
   // IBX normally lives at base+4, but when only IBX is used the scratch
   // slot is only 4 bytes and IBX is remapped to base+0.
@@ -378,6 +388,12 @@ int64_t I8085ExpandPseudo32::getScratchOffset(unsigned Reg,
 void I8085ExpandPseudo32::emitScratchAddr(Block &MBB, BlockIt MBBI,
                                           unsigned Reg, int ByteIndex) {
   int64_t Offset = getScratchOffset(Reg, ByteIndex);
+  if (UsesStaticGR32) {
+    buildMI(MBB, MBBI, I8085::LXI)
+        .addReg(I8085::HL, RegState::Define)
+        .addGlobalAddress(StaticGR32GV, Offset);
+    return;
+  }
   buildMI(MBB, MBBI, I8085::LXI)
       .addReg(I8085::HL, RegState::Define)
       .addImm(Offset);
@@ -388,6 +404,12 @@ void I8085ExpandPseudo32::emitScratchAddr(Block &MBB, BlockIt MBBI,
 void I8085ExpandPseudo32::emitScratchAddr(Block &MBB, const DebugLoc &DL,
                                           unsigned Reg, int ByteIndex) {
   int64_t Offset = getScratchOffset(Reg, ByteIndex);
+  if (UsesStaticGR32) {
+    BuildMI(&MBB, DL, TII->get(I8085::LXI))
+        .addReg(I8085::HL, RegState::Define)
+        .addGlobalAddress(StaticGR32GV, Offset);
+    return;
+  }
   BuildMI(&MBB, DL, TII->get(I8085::LXI))
       .addReg(I8085::HL, RegState::Define)
       .addImm(Offset);
@@ -398,6 +420,11 @@ void I8085ExpandPseudo32::emitScratchAddr(Block &MBB, const DebugLoc &DL,
 void I8085ExpandPseudo32::emitScratchLoad(Block &MBB, BlockIt MBBI,
                                           unsigned Reg, int ByteIndex,
                                           unsigned DestReg) {
+  if (UsesStaticGR32 && DestReg == I8085::A) {
+    buildMI(MBB, MBBI, I8085::LDA)
+        .addGlobalAddress(StaticGR32GV, getScratchOffset(Reg, ByteIndex));
+    return;
+  }
   emitScratchAddr(MBB, MBBI, Reg, ByteIndex);
   buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(DestReg, RegState::Define);
 }
@@ -405,6 +432,11 @@ void I8085ExpandPseudo32::emitScratchLoad(Block &MBB, BlockIt MBBI,
 void I8085ExpandPseudo32::emitScratchLoad(Block &MBB, const DebugLoc &DL,
                                           unsigned Reg, int ByteIndex,
                                           unsigned DestReg) {
+  if (UsesStaticGR32 && DestReg == I8085::A) {
+    BuildMI(&MBB, DL, TII->get(I8085::LDA))
+        .addGlobalAddress(StaticGR32GV, getScratchOffset(Reg, ByteIndex));
+    return;
+  }
   emitScratchAddr(MBB, DL, Reg, ByteIndex);
   BuildMI(&MBB, DL, TII->get(I8085::MOV_FROM_M))
       .addReg(DestReg, RegState::Define);
@@ -413,6 +445,11 @@ void I8085ExpandPseudo32::emitScratchLoad(Block &MBB, const DebugLoc &DL,
 void I8085ExpandPseudo32::emitScratchStore(Block &MBB, BlockIt MBBI,
                                            unsigned Reg, int ByteIndex,
                                            unsigned SrcReg) {
+  if (UsesStaticGR32 && SrcReg == I8085::A) {
+    buildMI(MBB, MBBI, I8085::STA)
+        .addGlobalAddress(StaticGR32GV, getScratchOffset(Reg, ByteIndex));
+    return;
+  }
   emitScratchAddr(MBB, MBBI, Reg, ByteIndex);
   buildMI(MBB, MBBI, I8085::MOV_M).addReg(SrcReg);
 }
@@ -561,10 +598,29 @@ bool I8085ExpandPseudo32::runOnMachineFunction(MachineFunction &MF) {
   ScratchBaseOffset = 0;
   HaveScratch = false;
   IBXRemapped = false;
+  UsesStaticGR32 = false;
+  StaticGR32GV = nullptr;
   ScratchUsesBasePointer = MF.getFrameInfo().hasVarSizedObjects();
   ScratchFI = AFI->getGR32ScratchFI();
   IBXRemapped = AFI->isIBXRemappedToZero();
-  if (ScratchFI >= 0) {
+  if (AFI->usesStaticGR32Scratch() ||
+      (ScratchFI < 0 && isI8085StaticGR32Enabled() &&
+       !AFI->isInterruptOrSignalHandler())) {
+    Module *M = const_cast<Module *>(MF.getFunction().getParent());
+    LLVMContext &Ctx = M->getContext();
+    auto *ArrTy = ArrayType::get(Type::getInt8Ty(Ctx), 8);
+    StaticGR32GV = M->getNamedGlobal("__i8085_vreg_gr32");
+    if (!StaticGR32GV) {
+      StaticGR32GV = new GlobalVariable(
+          *M, ArrTy, false, GlobalValue::LinkOnceODRLinkage,
+          Constant::getNullValue(ArrTy), "__i8085_vreg_gr32");
+      StaticGR32GV->setVisibility(GlobalValue::HiddenVisibility);
+      StaticGR32GV->setAlignment(Align(1));
+      StaticGR32GV->setSection(".bss.i8085.scratch");
+    }
+    UsesStaticGR32 = true;
+    HaveScratch = true;
+  } else if (ScratchFI >= 0) {
     const MachineFrameInfo &MFI = MF.getFrameInfo();
     const TargetFrameLowering *TFI = STI.getFrameLowering();
     ScratchBaseOffset = MFI.getObjectOffset(ScratchFI) +
@@ -691,6 +747,15 @@ bool I8085ExpandPseudo32::tryForwardBCDE(Block &MBB, BlockIt MBBI,
   }
   if (NextOpc == I8085::STORE_32_AT_OFFSET_WITH_SP) {
     if (NextPseudo->getOperand(0).getReg() != destReg)
+      return false;
+    if (!isGR32DeadAfter(MBB, NextMBBI, destReg) ||
+        !areBCDEDeadAfter(MBB, NextMBBI))
+      return false;
+    BCDEForwarded[NextPseudo] = destReg;
+    return true;
+  }
+  if (NextOpc == I8085::STORE_32_STATIC_ADDR) {
+    if (NextPseudo->getOperand(1).getReg() != destReg)
       return false;
     if (!isGR32DeadAfter(MBB, NextMBBI, destReg) ||
         !areBCDEDeadAfter(MBB, NextMBBI))
@@ -1698,6 +1763,20 @@ template <> bool I8085ExpandPseudo32::expand<I8085::PACK_BCDE_TO_32>(Block &MBB,
       RestoreBase->getOpcode() == I8085::RESTORE_VLA_BASE_AFTER_PACK;
 
   if (MustRestoreBase) {
+    if (UsesStaticGR32) {
+      emitScratchAddr(MBB, MBBI, destReg, 0);
+      buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::C);
+      emitScratchAdvance(MBB, MBBI, 1);
+      buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::B);
+      emitScratchAdvance(MBB, MBBI, 1);
+      buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::E);
+      emitScratchAdvance(MBB, MBBI, 1);
+      buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::D);
+      buildMI(MBB, MBBI, I8085::POP).addReg(I8085::DE, RegState::Define);
+      RestoreBase->eraseFromParent();
+      MI.eraseFromParent();
+      return true;
+    }
     // DE holds the high result word while the stack top holds the saved base.
     // Keep a stack copy of the base while HL addresses fixed GR32 scratch.
     buildMI(MBB, MBBI, I8085::POP).addReg(I8085::HL, RegState::Define);
@@ -2630,6 +2709,80 @@ template <> bool I8085ExpandPseudo32::expand<I8085::STORE_32_AT_OFFSET_WITH_SP>(
 }
 
 
+template <> bool I8085ExpandPseudo32::expand<I8085::STORE_32_STATIC_ADDR>(Block &MBB, BlockIt MBBI) {
+  MachineInstr &MI = *MBBI;
+
+  const MachineOperand &AddrMO = MI.getOperand(0);
+  unsigned srcReg = MI.getOperand(1).getReg();
+
+  auto FwdIt = BCDEForwarded.find(&MI);
+  bool Forwarded = (FwdIt != BCDEForwarded.end() && FwdIt->second == srcReg);
+  if (Forwarded)
+    BCDEForwarded.erase(FwdIt);
+  bool CanBatch = Forwarded || areBCDEDeadAfter(MBB, MBBI);
+
+  if (CanBatch) {
+    if (!Forwarded) {
+      emitScratchAddr(MBB, MBBI, srcReg, 0);
+      buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::B, RegState::Define);
+      emitScratchAdvance(MBB, MBBI, 1);
+      buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::C, RegState::Define);
+      emitScratchAdvance(MBB, MBBI, 1);
+      buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::D, RegState::Define);
+      emitScratchAdvance(MBB, MBBI, 1);
+      buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(I8085::E, RegState::Define);
+    }
+
+    {
+      MachineInstrBuilder Addr =
+          buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL, RegState::Define);
+      addAddrOperand(Addr, AddrMO, 0);
+    }
+    buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::B);
+    emitScratchAdvance(MBB, MBBI, 1);
+    buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::C);
+    emitScratchAdvance(MBB, MBBI, 1);
+    buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::D);
+    emitScratchAdvance(MBB, MBBI, 1);
+    buildMI(MBB, MBBI, I8085::MOV_M).addReg(I8085::E);
+  } else {
+    unsigned Pair = I8085::BC, R0 = I8085::C, R1 = I8085::B;
+    bool NeedSave = false;
+    if (isDEDeadAfter(MBB, MBBI)) {
+      Pair = I8085::DE;
+      R0 = I8085::E;
+      R1 = I8085::D;
+    } else if (!isBCDeadAfter(MBB, MBBI)) {
+      NeedSave = true;
+    }
+    if (NeedSave) {
+      buildMI(MBB, MBBI, I8085::PUSH).addReg(Pair);
+      HLSaveBias += 2;
+    }
+    for (int half = 0; half < 4; half += 2) {
+      emitScratchAddr(MBB, MBBI, srcReg, half);
+      buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(R0, RegState::Define);
+      emitScratchAdvance(MBB, MBBI, 1);
+      buildMI(MBB, MBBI, I8085::MOV_FROM_M).addReg(R1, RegState::Define);
+      {
+        MachineInstrBuilder Addr =
+            buildMI(MBB, MBBI, I8085::LXI).addReg(I8085::HL, RegState::Define);
+        addAddrOperand(Addr, AddrMO, half);
+      }
+      buildMI(MBB, MBBI, I8085::MOV_M).addReg(R0);
+      emitScratchAdvance(MBB, MBBI, 1);
+      buildMI(MBB, MBBI, I8085::MOV_M).addReg(R1);
+    }
+    if (NeedSave) {
+      HLSaveBias -= 2;
+      buildMI(MBB, MBBI, I8085::POP).addReg(Pair, RegState::Define);
+    }
+  }
+
+  MI.eraseFromParent();
+  return true;
+}
+
 template <> bool I8085ExpandPseudo32::expand<I8085::LOAD_32_OFFSET_WITH_SP>(Block &MBB, BlockIt MBBI) {
   MachineInstr &MI = *MBBI;
 
@@ -2967,6 +3120,7 @@ bool I8085ExpandPseudo32::expandMI(Block &MBB, BlockIt MBBI) {
     EXPAND(I8085::ZEXT8TO32);
     EXPAND(I8085::LOAD_32_OFFSET_WITH_SP);
     EXPAND(I8085::STORE_32_AT_OFFSET_WITH_SP);
+    EXPAND(I8085::STORE_32_STATIC_ADDR);
     EXPAND(I8085::STORE_32_ADDR_CONTENT);
     EXPAND(I8085::JMP_32_IF_POSITIVE);
     EXPAND(I8085::JMP_32_IF_SAME_SIGN);

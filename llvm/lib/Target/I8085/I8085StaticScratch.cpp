@@ -6,24 +6,30 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// Redirect selected spill stack slots to private absolute RAM symbols in a
-// dedicated .bss.i8085.scratch section.
+// Redirect selected 8-bit, 16-bit, and 32-bit spill stack slots to static RAM
+// symbols in .bss.i8085.scratch.
 //
-// This is a conservative prototype for CP/M-style fixed workspace locations.
-// It is gated behind -i8085-static-scratch-bytes=N and currently handles 8-bit
-// and 16-bit spill slots.  The scratch pseudos preserve HL during late
-// expansion when it is live, matching the safety contract of normal stack
-// pseudos.
+// Supports three storage modes:
+//   1. Per-function private globals (default with -i8085-static-scratch-bytes=N)
+//   2. Canonical shared non-call-live virtual register pool (@__i8085_vreg_spill,
+//      via -i8085-static-scratch-share or -i8085-scratchpad): all non-call-live
+//      spills across the program share O(1) static RAM and emit identical symbol
+//      references that MachineOutliner can deduplicate across functions.
+//   3. Automatic closed-call-cone depth overlay (@__i8085_vreg_overlay_d<k>,
+//      via -i8085-static-scratch-overlay or -i8085-scratchpad): functions whose
+//      transitive call cone is exact, internal to the module, and acyclic get
+//      call-live spills overlaid by call-DAG height (caller depth > callee depth,
+//      so active frames never alias).
 //
-// By default, a slot is converted only when its value is not live across a
-// call.  Wider use requires an explicit nonreentrant contract, either via the
-// "i8085-nonreentrant" function attribute, a function-name option, or the
-// module-wide option below.
+// Combined with -i8085-static-gr32 (enabled under -i8085-scratchpad), the 32-bit
+// IAX/IBX pseudo-registers also reside in shared 8-byte .bss.i8085.scratch RAM.
+// Interrupt/signal handlers are automatically excluded unless explicitly named.
 //
 //===----------------------------------------------------------------------===//
 
 #include "I8085.h"
 #include "I8085InstrInfo.h"
+#include "I8085MachineFunctionInfo.h"
 #include "MCTargetDesc/I8085MCTargetDesc.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/STLExtras.h"
@@ -36,12 +42,14 @@
 #include "llvm/IR/DerivedTypes.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/GlobalVariable.h"
+#include "llvm/IR/InlineAsm.h"
 #include "llvm/IR/InstIterator.h"
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/Module.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Target/TargetMachine.h"
+#include <algorithm>
 #include <limits>
 #include <tuple>
 
@@ -49,10 +57,35 @@ using namespace llvm;
 
 #define I8085_STATIC_SCRATCH_NAME "I8085 static scratch spill pass"
 
+static cl::opt<bool> I8085Scratchpad(
+    "i8085-scratchpad", cl::Hidden, cl::init(false),
+    cl::desc("Enable shared static GR32 registers, shared non-call-live spill "
+             "pool, and closed-call-cone overlaid call-live spills for "
+             "single-threaded i8085 firmware"));
+
+static cl::opt<bool> I8085StaticGR32(
+    "i8085-static-gr32", cl::Hidden, cl::init(false),
+    cl::desc("Place 32-bit IAX/IBX pseudo-registers in shared 8-byte static "
+             ".bss.i8085.scratch RAM instead of per-function stack frames"));
+
 static cl::opt<unsigned> I8085StaticScratchBytes(
     "i8085-static-scratch-bytes", cl::Hidden, cl::init(0),
-    cl::desc("Maximum bytes of private static RAM to use per function for "
+    cl::desc("Maximum bytes of static RAM to use per function for "
              "i8085 spill slots"));
+
+static cl::opt<bool> I8085StaticScratchShare(
+    "i8085-static-scratch-share", cl::Hidden, cl::init(false),
+    cl::desc("Share one canonical static virtual-register pool across "
+             "functions for non-call-live spill slots"));
+
+static cl::opt<bool> I8085StaticScratchOverlay(
+    "i8085-static-scratch-overlay", cl::Hidden, cl::init(false),
+    cl::desc("Overlay call-live spill slots by call-DAG height for functions "
+             "with a closed, acyclic module call cone"));
+
+static cl::opt<bool> I8085StaticScratchI32(
+    "i8085-static-scratch-i32", cl::Hidden, cl::init(true),
+    cl::desc("Allow converting 32-bit (4-byte) spill slots to static scratch"));
 
 static cl::opt<bool> I8085StaticScratchUnsafeRecursive(
     "i8085-static-scratch-unsafe-recursive", cl::Hidden, cl::init(false),
@@ -94,7 +127,13 @@ static cl::opt<bool> I8085StaticScratchDump(
     "i8085-static-scratch-dump", cl::Hidden, cl::init(false),
     cl::desc("Dump i8085 static scratch frame-object conversions"));
 
+bool llvm::isI8085StaticGR32Enabled() {
+  return I8085StaticGR32 || I8085Scratchpad;
+}
+
 namespace {
+
+static constexpr unsigned SharedPoolBytes = 32;
 
 struct SlotInfo {
   unsigned Size = 0;
@@ -119,16 +158,24 @@ public:
 private:
   const TargetInstrInfo *TII = nullptr;
   DenseMap<const Function *, bool> DirectRecursiveSCC;
+  DenseMap<const Function *, int> ClosedConeDepthCache;
 
   bool isSupportedAccess(const MachineInstr &MI, int &FrameIndex) const;
   bool isInDirectRecursiveSCC(const Function &F);
+  int getClosedAcyclicCallConeDepth(const Function &F,
+                                    SmallPtrSetImpl<const Function *> &Active);
   bool mayBeLiveAcrossCall(const MachineFunction &MF, int FrameIndex) const;
   bool hasNonReentrantContract(const MachineFunction &MF) const;
   void dumpConversion(const MachineFunction &MF, int FrameIndex,
-                      const SlotInfo &Info, const GlobalVariable &GV) const;
-  GlobalVariable *createScratchGlobal(MachineFunction &MF, int FrameIndex,
-                                      unsigned Size) const;
-  bool rewriteAccess(MachineInstr &MI, GlobalVariable *GV) const;
+                      const SlotInfo &Info, const GlobalVariable &GV,
+                      int64_t Offset) const;
+  GlobalVariable *createPrivateScratchGlobal(MachineFunction &MF,
+                                             int FrameIndex,
+                                             unsigned Size) const;
+  GlobalVariable *getOrCreateSharedPool(Module &M, StringRef Name,
+                                        unsigned PoolSize) const;
+  bool rewriteAccess(MachineInstr &MI, GlobalVariable *GV,
+                     int64_t Offset) const;
 };
 
 } // end anonymous namespace
@@ -143,6 +190,7 @@ bool I8085StaticScratch::isSupportedAccess(const MachineInstr &MI,
   switch (MI.getOpcode()) {
   case I8085::LOAD_8_WITH_ADDR:
   case I8085::LOAD_16_WITH_ADDR:
+  case I8085::LOAD_32_WITH_ADDR:
     if (MI.getOperand(1).isFI() && MI.getOperand(2).isImm() &&
         MI.getOperand(2).getImm() == 0 &&
         MI.getOperand(0).getReg() != I8085::SP) {
@@ -152,6 +200,7 @@ bool I8085StaticScratch::isSupportedAccess(const MachineInstr &MI,
     return false;
   case I8085::STORE_8:
   case I8085::STORE_16:
+  case I8085::STORE_32:
     if (MI.getOperand(0).isFI() && MI.getOperand(1).isImm() &&
         MI.getOperand(1).getImm() == 0 &&
         MI.getOperand(2).getReg() != I8085::SP) {
@@ -207,6 +256,60 @@ bool I8085StaticScratch::isInDirectRecursiveSCC(const Function &F) {
   return DirectRecursiveSCC[&F] = false;
 }
 
+// Compute the call-DAG height >= 0 if F's entire transitive call cone consists
+// of exact definitions in this Module with no cycles and no indirect calls;
+// return -1 otherwise. Note: compiler-emitted arithmetic/memory libcalls (such
+// as __mul16, __udiv32, __addsf3, memcpy, memset) do not exist as IR CallBase
+// instructions unless explicitly called in IR, and never call back into user C
+// functions!
+int I8085StaticScratch::getClosedAcyclicCallConeDepth(
+    const Function &F, SmallPtrSetImpl<const Function *> &Active) {
+  auto Cached = ClosedConeDepthCache.find(&F);
+  if (Cached != ClosedConeDepthCache.end())
+    return Cached->second;
+
+  if (F.isDeclaration() || !F.hasExactDefinition())
+    return -1;
+  if (!Active.insert(&F).second)
+    return -1; // Cycle detected!
+
+  int MaxChildDepth = -1;
+  for (const Instruction &I : instructions(F)) {
+    const auto *CB = dyn_cast<CallBase>(&I);
+    if (!CB)
+      continue;
+    if (CB->isInlineAsm())
+      continue;
+    const Function *Callee = getDirectCallee(I);
+    if (!Callee) {
+      Active.erase(&F);
+      return ClosedConeDepthCache[&F] = -1; // Indirect call!
+    }
+    if (Callee->isIntrinsic())
+      continue;
+    // Allow pure SDK runtime helpers that never call back into user functions.
+    StringRef Name = Callee->getName();
+    if (Callee->isDeclaration() &&
+        (Name == "memcpy" || Name == "memset" || Name == "memmove" ||
+         Name == "memcmp" || Name == "memchr" || Name == "strlen" ||
+         Name == "strcmp" || Name == "strncmp" || Name == "strchr" ||
+         Name == "strrchr")) {
+      MaxChildDepth = std::max(MaxChildDepth, 0);
+      continue;
+    }
+    int ChildDepth = getClosedAcyclicCallConeDepth(*Callee, Active);
+    if (ChildDepth < 0) {
+      Active.erase(&F);
+      return ClosedConeDepthCache[&F] = -1;
+    }
+    MaxChildDepth = std::max(MaxChildDepth, ChildDepth);
+  }
+
+  Active.erase(&F);
+  int Depth = (MaxChildDepth < 0) ? 0 : (MaxChildDepth + 1);
+  return ClosedConeDepthCache[&F] = Depth;
+}
+
 bool I8085StaticScratch::mayBeLiveAcrossCall(const MachineFunction &MF,
                                              int FrameIndex) const {
   DenseMap<const MachineBasicBlock *, bool> LiveIn;
@@ -238,10 +341,12 @@ bool I8085StaticScratch::mayBeLiveAcrossCall(const MachineFunction &MF,
           switch (MI.getOpcode()) {
           case I8085::STORE_8:
           case I8085::STORE_16:
+          case I8085::STORE_32:
             Live = false;
             break;
           case I8085::LOAD_8_WITH_ADDR:
           case I8085::LOAD_16_WITH_ADDR:
+          case I8085::LOAD_32_WITH_ADDR:
             Live = true;
             break;
           default:
@@ -277,7 +382,8 @@ bool I8085StaticScratch::hasNonReentrantContract(
 
 void I8085StaticScratch::dumpConversion(const MachineFunction &MF,
                                         int FrameIndex, const SlotInfo &Info,
-                                        const GlobalVariable &GV) const {
+                                        const GlobalVariable &GV,
+                                        int64_t Offset) const {
   const MachineFrameInfo &MFI = MF.getFrameInfo();
   errs() << "i8085-static-scratch: function=" << MF.getName()
          << " frame-index=" << FrameIndex << " size=" << Info.Size
@@ -289,12 +395,12 @@ void I8085StaticScratch::dumpConversion(const MachineFunction &MF,
          << " stack-id=" << unsigned(MFI.getStackID(FrameIndex))
          << " has-calls=" << MFI.hasCalls()
          << " live-across-call=" << Info.LiveAcrossCall
-         << " symbol=" << GV.getName() << " address=<linker-assigned>\n";
+         << " symbol=" << GV.getName() << "+" << Offset
+         << " address=<linker-assigned>\n";
 }
 
-GlobalVariable *I8085StaticScratch::createScratchGlobal(MachineFunction &MF,
-                                                        int FrameIndex,
-                                                        unsigned Size) const {
+GlobalVariable *I8085StaticScratch::createPrivateScratchGlobal(
+    MachineFunction &MF, int FrameIndex, unsigned Size) const {
   Module *M = const_cast<Module *>(MF.getFunction().getParent());
   LLVMContext &Ctx = M->getContext();
   auto *Ty = ArrayType::get(Type::getInt8Ty(Ctx), Size);
@@ -308,8 +414,22 @@ GlobalVariable *I8085StaticScratch::createScratchGlobal(MachineFunction &MF,
   return GV;
 }
 
-bool I8085StaticScratch::rewriteAccess(MachineInstr &MI,
-                                       GlobalVariable *GV) const {
+GlobalVariable *I8085StaticScratch::getOrCreateSharedPool(
+    Module &M, StringRef Name, unsigned PoolSize) const {
+  if (GlobalVariable *Existing = M.getNamedGlobal(Name))
+    return Existing;
+  LLVMContext &Ctx = M.getContext();
+  auto *Ty = ArrayType::get(Type::getInt8Ty(Ctx), PoolSize);
+  auto *GV = new GlobalVariable(M, Ty, false, GlobalValue::LinkOnceODRLinkage,
+                                Constant::getNullValue(Ty), Name);
+  GV->setVisibility(GlobalValue::HiddenVisibility);
+  GV->setAlignment(Align(1));
+  GV->setSection(".bss.i8085.scratch");
+  return GV;
+}
+
+bool I8085StaticScratch::rewriteAccess(MachineInstr &MI, GlobalVariable *GV,
+                                       int64_t Offset) const {
   MachineBasicBlock &MBB = *MI.getParent();
   DebugLoc DL = MI.getDebugLoc();
   MachineBasicBlock::iterator InsertPt(MI);
@@ -319,7 +439,7 @@ bool I8085StaticScratch::rewriteAccess(MachineInstr &MI,
     Register Dst = MI.getOperand(0).getReg();
     MachineInstrBuilder MIB =
         BuildMI(MBB, InsertPt, DL, TII->get(I8085::LOAD_8_STATIC_ADDR), Dst)
-            .addGlobalAddress(GV);
+            .addGlobalAddress(GV, Offset);
     if (MI.getOperand(0).isDead())
       MIB->getOperand(0).setIsDead();
     MIB.cloneMemRefs(MI);
@@ -330,7 +450,18 @@ bool I8085StaticScratch::rewriteAccess(MachineInstr &MI,
     Register Dst = MI.getOperand(0).getReg();
     MachineInstrBuilder MIB =
         BuildMI(MBB, InsertPt, DL, TII->get(I8085::LOAD_16_STATIC_ADDR), Dst)
-            .addGlobalAddress(GV);
+            .addGlobalAddress(GV, Offset);
+    if (MI.getOperand(0).isDead())
+      MIB->getOperand(0).setIsDead();
+    MIB.cloneMemRefs(MI);
+    MI.eraseFromParent();
+    return true;
+  }
+  case I8085::LOAD_32_WITH_ADDR: {
+    Register Dst = MI.getOperand(0).getReg();
+    MachineInstrBuilder MIB =
+        BuildMI(MBB, InsertPt, DL, TII->get(I8085::LOAD_32_WITH_IMM_ADDR), Dst)
+            .addGlobalAddress(GV, Offset);
     if (MI.getOperand(0).isDead())
       MIB->getOperand(0).setIsDead();
     MIB.cloneMemRefs(MI);
@@ -341,7 +472,7 @@ bool I8085StaticScratch::rewriteAccess(MachineInstr &MI,
     const MachineOperand &Src = MI.getOperand(2);
     MachineInstrBuilder MIB =
         BuildMI(MBB, InsertPt, DL, TII->get(I8085::STORE_8_STATIC_ADDR))
-            .addGlobalAddress(GV)
+            .addGlobalAddress(GV, Offset)
             .addReg(Src.getReg(), getKillRegState(Src.isKill()));
     MIB.cloneMemRefs(MI);
     MI.eraseFromParent();
@@ -351,7 +482,17 @@ bool I8085StaticScratch::rewriteAccess(MachineInstr &MI,
     const MachineOperand &Src = MI.getOperand(2);
     MachineInstrBuilder MIB =
         BuildMI(MBB, InsertPt, DL, TII->get(I8085::STORE_16_STATIC_ADDR))
-            .addGlobalAddress(GV)
+            .addGlobalAddress(GV, Offset)
+            .addReg(Src.getReg(), getKillRegState(Src.isKill()));
+    MIB.cloneMemRefs(MI);
+    MI.eraseFromParent();
+    return true;
+  }
+  case I8085::STORE_32: {
+    const MachineOperand &Src = MI.getOperand(2);
+    MachineInstrBuilder MIB =
+        BuildMI(MBB, InsertPt, DL, TII->get(I8085::STORE_32_STATIC_ADDR))
+            .addGlobalAddress(GV, Offset)
             .addReg(Src.getReg(), getKillRegState(Src.isKill()));
     MIB.cloneMemRefs(MI);
     MI.eraseFromParent();
@@ -363,19 +504,35 @@ bool I8085StaticScratch::rewriteAccess(MachineInstr &MI,
 }
 
 bool I8085StaticScratch::runOnMachineFunction(MachineFunction &MF) {
-  if (I8085StaticScratchBytes == 0)
+  const unsigned EffectiveBudget =
+      (I8085StaticScratchBytes > 0)
+          ? unsigned(I8085StaticScratchBytes)
+          : (I8085Scratchpad ? 32u : 0u);
+  if (EffectiveBudget == 0)
     return false;
-  if (!I8085StaticScratchOnlyFunctions.empty() &&
-      !llvm::is_contained(I8085StaticScratchOnlyFunctions, MF.getName()))
+
+  const bool ExplicitlySelected =
+      !I8085StaticScratchOnlyFunctions.empty() &&
+      llvm::is_contained(I8085StaticScratchOnlyFunctions, MF.getName());
+  if (!I8085StaticScratchOnlyFunctions.empty() && !ExplicitlySelected)
     return false;
   if (llvm::is_contained(I8085StaticScratchSkipFunctions, MF.getName()))
     return false;
   if (MF.getTarget().getOptLevel() == CodeGenOptLevel::None)
     return false;
 
+  auto *FuncInfo = MF.getInfo<I8085MachineFunctionInfo>();
+  if (FuncInfo->isInterruptOrSignalHandler() && !ExplicitlySelected)
+    return false;
+
+  const bool ShareNonCallPool = I8085StaticScratchShare || I8085Scratchpad;
+  const bool EnableOverlay = I8085StaticScratchOverlay || I8085Scratchpad;
+  const bool AllowI32 = I8085StaticScratchI32;
+
   const auto &ST = MF.getSubtarget();
   TII = ST.getInstrInfo();
   MachineFrameInfo &MFI = MF.getFrameInfo();
+  Module &Mod = *const_cast<Module *>(MF.getFunction().getParent());
 
   DenseMap<int, SlotInfo> Slots;
 
@@ -387,8 +544,9 @@ bool I8085StaticScratch::runOnMachineFunction(MachineFunction &MF) {
         Info.Accesses++;
         Info.Instrs.push_back(&MI);
         Info.Size = MFI.getObjectSize(FI);
-        if (!MFI.isSpillSlotObjectIndex(FI) ||
-            (Info.Size != 1 && Info.Size != 2))
+        const bool SizeOK =
+            (Info.Size == 1 || Info.Size == 2 || (AllowI32 && Info.Size == 4));
+        if (!MFI.isSpillSlotObjectIndex(FI) || !SizeOK)
           Info.Supported = false;
         continue;
       }
@@ -419,7 +577,18 @@ bool I8085StaticScratch::runOnMachineFunction(MachineFunction &MF) {
     return std::tie(LA.Accesses, A) > std::tie(LB.Accesses, B);
   });
 
+  int ConeDepth = -2; // -2 = uncomputed
+  auto getConeDepth = [&]() -> int {
+    if (ConeDepth == -2) {
+      SmallPtrSet<const Function *, 16> Active;
+      ConeDepth = getClosedAcyclicCallConeDepth(MF.getFunction(), Active);
+    }
+    return ConeDepth;
+  };
+
   unsigned UsedBytes = 0;
+  unsigned SharedCursor = 0;
+  unsigned OverlayCursor = 0;
   bool Changed = false;
   bool CheckedDirectRecursive = false;
   bool IsDirectRecursive = false;
@@ -428,29 +597,64 @@ bool I8085StaticScratch::runOnMachineFunction(MachineFunction &MF) {
     if (I8085StaticScratchOnlyFrameIndex != std::numeric_limits<int>::min() &&
         FI != I8085StaticScratchOnlyFrameIndex)
       continue;
-    if (Info.LiveAcrossCall) {
-      const bool HasNonReentrantContract = hasNonReentrantContract(MF);
-      if (!HasNonReentrantContract && !I8085StaticScratchUnsafeRecursive)
-        continue;
-      if (!I8085StaticScratchAllowKnownRecursive) {
-        if (!CheckedDirectRecursive) {
-          IsDirectRecursive = isInDirectRecursiveSCC(MF.getFunction());
-          CheckedDirectRecursive = true;
-        }
-        if (IsDirectRecursive)
-          continue;
-      }
-    }
-    if (UsedBytes + Info.Size > I8085StaticScratchBytes)
+    if (UsedBytes + Info.Size > EffectiveBudget)
       continue;
 
-    GlobalVariable *GV = createScratchGlobal(MF, FI, Info.Size);
+    GlobalVariable *GV = nullptr;
+    int64_t Offset = 0;
+
+    if (Info.LiveAcrossCall) {
+      const bool HasNonReentrantContract = hasNonReentrantContract(MF);
+      int Depth = EnableOverlay ? getConeDepth() : -1;
+      if (Depth > 0 && Depth <= 12 &&
+          OverlayCursor + Info.Size <= SharedPoolBytes) {
+        std::string PoolName =
+            ("__i8085_vreg_overlay_d" + Twine(Depth)).str();
+        GV = getOrCreateSharedPool(Mod, PoolName, SharedPoolBytes);
+        Offset = OverlayCursor;
+        OverlayCursor += Info.Size;
+      } else {
+        if (!HasNonReentrantContract && !I8085StaticScratchUnsafeRecursive)
+          continue;
+        if (!I8085StaticScratchAllowKnownRecursive) {
+          if (!CheckedDirectRecursive) {
+            IsDirectRecursive = isInDirectRecursiveSCC(MF.getFunction());
+            CheckedDirectRecursive = true;
+          }
+          if (IsDirectRecursive)
+            continue;
+        }
+        GV = createPrivateScratchGlobal(MF, FI, Info.Size);
+      }
+    } else if (ShareNonCallPool &&
+               SharedCursor + Info.Size <= SharedPoolBytes) {
+      GV = getOrCreateSharedPool(Mod, "__i8085_vreg_spill", SharedPoolBytes);
+      Offset = SharedCursor;
+      SharedCursor += Info.Size;
+    } else {
+      GV = createPrivateScratchGlobal(MF, FI, Info.Size);
+    }
+
     if (I8085StaticScratchDump)
-      dumpConversion(MF, FI, Info, *GV);
+      dumpConversion(MF, FI, Info, *GV, Offset);
     for (MachineInstr *MI : Info.Instrs)
-      Changed |= rewriteAccess(*MI, GV);
+      Changed |= rewriteAccess(*MI, GV, Offset);
     MFI.RemoveStackObject(FI);
     UsedBytes += Info.Size;
+  }
+
+  // If every non-fixed stack object has been converted and removed, clear
+  // HasSpills so leaf functions omit frame setup/teardown completely.
+  if (Changed && !FuncInfo->hasStackRealign() && !FuncInfo->hasGR32ScratchFI()) {
+    bool AnyLiveStackObj = false;
+    for (int I = 0, E = MFI.getObjectIndexEnd(); I < E; ++I) {
+      if (!MFI.isDeadObjectIndex(I)) {
+        AnyLiveStackObj = true;
+        break;
+      }
+    }
+    if (!AnyLiveStackObj)
+      FuncInfo->setHasSpills(false);
   }
 
   return Changed;

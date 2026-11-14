@@ -39,6 +39,7 @@ FunctionPass *createI8085BranchSelectionPass();
 FunctionPass *createI8085SelectToBranchPass();
 FunctionPass *createI8085HLTrackingPass();
 FunctionPass *createI8085StaticScratchPass();
+bool isI8085StaticGR32Enabled();
 
 void initializeI8085ExpandPseudoPass(PassRegistry &);
 void initializeI8085ExpandPseudo32Pass(PassRegistry &);

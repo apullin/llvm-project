@@ -11,6 +11,31 @@ Enable it with:
 -mllvm -i8085-static-scratch-bytes=N
 ```
 
+For single-threaded bare-metal applications and benchmarks, the umbrella flag:
+
+```sh
+-mllvm -i8085-scratchpad
+```
+
+enables all three cooperative static-RAM mechanisms together:
+
+1. **`-i8085-static-gr32`**: places the 32-bit `IAX`/`IBX` pseudo-registers in a
+   shared 8-byte `.bss.i8085.scratch` bank (`__i8085_vreg_gr32`), eliminating
+   per-function `GR32` stack frames and `DAD SP` address computations (safe even
+   across synchronous recursion because `IAX`/`IBX` are call-clobbered).
+2. **`-i8085-static-scratch-share`**: packs non-call-live 8/16/32-bit spill
+   slots across functions into one canonical 32-byte pool (`__i8085_vreg_spill`),
+   bounding RAM to $O(1)$ and exposing identical symbol references to the
+   MachineOutliner.
+3. **`-i8085-static-scratch-overlay`**: automatically analyzes the module's call
+   graph and overlays call-live 8/16/32-bit spill slots by call-DAG height
+   (`__i8085_vreg_overlay_d1`, `d2`, ...) for functions whose transitive call
+   cone is closed within the module and acyclic, while automatically keeping
+   recursive or externally-escaping call-live state on the stack.
+
+Functions marked `"interrupt"` or `"signal"` are automatically excluded unless
+explicitly targeted with `-i8085-static-scratch-only-function`.
+
 The pass emits one private global per converted frame object. Those globals are
 placed in `.bss.i8085.scratch`, a target-specific BSS subsection. Linker scripts
 that already collect `.bss*` will normally place the scratch storage with other

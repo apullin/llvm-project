@@ -149,6 +149,11 @@ def STORE_32 : I8085Pseudo<(outs),
 def STORE_32_AT_OFFSET_WITH_SP : I8085Pseudo<(outs),
                        (ins GR32: $src, I8085Imm16: $offset),
                        "STORE_32_SP_AT_OFFSET\t$offset, $src", [(store i32: $src, imm: $offset)]>;
+
+let mayStore = 1 in
+def STORE_32_STATIC_ADDR : I8085Pseudo<(outs),
+                       (ins imm16Addr: $addr, GR32: $src),
+                       "STORE_32_STATIC_ADDR $addr, $src", []>;
 }
 // LOAD_32_ADDR_CONTENT may clobber BC when the source address is in HL,
 // since BC is used to preserve the address during scratch store operations.

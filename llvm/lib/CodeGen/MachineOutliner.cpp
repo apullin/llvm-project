@@ -919,42 +919,71 @@ bool MachineOutliner::outline(Module &M,
               MachineFunctionProperties::Property::TracksLiveness)) {
         // The following code is to add implicit def operands to the call
         // instruction. It also updates call site information for moved
-        // code.
-        SmallSet<Register, 2> UseRegs, DefRegs;
-        // Copy over the defs in the outlined range.
-        // First inst in outlined range <-- Anything that's defined in this
-        // ...                           .. range has to be added as an
-        // implicit Last inst in outlined range  <-- def to the call
-        // instruction. Also remove call site information for outlined block
-        // of code. The exposed uses need to be copied in the outlined range.
+        // code. Track upwards-exposed uses via MCRegUnits so subregister defs
+        // (e.g. defining $b and $c before reading $bc) properly kill superreg
+        // uses and vice versa.
+        const TargetRegisterInfo *TRI = STI.getRegisterInfo();
+        SmallSet<Register, 4> UseRegs, DefRegs, SawUseRegs;
+        SmallVector<Register, 8> CandidateUseRegs;
+        SmallSet<MCRegUnit, 8> LiveUnits;
         for (MachineBasicBlock::reverse_iterator
                  Iter = EndIt.getReverse(),
                  Last = std::next(CallInst.getReverse());
              Iter != Last; Iter++) {
           MachineInstr *MI = &*Iter;
-          SmallSet<Register, 2> InstrUseRegs;
           for (MachineOperand &MOP : MI->operands()) {
-            // Skip over anything that isn't a register.
-            if (!MOP.isReg())
+            if (!MOP.isReg() || !MOP.getReg() || !MOP.isDef())
               continue;
-
-            if (MOP.isDef()) {
-              // Introduce DefRegs set to skip the redundant register.
-              DefRegs.insert(MOP.getReg());
-              if (UseRegs.count(MOP.getReg()) &&
-                  !InstrUseRegs.count(MOP.getReg()))
-                // Since the regiester is modeled as defined,
-                // it is not necessary to be put in use register set.
-                UseRegs.erase(MOP.getReg());
-            } else if (!MOP.isUndef()) {
-              // Any register which is not undefined should
-              // be put in the use register set.
-              UseRegs.insert(MOP.getReg());
-              InstrUseRegs.insert(MOP.getReg());
+            Register Reg = MOP.getReg();
+            DefRegs.insert(Reg);
+            if (Reg.isPhysical()) {
+              for (MCRegUnit U : TRI->regunits(Reg.asMCReg()))
+                LiveUnits.erase(U);
+            } else {
+              UseRegs.erase(Reg);
+            }
+          }
+          for (MachineOperand &MOP : MI->operands()) {
+            if (!MOP.isReg() || !MOP.getReg() || MOP.isDef() || MOP.isUndef())
+              continue;
+            Register Reg = MOP.getReg();
+            if (Reg.isPhysical()) {
+              if (SawUseRegs.insert(Reg).second)
+                CandidateUseRegs.push_back(Reg);
+              for (MCRegUnit U : TRI->regunits(Reg.asMCReg()))
+                LiveUnits.insert(U);
+            } else {
+              UseRegs.insert(Reg);
             }
           }
           if (MI->isCandidateForCallSiteEntry())
             MI->getMF()->eraseCallSiteInfo(MI);
+        }
+
+        for (Register Reg : CandidateUseRegs) {
+          bool AllLive = true;
+          bool AnyLive = false;
+          for (MCRegUnit U : TRI->regunits(Reg.asMCReg())) {
+            if (LiveUnits.count(U))
+              AnyLive = true;
+            else
+              AllLive = false;
+          }
+          if (AllLive) {
+            UseRegs.insert(Reg);
+          } else if (AnyLive) {
+            for (MCPhysReg Sub : TRI->subregs(Reg.asMCReg())) {
+              bool SubAllLive = true;
+              for (MCRegUnit U : TRI->regunits(Sub)) {
+                if (!LiveUnits.count(U)) {
+                  SubAllLive = false;
+                  break;
+                }
+              }
+              if (SubAllLive)
+                UseRegs.insert(Register(Sub));
+            }
+          }
         }
 
         for (const Register &I : DefRegs)

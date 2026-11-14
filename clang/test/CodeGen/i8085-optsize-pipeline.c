@@ -26,6 +26,8 @@ __attribute__((minsize)) int add_small(int a, int b) { return a + b; }
 // ASM-OS: RET
 
 // ASM-OZ-LABEL: add:
-// ASM-OZ: RET
+// ASM-OZ: JMP OUTLINED_FUNCTION_0
 // ASM-OZ-LABEL: add_small:
+// ASM-OZ: JMP OUTLINED_FUNCTION_0
+// ASM-OZ-LABEL: OUTLINED_FUNCTION_0:
 // ASM-OZ: RET

@@ -15,6 +15,7 @@
 
 #include <array>
 #include <cassert>
+#include <cstdint>
 #include <type_traits>
 #include <variant>
 

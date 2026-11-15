@@ -45,6 +45,13 @@
 //     };
 //   };
 
+#ifndef LLD_MACHO_LAYOUT_H
+#define LLD_MACHO_LAYOUT_H
+
+#include <cassert>
+#include <cstddef>
+#include <cstdint>
+
 #define _OFFSET_FOR_FIELD(_, name) uint32_t name##Offset;
 #define _INIT_OFFSET(type, name) name##Offset = offsetof(Layout<Ptr>, name);
 #define _LAYOUT_ENTRY(type, name) type name;
@@ -72,3 +79,5 @@
       FOR_EACH_FIELD(_LAYOUT_ENTRY)                                            \
     };                                                                         \
   }
+
+#endif // LLD_MACHO_LAYOUT_H

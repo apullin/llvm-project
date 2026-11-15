@@ -18,6 +18,7 @@
 #include "llvm/Config/llvm-config.h"
 
 #include <stddef.h>
+#include <stdint.h>
 
 #if defined(_MSC_VER)
 #include <sal.h>

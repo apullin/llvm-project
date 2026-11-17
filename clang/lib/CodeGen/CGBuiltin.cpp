@@ -5206,7 +5206,17 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
                                                    getContext().UnsignedIntTy);
     Depth = Builder.CreateZExtOrTrunc(Depth, Int32Ty);
     Function *F = CGM.getIntrinsic(Intrinsic::frameaddress, AllocaInt8PtrTy);
-    return RValue::get(Builder.CreateCall(F, Depth));
+    Value *FrameAddr = Builder.CreateCall(F, Depth);
+    // llvm.frameaddress returns a pointer in the alloca address space, but
+    // the builtin's result type is a generic pointer (as for __builtin_alloca
+    // above), so cast it when the address spaces differ.
+    if (AllocaInt8PtrTy->getAddressSpace() !=
+        CGM.getContext().getTargetAddressSpace(
+            E->getType()->getPointeeType().getAddressSpace())) {
+      llvm::Type *Ty = CGM.getTypes().ConvertType(E->getType());
+      return RValue::get(performAddrSpaceCast(FrameAddr, Ty));
+    }
+    return RValue::get(FrameAddr);
   }
   case Builtin::BI__builtin_stack_address: {
     return RValue::get(Builder.CreateCall(

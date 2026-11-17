@@ -26654,8 +26654,13 @@ SDValue RISCVTargetLowering::PerformDAGCombine(SDNode *N,
     SmallVector<int> ShuffleMask;
     if (!MSN->isTruncatingStore() &&
         matchIndexAsShuffle(VT, Index, MSN->getMask(), ShuffleMask)) {
+      // The index maps each source lane to its destination lane, so the
+      // store needs the inverse permutation.
+      SmallVector<int> InvShuffleMask(ShuffleMask.size());
+      for (auto [SrcIdx, DstIdx] : enumerate(ShuffleMask))
+        InvShuffleMask[DstIdx] = SrcIdx;
       SDValue Shuffle = DAG.getVectorShuffle(VT, DL, MSN->getValue(),
-                                             DAG.getUNDEF(VT), ShuffleMask);
+                                             DAG.getUNDEF(VT), InvShuffleMask);
       return DAG.getMaskedStore(MSN->getChain(), DL, Shuffle, MSN->getBasePtr(),
                                 DAG.getPOISON(XLenVT), MSN->getMask(),
                                 MSN->getMemoryVT(), MSN->getMemOperand(),

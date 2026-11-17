@@ -596,6 +596,8 @@ private:
 
   SDValue expandUnalignedVPLoad(SDValue Op, SelectionDAG &DAG) const;
   SDValue expandUnalignedVPStore(SDValue Op, SelectionDAG &DAG) const;
+  SDValue expandUnalignedVPStridedLoad(SDValue Op, SelectionDAG &DAG) const;
+  SDValue expandUnalignedVPStridedStore(SDValue Op, SelectionDAG &DAG) const;
 
   SDValue lowerINIT_TRAMPOLINE(SDValue Op, SelectionDAG &DAG) const;
   SDValue lowerADJUST_TRAMPOLINE(SDValue Op, SelectionDAG &DAG) const;

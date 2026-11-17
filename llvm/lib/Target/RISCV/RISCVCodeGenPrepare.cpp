@@ -474,7 +474,9 @@ bool RISCVCodeGenPrepareImpl::expandVPStrideLoad(IntrinsicInst &II) {
 
   IRBuilder<> Builder(&II);
   Type *STy = VTy->getElementType();
-  Value *Val = Builder.CreateLoad(STy, BasePtr);
+  Align Alignment = cast<VPIntrinsic>(II).getPointerAlignment().value_or(
+      DL->getABITypeAlign(STy));
+  Value *Val = Builder.CreateAlignedLoad(STy, BasePtr, Alignment);
   Value *Res = Builder.CreateIntrinsic(
       Intrinsic::vp_merge, VTy,
       {II.getOperand(2), Builder.CreateVectorSplat(VTy->getElementCount(), Val),

@@ -7782,6 +7782,133 @@ SDValue RISCVTargetLowering::expandUnalignedVPStore(SDValue Op,
                         ISD::UNINDEXED);
 }
 
+// The byte vector that occupies the same registers as VecVT.
+static MVT getByteVectorVT(MVT VecVT) {
+  return MVT::getVectorVT(MVT::i8, VecVT.getVectorElementCount() *
+                                       (VecVT.getScalarSizeInBits() / 8));
+}
+
+// The mask for getByteVectorVT(VecVT) that enables all bytes of the elements
+// enabled in Mask.
+static SDValue getByteMaskForElementMask(SDValue Mask, MVT VecVT,
+                                         const SDLoc &DL, SelectionDAG &DAG) {
+  MVT IntVT = VecVT.changeVectorElementTypeToInteger();
+  MVT ByteVT = getByteVectorVT(VecVT);
+  SDValue Elts =
+      DAG.getSelect(DL, IntVT, Mask, DAG.getAllOnesConstant(DL, IntVT),
+                    DAG.getConstant(0, DL, IntVT));
+  return DAG.getSetCC(DL, ByteVT.changeVectorElementType(MVT::i1),
+                      DAG.getBitcast(ByteVT, Elts),
+                      DAG.getConstant(0, DL, ByteVT), ISD::SETNE);
+}
+
+// The VL for getByteVectorVT of a vector accessed with VL. VLMAX (X0) stays
+// VLMAX.
+static SDValue getByteVL(SDValue VL, unsigned EltBytes, const SDLoc &DL,
+                         SelectionDAG &DAG) {
+  if (auto *Reg = dyn_cast<RegisterSDNode>(VL);
+      Reg && Reg->getReg() == RISCV::X0)
+    return VL;
+  return DAG.getNode(ISD::SHL, DL, VL.getValueType(), VL,
+                     DAG.getConstant(Log2_32(EltBytes), DL, VL.getValueType()));
+}
+
+// An under-aligned strided load is done as one byte-wide strided load per
+// byte of the element, starting at successive byte offsets, whose results are
+// zero extended, shifted into place and or'ed together.
+SDValue
+RISCVTargetLowering::expandUnalignedVPStridedLoad(SDValue Op,
+                                                  SelectionDAG &DAG) const {
+  auto *Load = cast<VPStridedLoadSDNode>(Op);
+  if (Op.getSimpleValueType().getScalarSizeInBits() % 8 != 0 ||
+      allowsMemoryAccessForAlignment(*DAG.getContext(), DAG.getDataLayout(),
+                                     Load->getMemoryVT(),
+                                     *Load->getMemOperand()))
+    return SDValue();
+
+  SDLoc DL(Op);
+  MVT VT = Op.getSimpleValueType();
+  MVT IntVT = VT.changeVectorElementTypeToInteger();
+  MVT ByteVT = IntVT.changeVectorElementType(MVT::i8);
+  unsigned EltBytes = VT.getScalarSizeInBits() / 8;
+  MachineFunction &MF = DAG.getMachineFunction();
+
+  SmallVector<SDValue, 8> Chains;
+  SDValue Result;
+  for (unsigned I = 0; I != EltBytes; ++I) {
+    SDValue Ptr =
+        DAG.getObjectPtrOffset(DL, Load->getBasePtr(), TypeSize::getFixed(I));
+    MachineMemOperand *MMO = MF.getMachineMemOperand(
+        Load->getMemOperand(), I, LocationSize::beforeOrAfterPointer());
+    SDValue Bytes = DAG.getStridedLoadVP(ByteVT, DL, Load->getChain(), Ptr,
+                                         Load->getStride(), Load->getMask(),
+                                         Load->getVectorLength(), MMO);
+    Chains.push_back(Bytes.getValue(1));
+    SDValue Part = DAG.getNode(ISD::ZERO_EXTEND, DL, IntVT, Bytes);
+    if (I == 0) {
+      Result = Part;
+      continue;
+    }
+    Part = DAG.getNode(ISD::SHL, DL, IntVT, Part,
+                       DAG.getConstant(8 * I, DL, IntVT));
+    Result = DAG.getNode(ISD::OR, DL, IntVT, Result, Part);
+  }
+  return DAG.getMergeValues(
+      {DAG.getBitcast(VT, Result),
+       DAG.getNode(ISD::TokenFactor, DL, MVT::Other, Chains)},
+      DL);
+}
+
+// An under-aligned strided store is done as one byte-wide strided store per
+// byte of the element. Where elements overlap, a later element must win, so
+// the bytes are stored from the last to the first for a non-negative stride
+// and from the first to the last for a negative one.
+SDValue
+RISCVTargetLowering::expandUnalignedVPStridedStore(SDValue Op,
+                                                   SelectionDAG &DAG) const {
+  auto *Store = cast<VPStridedStoreSDNode>(Op);
+  if (Store->getValue().getSimpleValueType().getScalarSizeInBits() % 8 != 0 ||
+      allowsMemoryAccessForAlignment(*DAG.getContext(), DAG.getDataLayout(),
+                                     Store->getMemoryVT(),
+                                     *Store->getMemOperand()))
+    return SDValue();
+
+  SDLoc DL(Op);
+  MVT VT = Store->getValue().getSimpleValueType();
+  MVT IntVT = VT.changeVectorElementTypeToInteger();
+  MVT ByteVT = IntVT.changeVectorElementType(MVT::i8);
+  MVT XLenVT = Subtarget.getXLenVT();
+  unsigned EltBytes = VT.getScalarSizeInBits() / 8;
+  SDValue BasePtr = Store->getBasePtr();
+  SDValue Stride = Store->getStride();
+  SDValue Val = DAG.getBitcast(IntVT, Store->getValue());
+  MachineMemOperand *MMO = DAG.getMachineFunction().getMachineMemOperand(
+      Store->getMemOperand(), 0, LocationSize::beforeOrAfterPointer());
+
+  SDValue IsNegative =
+      DAG.getSetCC(DL, XLenVT, Stride,
+                   DAG.getConstant(0, DL, Stride.getValueType()), ISD::SETLT);
+  SDValue Chain = Store->getChain();
+  for (unsigned I = 0; I != EltBytes; ++I) {
+    SDValue Byte =
+        DAG.getSelect(DL, XLenVT, IsNegative, DAG.getConstant(I, DL, XLenVT),
+                      DAG.getConstant(EltBytes - 1 - I, DL, XLenVT));
+    SDValue Ptr =
+        DAG.getNode(ISD::ADD, DL, BasePtr.getValueType(), BasePtr, Byte);
+    SDValue ShiftAmt =
+        DAG.getSelect(DL, IntVT, IsNegative, DAG.getConstant(8 * I, DL, IntVT),
+                      DAG.getConstant(8 * (EltBytes - 1 - I), DL, IntVT));
+    SDValue Bytes =
+        DAG.getNode(ISD::TRUNCATE, DL, ByteVT,
+                    DAG.getNode(ISD::SRL, DL, IntVT, Val, ShiftAmt));
+    Chain = DAG.getStridedStoreVP(Chain, DL, Bytes, Ptr,
+                                  DAG.getUNDEF(BasePtr.getValueType()), Stride,
+                                  Store->getMask(), Store->getVectorLength(),
+                                  ByteVT, MMO, ISD::UNINDEXED);
+  }
+  return Chain;
+}
+
 static SDValue lowerConstant(SDValue Op, SelectionDAG &DAG,
                              const RISCVSubtarget &Subtarget) {
   assert(Op.getValueType() == MVT::i64 && "Unexpected VT");
@@ -9878,8 +10005,12 @@ SDValue RISCVTargetLowering::LowerOperation(SDValue Op,
   case ISD::VP_UREM:
     return lowerVPOp(Op, DAG);
   case ISD::EXPERIMENTAL_VP_STRIDED_LOAD:
+    if (SDValue V = expandUnalignedVPStridedLoad(Op, DAG))
+      return V;
     return lowerVPStridedLoad(Op, DAG);
   case ISD::EXPERIMENTAL_VP_STRIDED_STORE:
+    if (SDValue V = expandUnalignedVPStridedStore(Op, DAG))
+      return V;
     return lowerVPStridedStore(Op, DAG);
   case ISD::EXPERIMENTAL_VP_SPLICE:
     return lowerVPSpliceExperimental(Op, DAG);
@@ -16112,9 +16243,23 @@ SDValue RISCVTargetLowering::lowerMaskedLoad(SDValue Op,
 
   unsigned IntID = IsUnmasked || IsExpandingLoad ? Intrinsic::riscv_vle
                                                  : Intrinsic::riscv_vle_mask;
+  MVT AccessVT = ContainerVT;
+  if (!IsExpandingLoad && ContainerVT.getScalarSizeInBits() >= 8 &&
+      !allowsMemoryAccessForAlignment(*DAG.getContext(), DAG.getDataLayout(),
+                                      MemVT, *MMO)) {
+    unsigned EltBytes = ContainerVT.getScalarSizeInBits() / 8;
+    AccessVT = getByteVectorVT(ContainerVT);
+    MemVT = EVT::getVectorVT(*DAG.getContext(), MVT::i8,
+                             MemVT.getVectorElementCount() * EltBytes);
+    if (IntID == Intrinsic::riscv_vle_mask) {
+      PassThru = DAG.getBitcast(AccessVT, PassThru);
+      Mask = getByteMaskForElementMask(Mask, ContainerVT, DL, DAG);
+    }
+    VL = getByteVL(VL, EltBytes, DL, DAG);
+  }
   SmallVector<SDValue, 8> Ops{Chain, DAG.getTargetConstant(IntID, DL, XLenVT)};
   if (IntID == Intrinsic::riscv_vle)
-    Ops.push_back(DAG.getUNDEF(ContainerVT));
+    Ops.push_back(DAG.getUNDEF(AccessVT));
   else
     Ops.push_back(PassThru);
   Ops.push_back(BasePtr);
@@ -16124,11 +16269,12 @@ SDValue RISCVTargetLowering::lowerMaskedLoad(SDValue Op,
   if (IntID == Intrinsic::riscv_vle_mask)
     Ops.push_back(DAG.getTargetConstant(RISCVVType::TAIL_AGNOSTIC, DL, XLenVT));
 
-  SDVTList VTs = DAG.getVTList({ContainerVT, MVT::Other});
+  SDVTList VTs = DAG.getVTList({AccessVT, MVT::Other});
 
   SDValue Result =
       DAG.getMemIntrinsicNode(ISD::INTRINSIC_W_CHAIN, DL, VTs, Ops, MemVT, MMO);
   Chain = Result.getValue(1);
+  Result = DAG.getBitcast(ContainerVT, Result);
   if (ExpandingVL) {
     MVT IndexVT = ContainerVT;
     if (ContainerVT.isFloatingPoint())
@@ -16261,6 +16407,18 @@ SDValue RISCVTargetLowering::lowerMaskedStore(SDValue Op,
     VL =
         DAG.getNode(RISCVISD::VCPOP_VL, DL, XLenVT, Mask,
                     getAllOnesMask(Mask.getSimpleValueType(), VL, DL, DAG), VL);
+  }
+
+  if (!IsCompressingStore && ContainerVT.getScalarSizeInBits() >= 8 &&
+      !allowsMemoryAccessForAlignment(*DAG.getContext(), DAG.getDataLayout(),
+                                      MemVT, *MMO)) {
+    unsigned EltBytes = ContainerVT.getScalarSizeInBits() / 8;
+    MemVT = EVT::getVectorVT(*DAG.getContext(), MVT::i8,
+                             MemVT.getVectorElementCount() * EltBytes);
+    if (!IsUnmasked)
+      Mask = getByteMaskForElementMask(Mask, ContainerVT, DL, DAG);
+    Val = DAG.getBitcast(getByteVectorVT(ContainerVT), Val);
+    VL = getByteVL(VL, EltBytes, DL, DAG);
   }
 
   unsigned IntID =

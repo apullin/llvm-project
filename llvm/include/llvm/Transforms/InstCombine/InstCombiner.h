@@ -500,10 +500,13 @@ public:
 
   /// Return true if the cast from integer to FP can be proven to be exact
   /// for all possible inputs (the conversion does not lose any precision).
-  LLVM_ABI bool isKnownExactCastIntToFP(CastInst &I) const;
-  LLVM_ABI bool
-  canBeCastedExactlyIntToFP(Value *V, Type *FPTy, bool IsSigned,
-                            const Instruction *CtxI = nullptr) const;
+  /// If IgnoreOverflow is set, a conversion that overflows to infinity also
+  /// counts as exact; this is only safe where overflow is poison/UB.
+  LLVM_ABI bool isKnownExactCastIntToFP(CastInst &I,
+                                       bool IgnoreOverflow = false) const;
+  LLVM_ABI bool canBeCastedExactlyIntToFP(Value *V, Type *FPTy, bool IsSigned,
+                                          const Instruction *CtxI = nullptr,
+                                          bool IgnoreOverflow = false) const;
 
   OverflowResult computeOverflowForUnsignedMul(const Value *LHS,
                                                const Value *RHS,

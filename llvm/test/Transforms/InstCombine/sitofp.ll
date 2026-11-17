@@ -327,6 +327,19 @@ define i11 @u32_half_u11(i32 %x) {
   ret i11 %r
 }
 
+; The integer can be too large for half, but then fptoui is poison.
+
+define i64 @masked_u64_half_u64(i64 %x) {
+; CHECK-LABEL: @masked_u64_half_u64(
+; CHECK-NEXT:    [[M:%.*]] = and i64 [[X:%.*]], 1099511627776
+; CHECK-NEXT:    ret i64 [[M]]
+;
+  %m = and i64 %x, 1099511627776
+  %h = uitofp i64 %m to half
+  %r = fptoui half %h to i64
+  ret i64 %r
+}
+
 ; Too many bits in output to ensure exact cast.
 
 define i12 @s32_half_s12(i32 %x) {

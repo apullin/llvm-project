@@ -2242,7 +2242,8 @@ static Type *getMinimumFPType(Value *V, Type *PreferredTy, InstCombiner &IC) {
 
 bool InstCombiner::canBeCastedExactlyIntToFP(Value *V, Type *FPTy,
                                              bool IsSigned,
-                                             const Instruction *CtxI) const {
+                                             const Instruction *CtxI,
+                                             bool IgnoreOverflow) const {
   Type *SrcTy = V->getType();
   assert(SrcTy->isIntOrIntVectorTy() && "Expected an integer type");
   int SrcSize = (int)SrcTy->getScalarSizeInBits() - IsSigned;
@@ -2253,22 +2254,40 @@ bool InstCombiner::canBeCastedExactlyIntToFP(Value *V, Type *FPTy,
   if (SrcSize <= DestNumSigBits)
     return true;
 
+  // Otherwise, the integer must also be in range of the destination type:
+  // an integer with few significant bits can still be larger than the
+  // largest finite value of the destination type, and then the cast rounds
+  // to infinity. The position of its most significant bit must not exceed
+  // the largest exponent of the destination type.
+  int DestMaxExp = IgnoreOverflow
+                       ? INT_MAX
+                       : APFloat::semanticsMaxExponent(
+                             FPTy->getScalarType()->getFltSemantics());
+
   // Cast from FP to integer and back to FP is independent of the intermediate
-  // integer width because of poison on overflow.
+  // integer width because of poison on overflow. The integer that is read
+  // back has no more significant bits and no larger magnitude than F, and it
+  // fits in the integer type. That does not hold for uitofp (fptosi F),
+  // which reads a negative integer as 2^N - |v|.
   Value *F;
   if (match(V, m_FPToI(m_Value(F)))) {
-    // If this is uitofp (fptosi F), the source needs an extra bit to avoid
-    // potential rounding of negative FP input values.
-    int SrcNumSigBits = F->getType()->getFPMantissaWidth();
-    if (!IsSigned && match(V, m_FPToSI(m_Value())))
-      SrcNumSigBits++;
+    // Exclude uitofp (fptosi F): it is not covered by the argument above,
+    // since a negative integer is read back as 2^N - |v|.
+    bool IsFPToSI = match(V, m_FPToSI(m_Value()));
+    if (!IsFPToSI || IsSigned) {
+      int SrcNumSigBits = F->getType()->getFPMantissaWidth();
+      int SrcMaxExp =
+          std::min(APFloat::semanticsMaxExponent(
+                       F->getType()->getScalarType()->getFltSemantics()),
+                   SrcSize);
 
-    // [su]itofp (fpto[su]i F) --> exact if the source type has less or equal
-    // significant bits than the destination (and make sure neither type is
-    // weird -- ppc_fp128).
-    if (SrcNumSigBits > 0 && DestNumSigBits > 0 &&
-        SrcNumSigBits <= DestNumSigBits)
-      return true;
+      // [su]itofp (fpto[su]i F) --> exact if the source type has less or equal
+      // significant bits than the destination (and make sure neither type is
+      // weird -- ppc_fp128).
+      if (SrcNumSigBits > 0 && DestNumSigBits > 0 &&
+          SrcNumSigBits <= DestNumSigBits && SrcMaxExp <= DestMaxExp)
+        return true;
+    }
   }
 
   // Try harder to find if the source integer type has less significant bits.
@@ -2277,27 +2296,31 @@ bool InstCombiner::canBeCastedExactlyIntToFP(Value *V, Type *FPTy,
   int SigBits = (int)SrcTy->getScalarSizeInBits() -
                 SrcKnown.countMinLeadingZeros() -
                 SrcKnown.countMinTrailingZeros();
-  if (SigBits <= DestNumSigBits)
+  int MaxExp =
+      (int)SrcTy->getScalarSizeInBits() - SrcKnown.countMinLeadingZeros() - 1;
+  if (SigBits <= DestNumSigBits && MaxExp <= DestMaxExp)
     return true;
 
   // For sitofp, the sign maps to the FP sign bit, so only magnitude bits
   // (BitWidth - NumSignBits) consume mantissa.
   if (IsSigned) {
     SigBits = (int)SrcTy->getScalarSizeInBits() - ComputeNumSignBits(V, CtxI);
-    if (SigBits <= DestNumSigBits)
+    if (SigBits <= DestNumSigBits && MaxExp <= DestMaxExp)
       return true;
   }
 
   return false;
 }
 
-bool InstCombiner::isKnownExactCastIntToFP(CastInst &I) const {
+bool InstCombiner::isKnownExactCastIntToFP(CastInst &I,
+                                           bool IgnoreOverflow) const {
   CastInst::CastOps Opcode = I.getOpcode();
   assert((Opcode == CastInst::SIToFP || Opcode == CastInst::UIToFP) &&
          "Unexpected cast");
   Value *Src = I.getOperand(0);
   Type *FPTy = I.getType();
-  return canBeCastedExactlyIntToFP(Src, FPTy, Opcode == CastInst::SIToFP, &I);
+  return canBeCastedExactlyIntToFP(Src, FPTy, Opcode == CastInst::SIToFP, &I,
+                                   IgnoreOverflow);
 }
 
 Instruction *InstCombinerImpl::visitFPTrunc(FPTruncInst &FPT) {
@@ -2549,8 +2572,9 @@ Instruction *InstCombinerImpl::foldItoFPtoI(FPToIntTy &FI) {
   // of the input range and output range.
 
   // This means this is also safe for a signed input and unsigned output, since
-  // a negative input would lead to undefined behavior.
-  if (!isKnownExactCastIntToFP(*OpI)) {
+  // a negative input would lead to undefined behavior. For the same reason,
+  // it does not matter whether the first cast overflows to infinity.
+  if (!isKnownExactCastIntToFP(*OpI, /*IgnoreOverflow=*/true)) {
     if constexpr (!IsSaturating) {
       // The first cast may not round exactly based on the source integer width
       // and FP width, but the overflow UB rules can still allow this to fold.

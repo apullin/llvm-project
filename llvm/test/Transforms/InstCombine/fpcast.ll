@@ -469,6 +469,101 @@ define double @masked_uint_to_fpext3(i32 %x) {
   ret double %r
 }
 
+; The integer has few significant bits, but can be too large for half, so the
+; cast to half is not exact.
+
+define float @sint_to_fpext_half_too_large(i64 %y) {
+; CHECK-LABEL: @sint_to_fpext_half_too_large(
+; CHECK-NEXT:    [[S:%.*]] = shl i64 [[Y:%.*]], 63
+; CHECK-NEXT:    [[H:%.*]] = sitofp i64 [[S]] to half
+; CHECK-NEXT:    [[R:%.*]] = fpext half [[H]] to float
+; CHECK-NEXT:    ret float [[R]]
+;
+  %s = shl i64 %y, 63
+  %h = sitofp i64 %s to half
+  %r = fpext half %h to float
+  ret float %r
+}
+
+define float @masked_uint_to_fpext_half_too_large(i32 %x) {
+; CHECK-LABEL: @masked_uint_to_fpext_half_too_large(
+; CHECK-NEXT:    [[M:%.*]] = and i32 [[X:%.*]], 65536
+; CHECK-NEXT:    [[H:%.*]] = uitofp nneg i32 [[M]] to half
+; CHECK-NEXT:    [[R:%.*]] = fpext half [[H]] to float
+; CHECK-NEXT:    ret float [[R]]
+;
+  %m = and i32 %x, 65536
+  %h = uitofp i32 %m to half
+  %r = fpext half %h to float
+  ret float %r
+}
+
+define float @masked_uint_to_fpext_half(i32 %x) {
+; CHECK-LABEL: @masked_uint_to_fpext_half(
+; CHECK-NEXT:    [[M:%.*]] = and i32 [[X:%.*]], 32768
+; CHECK-NEXT:    [[R:%.*]] = uitofp nneg i32 [[M]] to float
+; CHECK-NEXT:    ret float [[R]]
+;
+  %m = and i32 %x, 32768
+  %h = uitofp i32 %m to half
+  %r = fpext half %h to float
+  ret float %r
+}
+
+define float @fptosi_bf16_to_fpext_half(bfloat %x) {
+; CHECK-LABEL: @fptosi_bf16_to_fpext_half(
+; CHECK-NEXT:    [[I:%.*]] = fptosi bfloat [[X:%.*]] to i32
+; CHECK-NEXT:    [[H:%.*]] = sitofp i32 [[I]] to half
+; CHECK-NEXT:    [[R:%.*]] = fpext half [[H]] to float
+; CHECK-NEXT:    ret float [[R]]
+;
+  %i = fptosi bfloat %x to i32
+  %h = sitofp i32 %i to half
+  %r = fpext half %h to float
+  ret float %r
+}
+
+define float @fptoui_half_to_fpext_half(half %x) {
+; CHECK-LABEL: @fptoui_half_to_fpext_half(
+; CHECK-NEXT:    [[I:%.*]] = fptoui half [[X:%.*]] to i32
+; CHECK-NEXT:    [[R:%.*]] = uitofp i32 [[I]] to float
+; CHECK-NEXT:    ret float [[R]]
+;
+  %i = fptoui half %x to i32
+  %h = uitofp i32 %i to half
+  %r = fpext half %h to float
+  ret float %r
+}
+
+; uitofp reads a negative integer from fptosi as 2^N - |v|: fptosi(-1.0) is
+; 2^32 - 1, which float rounds to 2^32.
+
+define double @fptosi_half_to_uitofp_fpext(half %x) {
+; CHECK-LABEL: @fptosi_half_to_uitofp_fpext(
+; CHECK-NEXT:    [[I:%.*]] = fptosi half [[X:%.*]] to i32
+; CHECK-NEXT:    [[F:%.*]] = uitofp i32 [[I]] to float
+; CHECK-NEXT:    [[R:%.*]] = fpext float [[F]] to double
+; CHECK-NEXT:    ret double [[R]]
+;
+  %i = fptosi half %x to i32
+  %f = uitofp i32 %i to float
+  %r = fpext float %f to double
+  ret double %r
+}
+
+define float @fptosi_bf16_to_uitofp_half_fpext(bfloat %x) {
+; CHECK-LABEL: @fptosi_bf16_to_uitofp_half_fpext(
+; CHECK-NEXT:    [[I:%.*]] = fptosi bfloat [[X:%.*]] to i12
+; CHECK-NEXT:    [[H:%.*]] = uitofp i12 [[I]] to half
+; CHECK-NEXT:    [[R:%.*]] = fpext half [[H]] to float
+; CHECK-NEXT:    ret float [[R]]
+;
+  %i = fptosi bfloat %x to i12
+  %h = uitofp i12 %i to half
+  %r = fpext half %h to float
+  ret float %r
+}
+
 define i32 @fptosi_nonnorm(float nofpclass(norm) %x) {
 ; CHECK-LABEL: @fptosi_nonnorm(
 ; CHECK-NEXT:    ret i32 0

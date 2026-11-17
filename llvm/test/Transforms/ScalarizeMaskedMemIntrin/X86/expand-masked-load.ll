@@ -85,8 +85,8 @@ define <2 x i24> @scalarize_v2i24(ptr %p, <2 x i1> %mask, <2 x i24> %passthru) {
 ; CHECK-NEXT:    [[TMP2:%.*]] = icmp ne i2 [[TMP1]], 0
 ; CHECK-NEXT:    br i1 [[TMP2]], label [[COND_LOAD:%.*]], label [[ELSE:%.*]]
 ; CHECK:       cond.load:
-; CHECK-NEXT:    [[TMP3:%.*]] = getelementptr inbounds i24, ptr [[P:%.*]], i32 0
-; CHECK-NEXT:    [[TMP4:%.*]] = load i24, ptr [[TMP3]], align 1
+; CHECK-NEXT:    [[TMP3:%.*]] = getelementptr inbounds i8, ptr [[P:%.*]], i64 0
+; CHECK-NEXT:    [[TMP4:%.*]] = load i24, ptr [[TMP3]], align 8
 ; CHECK-NEXT:    [[TMP5:%.*]] = insertelement <2 x i24> [[PASSTHRU:%.*]], i24 [[TMP4]], i64 0
 ; CHECK-NEXT:    br label [[ELSE]]
 ; CHECK:       else:
@@ -95,7 +95,7 @@ define <2 x i24> @scalarize_v2i24(ptr %p, <2 x i1> %mask, <2 x i24> %passthru) {
 ; CHECK-NEXT:    [[TMP7:%.*]] = icmp ne i2 [[TMP6]], 0
 ; CHECK-NEXT:    br i1 [[TMP7]], label [[COND_LOAD1:%.*]], label [[ELSE2:%.*]]
 ; CHECK:       cond.load1:
-; CHECK-NEXT:    [[TMP8:%.*]] = getelementptr inbounds i24, ptr [[P]], i32 1
+; CHECK-NEXT:    [[TMP8:%.*]] = getelementptr inbounds i8, ptr [[P]], i64 3
 ; CHECK-NEXT:    [[TMP9:%.*]] = load i24, ptr [[TMP8]], align 1
 ; CHECK-NEXT:    [[TMP10:%.*]] = insertelement <2 x i24> [[RES_PHI_ELSE]], i24 [[TMP9]], i64 1
 ; CHECK-NEXT:    br label [[ELSE2]]
@@ -115,8 +115,8 @@ define <2 x i48> @scalarize_v2i48(ptr %p, <2 x i1> %mask, <2 x i48> %passthru) {
 ; CHECK-NEXT:    [[TMP2:%.*]] = icmp ne i2 [[TMP1]], 0
 ; CHECK-NEXT:    br i1 [[TMP2]], label [[COND_LOAD:%.*]], label [[ELSE:%.*]]
 ; CHECK:       cond.load:
-; CHECK-NEXT:    [[TMP3:%.*]] = getelementptr inbounds i48, ptr [[P:%.*]], i32 0
-; CHECK-NEXT:    [[TMP4:%.*]] = load i48, ptr [[TMP3]], align 2
+; CHECK-NEXT:    [[TMP3:%.*]] = getelementptr inbounds i8, ptr [[P:%.*]], i64 0
+; CHECK-NEXT:    [[TMP4:%.*]] = load i48, ptr [[TMP3]], align 16
 ; CHECK-NEXT:    [[TMP5:%.*]] = insertelement <2 x i48> [[PASSTHRU:%.*]], i48 [[TMP4]], i64 0
 ; CHECK-NEXT:    br label [[ELSE]]
 ; CHECK:       else:
@@ -125,7 +125,7 @@ define <2 x i48> @scalarize_v2i48(ptr %p, <2 x i1> %mask, <2 x i48> %passthru) {
 ; CHECK-NEXT:    [[TMP7:%.*]] = icmp ne i2 [[TMP6]], 0
 ; CHECK-NEXT:    br i1 [[TMP7]], label [[COND_LOAD1:%.*]], label [[ELSE2:%.*]]
 ; CHECK:       cond.load1:
-; CHECK-NEXT:    [[TMP8:%.*]] = getelementptr inbounds i48, ptr [[P]], i32 1
+; CHECK-NEXT:    [[TMP8:%.*]] = getelementptr inbounds i8, ptr [[P]], i64 6
 ; CHECK-NEXT:    [[TMP9:%.*]] = load i48, ptr [[TMP8]], align 2
 ; CHECK-NEXT:    [[TMP10:%.*]] = insertelement <2 x i48> [[RES_PHI_ELSE]], i48 [[TMP9]], i64 1
 ; CHECK-NEXT:    br label [[ELSE2]]

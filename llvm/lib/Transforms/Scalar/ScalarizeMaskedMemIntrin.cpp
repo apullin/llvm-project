@@ -168,6 +168,110 @@ static void copyMetadataForScalarizedStore(StoreInst &Dest,
       ByteOffset);
 }
 
+// The bytes of a vector in memory, read as an integer, hold the vector
+// bitcast to an integer in their low bits, so lane Idx is at bit
+// adjustForEndian(Idx) * EltBits of that integer. An element-typed GEP only
+// addresses the lane when the element's alloc size is its bit width.
+// Otherwise the lane is addressed in bytes, and a lane that is not a whole
+// number of bytes shares its first and last bytes with its neighbours.
+namespace {
+struct LaneBytes {
+  uint64_t Offset; // Offset of the first byte that holds bits of the lane.
+  unsigned Size;   // Number of bytes that hold bits of the lane.
+  unsigned Shift;  // Position of the lane in those bytes, read as an integer.
+};
+} // end anonymous namespace
+
+static LaneBytes getLaneBytes(const DataLayout &DL, FixedVectorType *VecTy,
+                              unsigned Idx) {
+  uint64_t EltBits = DL.getTypeSizeInBits(VecTy->getElementType());
+  uint64_t Bit = adjustForEndian(DL, VecTy->getNumElements(), Idx) * EltBits;
+  // Bytes of the integer that hold the lane, counted from its least
+  // significant byte.
+  uint64_t Low = Bit / 8, High = (Bit + EltBits - 1) / 8;
+  uint64_t Offset =
+      DL.isBigEndian() ? DL.getTypeStoreSize(VecTy) - 1 - High : Low;
+  return {Offset, unsigned(High - Low + 1), unsigned(Bit % 8)};
+}
+
+static Value *loadLane(IRBuilder<> &Builder, const DataLayout &DL,
+                       FixedVectorType *VecTy, Value *Ptr, unsigned Idx,
+                       Align VecAlign, Align EltAlign, CallInst *CI) {
+  Type *EltTy = VecTy->getElementType();
+  uint64_t EltBits = DL.getTypeSizeInBits(EltTy);
+  if (DL.getTypeAllocSizeInBits(EltTy) == EltBits) {
+    Value *Gep = Builder.CreateConstInBoundsGEP1_32(EltTy, Ptr, Idx);
+    LoadInst *Load = Builder.CreateAlignedLoad(EltTy, Gep, EltAlign);
+    copyMetadataForScalarizedLoad(
+        *Load, *CI, DL, /*SourcePtrOperand=*/0,
+        Idx * DL.getTypeAllocSize(EltTy).getFixedValue());
+    return Load;
+  }
+  LaneBytes LB = getLaneBytes(DL, VecTy, Idx);
+  Value *Gep =
+      Builder.CreateConstInBoundsGEP1_64(Builder.getInt8Ty(), Ptr, LB.Offset);
+  Align ByteAlign = commonAlignment(VecAlign, LB.Offset);
+  if (EltBits % 8 == 0) {
+    LoadInst *Load = Builder.CreateAlignedLoad(EltTy, Gep, ByteAlign);
+    copyMetadataForScalarizedLoad(*Load, *CI, DL, /*SourcePtrOperand=*/0,
+                                  LB.Offset);
+    return Load;
+  }
+  // Only copy memory-access metadata to this intermediate load: result
+  // metadata such as !range describes the element, not the bytes.
+  IntegerType *BytesTy = Builder.getIntNTy(LB.Size * 8);
+  LoadInst *BytesLoad = Builder.CreateAlignedLoad(BytesTy, Gep, ByteAlign);
+  copyMetadataForMemoryAccess(*BytesLoad, *CI, DL, /*SourcePtrOperand=*/0,
+                              BytesLoad->getPointerOperandIndex(), BytesTy,
+                              /*IsWholeAccess=*/false, LB.Offset);
+  Value *Bytes = BytesLoad;
+  if (LB.Shift)
+    Bytes = Builder.CreateLShr(Bytes, LB.Shift);
+  return Builder.CreateTrunc(Bytes, EltTy);
+}
+
+static void storeLane(IRBuilder<> &Builder, const DataLayout &DL,
+                      FixedVectorType *VecTy, Value *Elt, Value *Ptr,
+                      unsigned Idx, Align VecAlign, Align EltAlign,
+                      CallInst *CI) {
+  Type *EltTy = VecTy->getElementType();
+  uint64_t EltBits = DL.getTypeSizeInBits(EltTy);
+  if (DL.getTypeAllocSizeInBits(EltTy) == EltBits) {
+    Value *Gep = Builder.CreateConstInBoundsGEP1_32(EltTy, Ptr, Idx);
+    StoreInst *Store = Builder.CreateAlignedStore(Elt, Gep, EltAlign);
+    copyMetadataForScalarizedStore(
+        *Store, *CI, DL, /*SourcePtrOperand=*/1,
+        Idx * DL.getTypeAllocSize(EltTy).getFixedValue());
+    return;
+  }
+  LaneBytes LB = getLaneBytes(DL, VecTy, Idx);
+  Value *Gep =
+      Builder.CreateConstInBoundsGEP1_64(Builder.getInt8Ty(), Ptr, LB.Offset);
+  Align ByteAlign = commonAlignment(VecAlign, LB.Offset);
+  if (EltBits % 8 == 0) {
+    StoreInst *Store = Builder.CreateAlignedStore(Elt, Gep, ByteAlign);
+    copyMetadataForScalarizedStore(*Store, *CI, DL,
+                                   /*SourcePtrOperand=*/1, LB.Offset);
+    return;
+  }
+  // Rewrite the bits of the lane in the bytes it shares with its neighbours.
+  // Only copy memory-access metadata to this read of neighbouring bytes.
+  IntegerType *BytesTy = Builder.getIntNTy(LB.Size * 8);
+  LoadInst *OldLoad = Builder.CreateAlignedLoad(BytesTy, Gep, ByteAlign);
+  copyMetadataForMemoryAccess(*OldLoad, *CI, DL, /*SourcePtrOperand=*/1,
+                              OldLoad->getPointerOperandIndex(), BytesTy,
+                              /*IsWholeAccess=*/false, LB.Offset);
+  Value *Old = OldLoad;
+  APInt Keep = ~APInt::getBitsSet(LB.Size * 8, LB.Shift, LB.Shift + EltBits);
+  Value *New = Builder.CreateZExt(Elt, BytesTy);
+  if (LB.Shift)
+    New = Builder.CreateShl(New, LB.Shift);
+  StoreInst *Store = Builder.CreateAlignedStore(
+      Builder.CreateOr(Builder.CreateAnd(Old, Keep), New), Gep, ByteAlign);
+  copyMetadataForScalarizedStore(*Store, *CI, DL, /*SourcePtrOperand=*/1,
+                                 LB.Offset);
+}
+
 // Translate a masked load intrinsic like
 // <16 x i32 > @llvm.masked.load( <16 x i32>* %addr,
 //                               <16 x i1> %mask, <16 x i32> %passthru)
@@ -240,11 +344,8 @@ static void scalarizeMaskedLoad(const DataLayout &DL, bool HasBranchDivergence,
     for (unsigned Idx = 0; Idx < VectorWidth; ++Idx) {
       if (cast<Constant>(Mask)->getAggregateElement(Idx)->isNullValue())
         continue;
-      Value *Gep = Builder.CreateConstInBoundsGEP1_32(EltTy, Ptr, Idx);
-      LoadInst *Load = Builder.CreateAlignedLoad(EltTy, Gep, AdjustedAlignVal);
-      copyMetadataForScalarizedLoad(
-          *Load, *CI, DL, /*SourcePtrOperand=*/0,
-          Idx * DL.getTypeAllocSize(EltTy).getFixedValue());
+      Value *Load = loadLane(Builder, DL, cast<FixedVectorType>(VecType),
+                             Ptr, Idx, AlignVal, AdjustedAlignVal, CI);
       VResult = Builder.CreateInsertElement(VResult, Load, Idx);
     }
     CI->replaceAllUsesWith(VResult);
@@ -333,11 +434,8 @@ static void scalarizeMaskedLoad(const DataLayout &DL, bool HasBranchDivergence,
     CondBlock->setName("cond.load");
 
     Builder.SetInsertPoint(CondBlock->getTerminator());
-    Value *Gep = Builder.CreateConstInBoundsGEP1_32(EltTy, Ptr, Idx);
-    LoadInst *Load = Builder.CreateAlignedLoad(EltTy, Gep, AdjustedAlignVal);
-    copyMetadataForScalarizedLoad(
-        *Load, *CI, DL, /*SourcePtrOperand=*/0,
-        Idx * DL.getTypeAllocSize(EltTy).getFixedValue());
+    Value *Load = loadLane(Builder, DL, cast<FixedVectorType>(VecType), Ptr,
+                           Idx, AlignVal, AdjustedAlignVal, CI);
     Value *NewVResult = Builder.CreateInsertElement(VResult, Load, Idx);
 
     // Create "else" block, fill it in the next iteration
@@ -424,12 +522,8 @@ static void scalarizeMaskedStore(const DataLayout &DL, bool HasBranchDivergence,
       if (cast<Constant>(Mask)->getAggregateElement(Idx)->isNullValue())
         continue;
       Value *OneElt = Builder.CreateExtractElement(Src, Idx);
-      Value *Gep = Builder.CreateConstInBoundsGEP1_32(EltTy, Ptr, Idx);
-      StoreInst *Store =
-          Builder.CreateAlignedStore(OneElt, Gep, AdjustedAlignVal);
-      copyMetadataForScalarizedStore(
-          *Store, *CI, DL, /*SourcePtrOperand=*/1,
-          Idx * DL.getTypeAllocSize(EltTy).getFixedValue());
+      storeLane(Builder, DL, cast<FixedVectorType>(VecType), OneElt, Ptr,
+                Idx, AlignVal, AdjustedAlignVal, CI);
     }
     CI->eraseFromParent();
     return;
@@ -512,12 +606,8 @@ static void scalarizeMaskedStore(const DataLayout &DL, bool HasBranchDivergence,
 
     Builder.SetInsertPoint(CondBlock->getTerminator());
     Value *OneElt = Builder.CreateExtractElement(Src, Idx);
-    Value *Gep = Builder.CreateConstInBoundsGEP1_32(EltTy, Ptr, Idx);
-    StoreInst *Store =
-        Builder.CreateAlignedStore(OneElt, Gep, AdjustedAlignVal);
-    copyMetadataForScalarizedStore(
-        *Store, *CI, DL, /*SourcePtrOperand=*/1,
-        Idx * DL.getTypeAllocSize(EltTy).getFixedValue());
+    storeLane(Builder, DL, cast<FixedVectorType>(VecType), OneElt, Ptr, Idx,
+              AlignVal, AdjustedAlignVal, CI);
 
     // Create "else" block, fill it in the next iteration
     BasicBlock *NewIfBlock = ThenTerm->getSuccessor(0);

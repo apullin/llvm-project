@@ -580,3 +580,62 @@ define void @scalarize_v16i16(ptr %p, <16 x i1> %mask, <16 x i16> %data) {
   call void @llvm.masked.store.v16i16.p0(<16 x i16> %data, ptr %p, i32 2, <16 x i1> %mask)
   ret void
 }
+
+; CHECK-LE-LABEL: @scalarize_v3i5_const_mask(
+; CHECK-LE-NEXT:    [[TMP1:%.*]] = extractelement <3 x i5> [[DATA:%.*]], i64 0
+; CHECK-LE-NEXT:    [[TMP2:%.*]] = getelementptr inbounds i8, ptr [[P:%.*]], i64 0
+; CHECK-LE-NEXT:    [[TMP3:%.*]] = load i8, ptr [[TMP2]], align 2
+; CHECK-LE-NEXT:    [[TMP4:%.*]] = zext i5 [[TMP1]] to i8
+; CHECK-LE-NEXT:    [[TMP5:%.*]] = and i8 [[TMP3]], -32
+; CHECK-LE-NEXT:    [[TMP6:%.*]] = or i8 [[TMP5]], [[TMP4]]
+; CHECK-LE-NEXT:    store i8 [[TMP6]], ptr [[TMP2]], align 2
+; CHECK-LE-NEXT:    [[TMP7:%.*]] = extractelement <3 x i5> [[DATA]], i64 1
+; CHECK-LE-NEXT:    [[TMP8:%.*]] = getelementptr inbounds i8, ptr [[P]], i64 0
+; CHECK-LE-NEXT:    [[TMP9:%.*]] = load i16, ptr [[TMP8]], align 2
+; CHECK-LE-NEXT:    [[TMP10:%.*]] = zext i5 [[TMP7]] to i16
+; CHECK-LE-NEXT:    [[TMP11:%.*]] = shl i16 [[TMP10]], 5
+; CHECK-LE-NEXT:    [[TMP12:%.*]] = and i16 [[TMP9]], -993
+; CHECK-LE-NEXT:    [[TMP13:%.*]] = or i16 [[TMP12]], [[TMP11]]
+; CHECK-LE-NEXT:    store i16 [[TMP13]], ptr [[TMP8]], align 2
+; CHECK-LE-NEXT:    ret void
+;
+; CHECK-SVE-LE-LABEL: @scalarize_v3i5_const_mask(
+; CHECK-SVE-LE-NEXT:    [[TMP1:%.*]] = extractelement <3 x i5> [[DATA:%.*]], i64 0
+; CHECK-SVE-LE-NEXT:    [[TMP2:%.*]] = getelementptr inbounds i8, ptr [[P:%.*]], i64 0
+; CHECK-SVE-LE-NEXT:    [[TMP3:%.*]] = load i8, ptr [[TMP2]], align 2
+; CHECK-SVE-LE-NEXT:    [[TMP4:%.*]] = zext i5 [[TMP1]] to i8
+; CHECK-SVE-LE-NEXT:    [[TMP5:%.*]] = and i8 [[TMP3]], -32
+; CHECK-SVE-LE-NEXT:    [[TMP6:%.*]] = or i8 [[TMP5]], [[TMP4]]
+; CHECK-SVE-LE-NEXT:    store i8 [[TMP6]], ptr [[TMP2]], align 2
+; CHECK-SVE-LE-NEXT:    [[TMP7:%.*]] = extractelement <3 x i5> [[DATA]], i64 1
+; CHECK-SVE-LE-NEXT:    [[TMP8:%.*]] = getelementptr inbounds i8, ptr [[P]], i64 0
+; CHECK-SVE-LE-NEXT:    [[TMP9:%.*]] = load i16, ptr [[TMP8]], align 2
+; CHECK-SVE-LE-NEXT:    [[TMP10:%.*]] = zext i5 [[TMP7]] to i16
+; CHECK-SVE-LE-NEXT:    [[TMP11:%.*]] = shl i16 [[TMP10]], 5
+; CHECK-SVE-LE-NEXT:    [[TMP12:%.*]] = and i16 [[TMP9]], -993
+; CHECK-SVE-LE-NEXT:    [[TMP13:%.*]] = or i16 [[TMP12]], [[TMP11]]
+; CHECK-SVE-LE-NEXT:    store i16 [[TMP13]], ptr [[TMP8]], align 2
+; CHECK-SVE-LE-NEXT:    ret void
+;
+; CHECK-BE-LABEL: @scalarize_v3i5_const_mask(
+; CHECK-BE-NEXT:    [[TMP1:%.*]] = extractelement <3 x i5> [[DATA:%.*]], i64 0
+; CHECK-BE-NEXT:    [[TMP2:%.*]] = getelementptr inbounds i8, ptr [[P:%.*]], i64 0
+; CHECK-BE-NEXT:    [[TMP3:%.*]] = load i8, ptr [[TMP2]], align 2
+; CHECK-BE-NEXT:    [[TMP4:%.*]] = zext i5 [[TMP1]] to i8
+; CHECK-BE-NEXT:    [[TMP5:%.*]] = shl i8 [[TMP4]], 2
+; CHECK-BE-NEXT:    [[TMP6:%.*]] = and i8 [[TMP3]], -125
+; CHECK-BE-NEXT:    [[TMP7:%.*]] = or i8 [[TMP6]], [[TMP5]]
+; CHECK-BE-NEXT:    store i8 [[TMP7]], ptr [[TMP2]], align 2
+; CHECK-BE-NEXT:    [[TMP8:%.*]] = extractelement <3 x i5> [[DATA]], i64 1
+; CHECK-BE-NEXT:    [[TMP9:%.*]] = getelementptr inbounds i8, ptr [[P]], i64 0
+; CHECK-BE-NEXT:    [[TMP10:%.*]] = load i16, ptr [[TMP9]], align 2
+; CHECK-BE-NEXT:    [[TMP11:%.*]] = zext i5 [[TMP8]] to i16
+; CHECK-BE-NEXT:    [[TMP12:%.*]] = shl i16 [[TMP11]], 5
+; CHECK-BE-NEXT:    [[TMP13:%.*]] = and i16 [[TMP10]], -993
+; CHECK-BE-NEXT:    [[TMP14:%.*]] = or i16 [[TMP13]], [[TMP12]]
+; CHECK-BE-NEXT:    store i16 [[TMP14]], ptr [[TMP9]], align 2
+; CHECK-BE-NEXT:    ret void
+;
+  call void @llvm.masked.store.v3i5.p0(<3 x i5> %data, ptr %p, i32 2, <3 x i1> <i1 true, i1 true, i1 false>)
+  ret void
+}

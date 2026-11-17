@@ -121,8 +121,8 @@ define <2 x i24> @scalarize_v2i24(ptr %p, <2 x i1> %mask, <2 x i24> %passthru) {
 ; CHECK-LE-COMMON-NEXT:    [[TMP2:%.*]] = icmp ne i2 [[TMP1]], 0
 ; CHECK-LE-COMMON-NEXT:    br i1 [[TMP2]], label [[COND_LOAD:%.*]], label [[ELSE:%.*]]
 ; CHECK-LE-COMMON:       cond.load:
-; CHECK-LE-COMMON-NEXT:    [[TMP3:%.*]] = getelementptr inbounds i24, ptr [[P:%.*]], i32 0
-; CHECK-LE-COMMON-NEXT:    [[TMP4:%.*]] = load i24, ptr [[TMP3]], align 1
+; CHECK-LE-COMMON-NEXT:    [[TMP3:%.*]] = getelementptr inbounds i8, ptr [[P:%.*]], i64 0
+; CHECK-LE-COMMON-NEXT:    [[TMP4:%.*]] = load i24, ptr [[TMP3]], align 8
 ; CHECK-LE-COMMON-NEXT:    [[TMP5:%.*]] = insertelement <2 x i24> [[PASSTHRU:%.*]], i24 [[TMP4]], i64 0
 ; CHECK-LE-COMMON-NEXT:    br label [[ELSE]]
 ; CHECK-LE-COMMON:       else:
@@ -131,7 +131,7 @@ define <2 x i24> @scalarize_v2i24(ptr %p, <2 x i1> %mask, <2 x i24> %passthru) {
 ; CHECK-LE-COMMON-NEXT:    [[TMP7:%.*]] = icmp ne i2 [[TMP6]], 0
 ; CHECK-LE-COMMON-NEXT:    br i1 [[TMP7]], label [[COND_LOAD1:%.*]], label [[ELSE2:%.*]]
 ; CHECK-LE-COMMON:       cond.load1:
-; CHECK-LE-COMMON-NEXT:    [[TMP8:%.*]] = getelementptr inbounds i24, ptr [[P]], i32 1
+; CHECK-LE-COMMON-NEXT:    [[TMP8:%.*]] = getelementptr inbounds i8, ptr [[P]], i64 3
 ; CHECK-LE-COMMON-NEXT:    [[TMP9:%.*]] = load i24, ptr [[TMP8]], align 1
 ; CHECK-LE-COMMON-NEXT:    [[TMP10:%.*]] = insertelement <2 x i24> [[RES_PHI_ELSE]], i24 [[TMP9]], i64 1
 ; CHECK-LE-COMMON-NEXT:    br label [[ELSE2]]
@@ -145,8 +145,8 @@ define <2 x i24> @scalarize_v2i24(ptr %p, <2 x i1> %mask, <2 x i24> %passthru) {
 ; CHECK-BE-NEXT:    [[TMP2:%.*]] = icmp ne i2 [[TMP1]], 0
 ; CHECK-BE-NEXT:    br i1 [[TMP2]], label [[COND_LOAD:%.*]], label [[ELSE:%.*]]
 ; CHECK-BE:       cond.load:
-; CHECK-BE-NEXT:    [[TMP3:%.*]] = getelementptr inbounds i24, ptr [[P:%.*]], i32 0
-; CHECK-BE-NEXT:    [[TMP4:%.*]] = load i24, ptr [[TMP3]], align 1
+; CHECK-BE-NEXT:    [[TMP3:%.*]] = getelementptr inbounds i8, ptr [[P:%.*]], i64 0
+; CHECK-BE-NEXT:    [[TMP4:%.*]] = load i24, ptr [[TMP3]], align 8
 ; CHECK-BE-NEXT:    [[TMP5:%.*]] = insertelement <2 x i24> [[PASSTHRU:%.*]], i24 [[TMP4]], i64 0
 ; CHECK-BE-NEXT:    br label [[ELSE]]
 ; CHECK-BE:       else:
@@ -155,7 +155,7 @@ define <2 x i24> @scalarize_v2i24(ptr %p, <2 x i1> %mask, <2 x i24> %passthru) {
 ; CHECK-BE-NEXT:    [[TMP7:%.*]] = icmp ne i2 [[TMP6]], 0
 ; CHECK-BE-NEXT:    br i1 [[TMP7]], label [[COND_LOAD1:%.*]], label [[ELSE2:%.*]]
 ; CHECK-BE:       cond.load1:
-; CHECK-BE-NEXT:    [[TMP8:%.*]] = getelementptr inbounds i24, ptr [[P]], i32 1
+; CHECK-BE-NEXT:    [[TMP8:%.*]] = getelementptr inbounds i8, ptr [[P]], i64 3
 ; CHECK-BE-NEXT:    [[TMP9:%.*]] = load i24, ptr [[TMP8]], align 1
 ; CHECK-BE-NEXT:    [[TMP10:%.*]] = insertelement <2 x i24> [[RES_PHI_ELSE]], i24 [[TMP9]], i64 1
 ; CHECK-BE-NEXT:    br label [[ELSE2]]
@@ -175,8 +175,8 @@ define <2 x i48> @scalarize_v2i48(ptr %p, <2 x i1> %mask, <2 x i48> %passthru) {
 ; CHECK-LE-COMMON-NEXT:    [[TMP2:%.*]] = icmp ne i2 [[TMP1]], 0
 ; CHECK-LE-COMMON-NEXT:    br i1 [[TMP2]], label [[COND_LOAD:%.*]], label [[ELSE:%.*]]
 ; CHECK-LE-COMMON:       cond.load:
-; CHECK-LE-COMMON-NEXT:    [[TMP3:%.*]] = getelementptr inbounds i48, ptr [[P:%.*]], i32 0
-; CHECK-LE-COMMON-NEXT:    [[TMP4:%.*]] = load i48, ptr [[TMP3]], align 2
+; CHECK-LE-COMMON-NEXT:    [[TMP3:%.*]] = getelementptr inbounds i8, ptr [[P:%.*]], i64 0
+; CHECK-LE-COMMON-NEXT:    [[TMP4:%.*]] = load i48, ptr [[TMP3]], align 16
 ; CHECK-LE-COMMON-NEXT:    [[TMP5:%.*]] = insertelement <2 x i48> [[PASSTHRU:%.*]], i48 [[TMP4]], i64 0
 ; CHECK-LE-COMMON-NEXT:    br label [[ELSE]]
 ; CHECK-LE-COMMON:       else:
@@ -185,7 +185,7 @@ define <2 x i48> @scalarize_v2i48(ptr %p, <2 x i1> %mask, <2 x i48> %passthru) {
 ; CHECK-LE-COMMON-NEXT:    [[TMP7:%.*]] = icmp ne i2 [[TMP6]], 0
 ; CHECK-LE-COMMON-NEXT:    br i1 [[TMP7]], label [[COND_LOAD1:%.*]], label [[ELSE2:%.*]]
 ; CHECK-LE-COMMON:       cond.load1:
-; CHECK-LE-COMMON-NEXT:    [[TMP8:%.*]] = getelementptr inbounds i48, ptr [[P]], i32 1
+; CHECK-LE-COMMON-NEXT:    [[TMP8:%.*]] = getelementptr inbounds i8, ptr [[P]], i64 6
 ; CHECK-LE-COMMON-NEXT:    [[TMP9:%.*]] = load i48, ptr [[TMP8]], align 2
 ; CHECK-LE-COMMON-NEXT:    [[TMP10:%.*]] = insertelement <2 x i48> [[RES_PHI_ELSE]], i48 [[TMP9]], i64 1
 ; CHECK-LE-COMMON-NEXT:    br label [[ELSE2]]
@@ -199,8 +199,8 @@ define <2 x i48> @scalarize_v2i48(ptr %p, <2 x i1> %mask, <2 x i48> %passthru) {
 ; CHECK-BE-NEXT:    [[TMP2:%.*]] = icmp ne i2 [[TMP1]], 0
 ; CHECK-BE-NEXT:    br i1 [[TMP2]], label [[COND_LOAD:%.*]], label [[ELSE:%.*]]
 ; CHECK-BE:       cond.load:
-; CHECK-BE-NEXT:    [[TMP3:%.*]] = getelementptr inbounds i48, ptr [[P:%.*]], i32 0
-; CHECK-BE-NEXT:    [[TMP4:%.*]] = load i48, ptr [[TMP3]], align 2
+; CHECK-BE-NEXT:    [[TMP3:%.*]] = getelementptr inbounds i8, ptr [[P:%.*]], i64 0
+; CHECK-BE-NEXT:    [[TMP4:%.*]] = load i48, ptr [[TMP3]], align 16
 ; CHECK-BE-NEXT:    [[TMP5:%.*]] = insertelement <2 x i48> [[PASSTHRU:%.*]], i48 [[TMP4]], i64 0
 ; CHECK-BE-NEXT:    br label [[ELSE]]
 ; CHECK-BE:       else:
@@ -209,7 +209,7 @@ define <2 x i48> @scalarize_v2i48(ptr %p, <2 x i1> %mask, <2 x i48> %passthru) {
 ; CHECK-BE-NEXT:    [[TMP7:%.*]] = icmp ne i2 [[TMP6]], 0
 ; CHECK-BE-NEXT:    br i1 [[TMP7]], label [[COND_LOAD1:%.*]], label [[ELSE2:%.*]]
 ; CHECK-BE:       cond.load1:
-; CHECK-BE-NEXT:    [[TMP8:%.*]] = getelementptr inbounds i48, ptr [[P]], i32 1
+; CHECK-BE-NEXT:    [[TMP8:%.*]] = getelementptr inbounds i8, ptr [[P]], i64 6
 ; CHECK-BE-NEXT:    [[TMP9:%.*]] = load i48, ptr [[TMP8]], align 2
 ; CHECK-BE-NEXT:    [[TMP10:%.*]] = insertelement <2 x i48> [[RES_PHI_ELSE]], i48 [[TMP9]], i64 1
 ; CHECK-BE-NEXT:    br label [[ELSE2]]
@@ -219,6 +219,37 @@ define <2 x i48> @scalarize_v2i48(ptr %p, <2 x i1> %mask, <2 x i48> %passthru) {
 ;
   %ret = call <2 x i48> @llvm.masked.load.v2i48.p0(ptr %p, i32 16, <2 x i1> %mask, <2 x i48> %passthru)
   ret <2 x i48> %ret
+}
+
+; Elements that are not a whole number of bytes, in a vector that does not fill its last byte.
+define <3 x i5> @scalarize_v3i5_const_mask(ptr %p, <3 x i5> %passthru) {
+; CHECK-LE-COMMON-LABEL: @scalarize_v3i5_const_mask(
+; CHECK-LE-COMMON-NEXT:    [[TMP1:%.*]] = getelementptr inbounds i8, ptr [[P:%.*]], i64 0
+; CHECK-LE-COMMON-NEXT:    [[TMP2:%.*]] = load i8, ptr [[TMP1]], align 2
+; CHECK-LE-COMMON-NEXT:    [[TMP3:%.*]] = trunc i8 [[TMP2]] to i5
+; CHECK-LE-COMMON-NEXT:    [[TMP4:%.*]] = insertelement <3 x i5> [[PASSTHRU:%.*]], i5 [[TMP3]], i64 0
+; CHECK-LE-COMMON-NEXT:    [[TMP5:%.*]] = getelementptr inbounds i8, ptr [[P]], i64 0
+; CHECK-LE-COMMON-NEXT:    [[TMP6:%.*]] = load i16, ptr [[TMP5]], align 2
+; CHECK-LE-COMMON-NEXT:    [[TMP7:%.*]] = lshr i16 [[TMP6]], 5
+; CHECK-LE-COMMON-NEXT:    [[TMP8:%.*]] = trunc i16 [[TMP7]] to i5
+; CHECK-LE-COMMON-NEXT:    [[TMP9:%.*]] = insertelement <3 x i5> [[TMP4]], i5 [[TMP8]], i64 1
+; CHECK-LE-COMMON-NEXT:    ret <3 x i5> [[TMP9]]
+;
+; CHECK-BE-LABEL: @scalarize_v3i5_const_mask(
+; CHECK-BE-NEXT:    [[TMP1:%.*]] = getelementptr inbounds i8, ptr [[P:%.*]], i64 0
+; CHECK-BE-NEXT:    [[TMP2:%.*]] = load i8, ptr [[TMP1]], align 2
+; CHECK-BE-NEXT:    [[TMP3:%.*]] = lshr i8 [[TMP2]], 2
+; CHECK-BE-NEXT:    [[TMP4:%.*]] = trunc i8 [[TMP3]] to i5
+; CHECK-BE-NEXT:    [[TMP5:%.*]] = insertelement <3 x i5> [[PASSTHRU:%.*]], i5 [[TMP4]], i64 0
+; CHECK-BE-NEXT:    [[TMP6:%.*]] = getelementptr inbounds i8, ptr [[P]], i64 0
+; CHECK-BE-NEXT:    [[TMP7:%.*]] = load i16, ptr [[TMP6]], align 2
+; CHECK-BE-NEXT:    [[TMP8:%.*]] = lshr i16 [[TMP7]], 5
+; CHECK-BE-NEXT:    [[TMP9:%.*]] = trunc i16 [[TMP8]] to i5
+; CHECK-BE-NEXT:    [[TMP10:%.*]] = insertelement <3 x i5> [[TMP5]], i5 [[TMP9]], i64 1
+; CHECK-BE-NEXT:    ret <3 x i5> [[TMP10]]
+;
+  %ret = call <3 x i5> @llvm.masked.load.v3i5.p0(ptr %p, i32 2, <3 x i1> <i1 true, i1 true, i1 false>, <3 x i5> %passthru)
+  ret <3 x i5> %ret
 }
 
 define <1 x half> @scalarize_v1f16(ptr %p, <1 x i1> %mask, <1 x half> %passthru) vscale_range(2,2) {

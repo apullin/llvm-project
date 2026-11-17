@@ -2156,6 +2156,16 @@ void DAGTypeLegalizer::SplitVecRes_INSERT_SUBVECTOR(SDNode *N, SDValue &Lo,
     }
   }
 
+  // Make the vector elements byte-addressable if they aren't already.
+  EVT EltVT = VecVT.getVectorElementType();
+  if (!EltVT.isByteSized()) {
+    EltVT = EltVT.changeTypeToInteger().getRoundIntegerType(*DAG.getContext());
+    VecVT = VecVT.changeElementType(*DAG.getContext(), EltVT);
+    SubVecVT = SubVecVT.changeElementType(*DAG.getContext(), EltVT);
+    Vec = DAG.getNode(ISD::ANY_EXTEND, dl, VecVT, Vec);
+    SubVec = DAG.getNode(ISD::ANY_EXTEND, dl, SubVecVT, SubVec);
+  }
+
   // Spill the vector to the stack.
   // In cases where the vector is illegal it will be broken down into parts
   // and stored in parts - we should use the alignment for the smallest part.
@@ -2175,9 +2185,11 @@ void DAGTypeLegalizer::SplitVecRes_INSERT_SUBVECTOR(SDNode *N, SDValue &Lo,
   Store = DAG.getStore(Store, dl, SubVec, SubVecPtr,
                        MachinePointerInfo::getUnknownStack(MF));
 
+  EVT HiVT;
+  std::tie(LoVT, HiVT) = DAG.GetSplitDestVTs(VecVT);
+
   // Load the Lo part from the stack slot.
-  Lo = DAG.getLoad(Lo.getValueType(), dl, Store, StackPtr, PtrInfo,
-                   SmallestAlign);
+  Lo = DAG.getLoad(LoVT, dl, Store, StackPtr, PtrInfo, SmallestAlign);
 
   // Increment the pointer to the other part.
   auto *Load = cast<LoadSDNode>(Lo);
@@ -2185,7 +2197,15 @@ void DAGTypeLegalizer::SplitVecRes_INSERT_SUBVECTOR(SDNode *N, SDValue &Lo,
   IncrementPointer(Load, LoVT, MPI, StackPtr);
 
   // Load the Hi part from the stack slot.
-  Hi = DAG.getLoad(Hi.getValueType(), dl, Store, StackPtr, MPI, SmallestAlign);
+  Hi = DAG.getLoad(HiVT, dl, Store, StackPtr, MPI, SmallestAlign);
+
+  // If we adjusted the original type, we need to truncate the results.
+  EVT OrigLoVT, OrigHiVT;
+  std::tie(OrigLoVT, OrigHiVT) = DAG.GetSplitDestVTs(N->getValueType(0));
+  if (OrigLoVT != Lo.getValueType())
+    Lo = DAG.getNode(ISD::TRUNCATE, dl, OrigLoVT, Lo);
+  if (OrigHiVT != Hi.getValueType())
+    Hi = DAG.getNode(ISD::TRUNCATE, dl, OrigHiVT, Hi);
 }
 
 // Handle splitting an FP where the second operand does not match the first
